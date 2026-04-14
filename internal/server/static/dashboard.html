@@ -2241,6 +2241,10 @@ function doCreateSession() {
 
 // --- New Session Naming Dialog ---
 
+// Pending names for sessions that haven't been registered in the router yet.
+// Key: session key, Value: desired name. Applied after first send_ack(accepted).
+var pendingSessionNames = {};
+
 function showNewSessionNameDialog(key, node) {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center';
@@ -2256,7 +2260,13 @@ function showNewSessionNameDialog(key, node) {
   const input = document.getElementById('new-session-name');
   input.focus();
   function finish(save) {
-    if (save && input.value.trim()) renameSession(key, node || 'local', input.value.trim());
+    if (save && input.value.trim()) {
+      // Store as pending — session may not exist in router yet.
+      // Will be applied when first send_ack(accepted) arrives for this key.
+      pendingSessionNames[key] = input.value.trim();
+      // Also try immediately (works if session already exists)
+      renameSession(key, node || 'local', input.value.trim());
+    }
     overlay.remove();
   }
   document.getElementById('new-session-ok').onclick = () => finish(true);
@@ -2761,6 +2771,13 @@ const wsm = {
         break;
       case 'sessions_update':
         debouncedFetchSessions().then(() => {
+          // Apply pending session names: the session now exists in the router
+          for (const pKey of Object.keys(pendingSessionNames)) {
+            if (sessionsData[sid(pKey, 'local')]) {
+              renameSession(pKey, 'local', pendingSessionNames[pKey]);
+              delete pendingSessionNames[pKey];
+            }
+          }
           // Auto-subscribe to newly created session (only if no active or pending subscription)
           if (selectedKey && !wsm.subscribedKey && !wsm._pendingSubscribeKey && sessionsData[sid(selectedKey, selectedNode)]) {
             wsm.subscribe(selectedKey, selectedNode);
@@ -2963,12 +2980,14 @@ const wsm = {
   onSendAck(msg) {
     if (msg.status === 'accepted') {
       flashSendBtn();
+      // Pending session names are applied in sessions_update handler
+      // (after the session actually exists in the router).
+      const ackKey = msg.key || selectedKey;
       // Subscribe to the session we just sent to, unless we're already
       // subscribed or a subscribe is already pending for this exact key.
       // The old check (!subscribedKey && !_pendingSubscribeKey) failed when
       // the user was previously viewing a different session — subscribedKey
       // was set to the old key, blocking the subscribe for the new one.
-      const ackKey = msg.key || selectedKey;
       if (ackKey && wsm.subscribedKey !== ackKey && wsm._pendingSubscribeKey !== ackKey) {
         wsm.lastEventTimeWs = 0;
         wsm.subscribe(ackKey, selectedNode);
