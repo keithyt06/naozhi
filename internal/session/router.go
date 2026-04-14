@@ -192,6 +192,12 @@ func NewRouter(cfg RouterConfig) *Router {
 				Exempt:         strings.HasPrefix(key, "project:"),
 			}
 			s.setSessionID(entry.SessionID)
+			if entry.Name != "" {
+				s.SetName(entry.Name)
+			}
+			if entry.Pinned {
+				s.SetPinned(true)
+			}
 			if entry.LastActive != 0 {
 				s.lastActive.Store(entry.LastActive)
 			}
@@ -1290,6 +1296,42 @@ func (r *Router) InterruptSession(key string) bool {
 		return false
 	}
 	return s.Interrupt()
+}
+
+// RenameSession sets the user-defined name for a session.
+// Returns true if the session was found.
+func (r *Router) RenameSession(key, name string) bool {
+	r.mu.RLock()
+	s, ok := r.sessions[key]
+	r.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	s.SetName(name)
+	r.mu.Lock()
+	r.storeDirty = true
+	r.storeGen++
+	r.mu.Unlock()
+	r.notifyChange()
+	return true
+}
+
+// PinSession sets the pin-to-top state for a session.
+// Returns true if the session was found.
+func (r *Router) PinSession(key string, pinned bool) bool {
+	r.mu.RLock()
+	s, ok := r.sessions[key]
+	r.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	s.SetPinned(pinned)
+	r.mu.Lock()
+	r.storeDirty = true
+	r.storeGen++
+	r.mu.Unlock()
+	r.notifyChange()
+	return true
 }
 
 // ActiveSessionIDs returns the set of session IDs currently managed by the router,

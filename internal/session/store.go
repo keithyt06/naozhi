@@ -15,6 +15,8 @@ type storeEntry struct {
 	TotalCost      float64  `json:"total_cost,omitempty"`
 	Workspace      string   `json:"workspace,omitempty"`
 	LastActive     int64    `json:"last_active,omitempty"` // unix nano
+	Name           string   `json:"name,omitempty"`
+	Pinned         bool     `json:"pinned,omitempty"`
 }
 
 func saveStore(path string, sessions map[string]*ManagedSession) error {
@@ -52,6 +54,8 @@ func saveStore(path string, sessions map[string]*ManagedSession) error {
 				TotalCost:      cost,
 				Workspace:      s.workspace,
 				LastActive:     s.lastActive.Load(),
+				Name:           s.GetName(),
+				Pinned:         s.IsPinned(),
 			})
 		}
 	}

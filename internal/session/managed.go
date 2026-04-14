@@ -75,6 +75,8 @@ type ManagedSession struct {
 	cliName     string       // "claude-code", "kiro" — set at creation from Wrapper
 	cliVersion  string       // semver from --version — set at creation from Wrapper
 	deathReason atomic.Value // string: why process died, empty if alive
+	name        atomic.Value // stores string — user-defined session name
+	pinned      atomic.Bool  // pin to top of dashboard sidebar
 	totalCost   float64      // cached cost when process is nil
 
 	// persistedHistory stores event entries that survive process restarts.
@@ -230,6 +232,32 @@ func (s *ManagedSession) setSessionID(id string) {
 	s.sessionID.Store(id)
 }
 
+// GetName returns the user-defined session name.
+func (s *ManagedSession) GetName() string {
+	if v, ok := s.name.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// SetName sets the user-defined session name (max 50 chars).
+func (s *ManagedSession) SetName(name string) {
+	if len(name) > 50 {
+		name = name[:50]
+	}
+	s.name.Store(name)
+}
+
+// IsPinned returns whether the session is pinned to the top.
+func (s *ManagedSession) IsPinned() bool {
+	return s.pinned.Load()
+}
+
+// SetPinned sets the pin-to-top state.
+func (s *ManagedSession) SetPinned(pinned bool) {
+	s.pinned.Store(pinned)
+}
+
 // parseKeyParts lazily parses the immutable session key into cached components.
 func (s *ManagedSession) parseKeyParts() {
 	s.keyOnce.Do(func() {
@@ -293,6 +321,8 @@ type SessionSnapshot struct {
 	Project      string             `json:"project,omitempty"`       // project name (filled by server)
 	IsPlanner    bool               `json:"is_planner,omitempty"`    // true for project planner sessions
 	Subagents    []cli.SubagentInfo `json:"subagents,omitempty"`     // active sub-agent types in current turn
+	Name         string             `json:"name,omitempty"`          // user-defined session name
+	Pinned       bool               `json:"pinned,omitempty"`        // pinned to top of sidebar
 }
 
 func (s *ManagedSession) HasProcess() bool {
@@ -314,6 +344,9 @@ func (s *ManagedSession) Snapshot() SessionSnapshot {
 		CLIName:    s.cliName,
 		CLIVersion: s.cliVersion,
 	}
+	snap.Name = s.GetName()
+	snap.Pinned = s.IsPinned()
+
 	if dr, ok := s.deathReason.Load().(string); ok {
 		snap.DeathReason = dr
 	}
