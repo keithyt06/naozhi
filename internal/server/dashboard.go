@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -10,6 +12,18 @@ import (
 	"github.com/naozhi/naozhi/internal/project"
 	"github.com/naozhi/naozhi/internal/session"
 )
+
+// dashboardETag is computed once at init from the embedded HTML content.
+var dashboardETag string
+
+func init() {
+	data, err := dashboardHTML.ReadFile("static/dashboard.html")
+	if err != nil {
+		return
+	}
+	h := sha256.Sum256(data)
+	dashboardETag = `"` + hex.EncodeToString(h[:8]) + `"`
+}
 
 //go:embed static/dashboard.html
 var dashboardHTML embed.FS
@@ -83,6 +97,10 @@ func (s *Server) registerDashboard() {
 	s.mux.HandleFunc("GET /api/cron/preview", auth(s.cronH.handlePreview))
 	s.mux.HandleFunc("POST /api/auth/logout", auth(s.auth.handleLogout))
 
+	// Session naming & pinning
+	s.mux.HandleFunc("PATCH /api/sessions/rename", auth(s.hub.handleRename))
+	s.mux.HandleFunc("PATCH /api/sessions/pin", auth(s.hub.handlePin))
+
 	// File Hub API
 	s.mux.HandleFunc("GET /api/files/list", auth(s.filesH.handleList))
 	s.mux.HandleFunc("GET /api/files/stat", auth(s.filesH.handleStat))
@@ -111,6 +129,16 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "dashboard not found", http.StatusNotFound)
 		return
+	}
+	// ETag-based caching: browser must revalidate every time, but gets
+	// a 304 if the content hasn't changed. This ensures code fixes are
+	// picked up immediately while still allowing conditional caching.
+	if dashboardETag != "" {
+		if match := r.Header.Get("If-None-Match"); match == dashboardETag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("ETag", dashboardETag)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
