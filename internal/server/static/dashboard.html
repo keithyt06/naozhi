@@ -2207,6 +2207,7 @@ function doCreateInProject(projectPath, projectName, nodeId) {
   renderMainShell();
   lastVersion = 0;
   debouncedFetchSessions();
+  showNewSessionNameDialog(key, nodeId || 'local');
   setTimeout(() => { const input = document.getElementById('msg-input'); if (input) input.focus(); }, 100);
 }
 
@@ -2233,9 +2234,39 @@ function doCreateSession() {
   renderMainShell();
   lastVersion = 0;
   debouncedFetchSessions();
+  showNewSessionNameDialog(key, 'local');
   setTimeout(() => { const input = document.getElementById('msg-input'); if (input) input.focus(); }, 100);
 }
 
+
+// --- New Session Naming Dialog ---
+
+function showNewSessionNameDialog(key, node) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center';
+  const dialog = document.createElement('div');
+  dialog.style.cssText = 'background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;width:320px;max-width:90vw';
+  dialog.innerHTML = '<label style="font-size:13px;color:#8b949e;display:block;margin-bottom:6px">Session 名称（可选）</label>' +
+    '<input id="new-session-name" type="text" placeholder="例如：CloudFront 调试、API 开发..." style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 12px;color:#e6edf3;font-size:14px;outline:none;box-sizing:border-box">' +
+    '<div style="display:flex;gap:8px;margin-top:12px">' +
+    '<button id="new-session-ok" style="background:#238636;border:none;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">确定</button>' +
+    '<button id="new-session-skip" style="background:none;border:1px solid #30363d;color:#8b949e;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">跳过</button></div>';
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+  const input = document.getElementById('new-session-name');
+  input.focus();
+  function finish(save) {
+    if (save && input.value.trim()) renameSession(key, node || 'local', input.value.trim());
+    overlay.remove();
+  }
+  document.getElementById('new-session-ok').onclick = () => finish(true);
+  document.getElementById('new-session-skip').onclick = () => finish(false);
+  overlay.onclick = (e) => { if (e.target === overlay) finish(false); };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+}
 
 // --- Session ID helpers ---
 
