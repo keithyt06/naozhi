@@ -105,15 +105,9 @@ func (h *Hub) sessionSend(p sendParams, onAsyncError func(string)) (bool, error)
 		return true, nil
 	}
 
-	// Dashboard command handling — returns (result text, handled).
-	if result, handled := h.handleDashboardCommand(key, trimmed); handled {
-		if onAsyncError != nil && result != "" {
-			// Repurpose onAsyncError to deliver command result to the WS/HTTP caller.
-			// The caller checks for the "cmd:" prefix to distinguish from real errors.
-			onAsyncError("cmd:" + result)
-		}
-		return true, nil
-	}
+	// Dashboard commands (/ls, /help, /cd, /pwd) are handled by callers
+	// (Hub.handleSend / SendHandler.handleSend) BEFORE calling sessionSend,
+	// because each caller has a different response mechanism (WS vs HTTP).
 
 	// Workspace validation
 	var validatedWorkspace string

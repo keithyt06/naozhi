@@ -121,6 +121,13 @@ func (h *SendHandler) handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Intercept slash commands before they reach sessionSend/CLI
+	if result, handled := h.hub.handleDashboardCommand(key, strings.TrimSpace(text)); handled {
+		w.Header().Set("Content-Type", "application/json")
+		writeJSON(w, map[string]string{"key": key, "status": "command", "result": result})
+		return
+	}
+
 	reset, err := h.hub.sessionSend(sendParams{
 		Key: key, Text: text, Images: images,
 		Workspace: workspace, ResumeID: resumeID,

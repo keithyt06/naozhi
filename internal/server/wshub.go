@@ -323,26 +323,23 @@ func (h *Hub) handleSend(c *wsClient, msg node.ClientMsg) {
 		return
 	}
 
+	// Intercept slash commands before they reach sessionSend/CLI
+	if result, handled := h.handleDashboardCommand(key, strings.TrimSpace(msg.Text)); handled {
+		c.SendJSON(node.ServerMsg{Type: "send_ack", ID: msg.ID, Status: "command", Key: key, Reason: result})
+		return
+	}
+
 	capturedID, capturedKey := msg.ID, key
-	reset, err := h.sessionSend(sendParams{
+	_, err := h.sessionSend(sendParams{
 		Key:       key,
 		Text:      msg.Text,
 		Workspace: msg.Workspace,
 		ResumeID:  msg.ResumeID,
 	}, func(errMsg string) {
-		// Dashboard commands return results via "cmd:" prefix
-		if strings.HasPrefix(errMsg, "cmd:") {
-			c.SendJSON(node.ServerMsg{Type: "send_ack", ID: capturedID, Status: "command", Key: capturedKey, Reason: errMsg[4:]})
-			return
-		}
 		c.SendJSON(node.ServerMsg{Type: "send_ack", ID: capturedID, Status: "error", Key: capturedKey, Error: errMsg})
 	})
 	if err != nil {
 		c.SendJSON(node.ServerMsg{Type: "send_ack", ID: msg.ID, Status: "error", Error: err.Error()})
-		return
-	}
-	if reset {
-		c.SendJSON(node.ServerMsg{Type: "send_ack", ID: msg.ID, Status: "accepted", Key: key})
 		return
 	}
 	c.SendJSON(node.ServerMsg{Type: "send_ack", ID: msg.ID, Status: "accepted", Key: key})
