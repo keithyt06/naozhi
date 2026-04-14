@@ -55,6 +55,10 @@ func (d *Dispatcher) dispatchCommand(ctx context.Context, msg platform.IncomingM
 		d.handleProjectCommand(ctx, msg, trimmed, log)
 		return true
 
+	case trimmed == "/ls" || strings.HasPrefix(trimmed, "/ls "):
+		d.handleLsCommand(ctx, msg, trimmed, log)
+		return true
+
 	case trimmed == "/new" || strings.HasPrefix(trimmed, "/new ") ||
 		trimmed == "/clear" || strings.HasPrefix(trimmed, "/clear "):
 		d.handleNewCommand(ctx, msg, trimmed, log)
@@ -76,6 +80,7 @@ func (d *Dispatcher) handleHelpCommand(ctx context.Context, msg platform.Incomin
 		"  /clear — 重置会话（同 /new）\n" +
 		"  /cd <路径> — 切换工作目录\n" +
 		"  /pwd — 显示当前工作目录\n" +
+		"  /ls [路径] — 列出目录内容\n" +
 		"  /project [name|off|list] — 项目绑定\n" +
 		"  /cron <add|list|del|pause|resume> — 定时任务"
 	if len(d.AgentCommands) > 0 {
@@ -378,6 +383,140 @@ func (d *Dispatcher) handleCdCommand(ctx context.Context, msg platform.IncomingM
 
 	p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "工作目录已切换到: " + absPath + "\n所有会话已重置，新消息将在此目录下执行。"})
 	log.Info("workspace changed", "chat_key", chatKey, "path", absPath)
+}
+
+// handleLsCommand lists directory contents without invoking the CLI.
+func (d *Dispatcher) handleLsCommand(ctx context.Context, msg platform.IncomingMessage, trimmed string, log *slog.Logger) {
+	p := d.Platforms[msg.Platform]
+	if p == nil {
+		return
+	}
+
+	chatKey := session.ChatKey(msg.Platform, msg.ChatType, msg.ChatID)
+	cwd := d.Router.GetWorkspace(chatKey)
+
+	arg := strings.TrimSpace(strings.TrimPrefix(trimmed, "/ls"))
+
+	var target string
+	switch {
+	case arg == "":
+		target = cwd
+	case strings.HasPrefix(arg, "~"):
+		home, err := os.UserHomeDir()
+		if err != nil {
+			p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "❌ 无法获取主目录: " + err.Error()})
+			return
+		}
+		target = filepath.Join(home, arg[1:])
+	case filepath.IsAbs(arg):
+		target = filepath.Clean(arg)
+	default:
+		target = filepath.Join(cwd, arg)
+	}
+
+	info, err := os.Stat(target)
+	if err != nil {
+		if os.IsPermission(err) {
+			p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "❌ 权限不足: " + target})
+		} else {
+			p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "❌ 路径不存在: " + target})
+		}
+		return
+	}
+	if !info.IsDir() {
+		p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "❌ 不是目录: " + target})
+		return
+	}
+
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		if os.IsPermission(err) {
+			p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "❌ 权限不足: " + target})
+		} else {
+			p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "❌ 读取目录失败: " + err.Error()})
+		}
+		return
+	}
+
+	// Skip dotfiles, separate dirs and files.
+	var dirs, files []os.DirEntry
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if e.IsDir() {
+			dirs = append(dirs, e)
+		} else {
+			files = append(files, e)
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("📂 " + target + "\n\n")
+
+	total := len(dirs) + len(files)
+	const maxItems = 50
+	shown := 0
+
+	for _, e := range dirs {
+		if shown >= maxItems {
+			break
+		}
+		subEntries, err := os.ReadDir(filepath.Join(target, e.Name()))
+		count := 0
+		if err == nil {
+			for _, se := range subEntries {
+				if !strings.HasPrefix(se.Name(), ".") {
+					count++
+				}
+			}
+		}
+		fmt.Fprintf(&sb, "  📁 %s/", e.Name())
+		if count > 0 {
+			fmt.Fprintf(&sb, "    %d items", count)
+		}
+		sb.WriteString("\n")
+		shown++
+	}
+
+	for _, e := range files {
+		if shown >= maxItems {
+			break
+		}
+		fi, err := e.Info()
+		sizeStr := ""
+		if err == nil {
+			sizeStr = formatSize(fi.Size())
+		}
+		fmt.Fprintf(&sb, "  📄 %s", e.Name())
+		if sizeStr != "" {
+			fmt.Fprintf(&sb, "    %s", sizeStr)
+		}
+		sb.WriteString("\n")
+		shown++
+	}
+
+	if total > maxItems {
+		fmt.Fprintf(&sb, "  ... and %d more items\n", total-maxItems)
+	}
+
+	fmt.Fprintf(&sb, "\n%d items (%d dirs, %d files)", total, len(dirs), len(files))
+
+	p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: sb.String()})
+}
+
+// formatSize returns a human-readable size string.
+func formatSize(b int64) string {
+	switch {
+	case b >= 1<<30:
+		return fmt.Sprintf("%.1fG", float64(b)/(1<<30))
+	case b >= 1<<20:
+		return fmt.Sprintf("%.1fM", float64(b)/(1<<20))
+	case b >= 1<<10:
+		return fmt.Sprintf("%.1fK", float64(b)/(1<<10))
+	default:
+		return fmt.Sprintf("%dB", b)
+	}
 }
 
 // ParseCronAdd parses the args of /cron add: "schedule" prompt
