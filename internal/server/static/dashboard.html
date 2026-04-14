@@ -806,9 +806,11 @@ function sessionCardHtml(s) {
   const cls = 'session-card' + (isActive ? ' active' : '') + (isNew ? ' new-card' : '') +
     (isSuspended ? ' suspended-card' : '');
 
-  // Line 1: prompt (prefer name if set)
-  const hasName = s.name && s.name.trim();
-  const prompt = hasName ? s.name : (s.summary || s.last_prompt || (isNew ? '(new session)' : '(no prompt)'));
+  // Line 1: prompt (prefer name if set, also check pending names for new sessions)
+  const pendingName = pendingSessionNames[s.key];
+  const effectiveName = pendingName || (s.name && s.name.trim() ? s.name : '');
+  const hasName = !!effectiveName;
+  const prompt = hasName ? effectiveName : (s.summary || s.last_prompt || (isNew ? '(new session)' : '(no prompt)'));
   const icon = cliIcon(s.cli_name || 'cli');
 
   // Line 2: status dot + meta
@@ -1032,8 +1034,8 @@ function renderMainShell() {
 
   const keyParts = (selectedKey || '').split(':');
   const agentIsGeneric = !s.agent || s.agent === 'general';
-  // Primary title: prefer name, then prompt. Fallback to agent name or key tail.
-  const displayName = s.name || s.summary || s.last_prompt || (agentIsGeneric ? '' : s.agent) || keyParts[keyParts.length - 1] || selectedKey || '';
+  // Primary title: prefer pending name, then server name, then prompt.
+  const displayName = pendingSessionNames[selectedKey] || s.name || s.summary || s.last_prompt || (agentIsGeneric ? '' : s.agent) || keyParts[keyParts.length - 1] || selectedKey || '';
 
   // Detail line: left = CLI name + version, right = cost (hidden for kiro)
   const cliLabel = s.cli_name ? esc(s.cli_name) + (s.cli_version ? ' v' + esc(s.cli_version) : '') : '';
@@ -2262,10 +2264,17 @@ function showNewSessionNameDialog(key, node) {
   function finish(save) {
     if (save && input.value.trim()) {
       // Store as pending — session may not exist in router yet.
-      // Will be applied when first send_ack(accepted) arrives for this key.
+      // Will be applied via sessions_update when session is created on server.
       pendingSessionNames[key] = input.value.trim();
       // Also try immediately (works if session already exists)
       renameSession(key, node || 'local', input.value.trim());
+      // Optimistic: update card text + header immediately so name shows
+      const card = document.querySelector('.session-card[data-key="' + key + '"]');
+      if (card) {
+        const promptEl = card.querySelector('.sc-prompt');
+        if (promptEl) { promptEl.textContent = input.value.trim(); promptEl.style.color = ''; }
+      }
+      renderMainShell();
     }
     overlay.remove();
   }
