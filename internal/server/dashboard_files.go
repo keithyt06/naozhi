@@ -50,23 +50,34 @@ type fileUploadResponse struct {
 
 const maxUploadSize = 100 << 20 // 100 MB
 
+// fileError writes a JSON error response.
+func fileError(w http.ResponseWriter, msg string, path string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	resp := map[string]string{"error": msg}
+	if path != "" {
+		resp["path"] = path
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
 // handleList returns the contents of a directory.
 // GET /api/files/list?path=/abs/path&hidden=true
 func (h *FileHandlers) handleList(w http.ResponseWriter, r *http.Request) {
 	dirPath := r.URL.Query().Get("path")
 	if dirPath == "" {
-		http.Error(w, "missing path parameter", http.StatusBadRequest)
+		fileError(w, "missing path parameter", "", http.StatusBadRequest)
 		return
 	}
 	dirPath = filepath.Clean(dirPath)
 
 	info, err := os.Stat(dirPath)
 	if err != nil {
-		http.Error(w, "path not found", http.StatusNotFound)
+		fileError(w, "path not found", dirPath, http.StatusNotFound)
 		return
 	}
 	if !info.IsDir() {
-		http.Error(w, "not a directory", http.StatusBadRequest)
+		fileError(w, "not a directory", dirPath, http.StatusBadRequest)
 		return
 	}
 
@@ -74,7 +85,7 @@ func (h *FileHandlers) handleList(w http.ResponseWriter, r *http.Request) {
 
 	dirEntries, err := os.ReadDir(dirPath)
 	if err != nil {
-		http.Error(w, "cannot read directory", http.StatusInternalServerError)
+		fileError(w, "cannot read directory", dirPath, http.StatusInternalServerError)
 		return
 	}
 
@@ -94,9 +105,15 @@ func (h *FileHandlers) handleList(w http.ResponseWriter, r *http.Request) {
 		}
 		if de.IsDir() {
 			entry.Type = "dir"
-			// Count direct children
+			// Count direct children (respecting hidden filter)
 			if sub, err := os.ReadDir(filepath.Join(dirPath, name)); err == nil {
-				entry.ItemCount = len(sub)
+				count := 0
+				for _, se := range sub {
+					if showHidden || !strings.HasPrefix(se.Name(), ".") {
+						count++
+					}
+				}
+				entry.ItemCount = count
 			}
 			dirs = append(dirs, entry)
 		} else {
@@ -123,14 +140,14 @@ func (h *FileHandlers) handleList(w http.ResponseWriter, r *http.Request) {
 func (h *FileHandlers) handleStat(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("path")
 	if filePath == "" {
-		http.Error(w, "missing path parameter", http.StatusBadRequest)
+		fileError(w, "missing path parameter", "", http.StatusBadRequest)
 		return
 	}
 	filePath = filepath.Clean(filePath)
 
 	fi, err := os.Stat(filePath)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		fileError(w, "not found", filePath, http.StatusNotFound)
 		return
 	}
 
@@ -156,27 +173,31 @@ func (h *FileHandlers) handleStat(w http.ResponseWriter, r *http.Request) {
 func (h *FileHandlers) handleUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize+4096)
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		http.Error(w, "request too large or invalid multipart", http.StatusBadRequest)
+		if err.Error() == "http: request body too large" {
+			fileError(w, "upload exceeds 100MB limit", "", http.StatusRequestEntityTooLarge)
+		} else {
+			fileError(w, "invalid multipart form", "", http.StatusBadRequest)
+		}
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
 
 	dest := r.FormValue("dest")
 	if dest == "" {
-		http.Error(w, "missing dest field", http.StatusBadRequest)
+		fileError(w, "missing dest field", "", http.StatusBadRequest)
 		return
 	}
 	dest = filepath.Clean(dest)
 
 	di, err := os.Stat(dest)
 	if err != nil || !di.IsDir() {
-		http.Error(w, "destination directory not found", http.StatusBadRequest)
+		fileError(w, "destination directory not found", dest, http.StatusBadRequest)
 		return
 	}
 
 	files := r.MultipartForm.File["file"]
 	if len(files) == 0 {
-		http.Error(w, "no files provided", http.StatusBadRequest)
+		fileError(w, "no files provided", "", http.StatusBadRequest)
 		return
 	}
 
@@ -223,7 +244,7 @@ func (h *FileHandlers) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(uploaded) == 0 {
-		http.Error(w, "all uploads failed", http.StatusInternalServerError)
+		fileError(w, "all uploads failed", dest, http.StatusInternalServerError)
 		return
 	}
 
@@ -236,18 +257,18 @@ func (h *FileHandlers) handleUpload(w http.ResponseWriter, r *http.Request) {
 func (h *FileHandlers) handleDownload(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("path")
 	if filePath == "" {
-		http.Error(w, "missing path parameter", http.StatusBadRequest)
+		fileError(w, "missing path parameter", "", http.StatusBadRequest)
 		return
 	}
 	filePath = filepath.Clean(filePath)
 
 	fi, err := os.Stat(filePath)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		fileError(w, "not found", filePath, http.StatusNotFound)
 		return
 	}
 	if fi.IsDir() {
-		http.Error(w, "cannot download directory", http.StatusBadRequest)
+		fileError(w, "cannot download directory", filePath, http.StatusBadRequest)
 		return
 	}
 
@@ -263,13 +284,13 @@ func (h *FileHandlers) handleMkdir(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
-		http.Error(w, "path is required", http.StatusBadRequest)
+		fileError(w, "path is required", "", http.StatusBadRequest)
 		return
 	}
 	req.Path = filepath.Clean(req.Path)
 
 	if err := os.MkdirAll(req.Path, 0o755); err != nil {
-		http.Error(w, "failed to create directory", http.StatusInternalServerError)
+		fileError(w, "failed to create directory", req.Path, http.StatusInternalServerError)
 		return
 	}
 
@@ -282,23 +303,23 @@ func (h *FileHandlers) handleMkdir(w http.ResponseWriter, r *http.Request) {
 func (h *FileHandlers) handleDelete(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("path")
 	if filePath == "" {
-		http.Error(w, "missing path parameter", http.StatusBadRequest)
+		fileError(w, "missing path parameter", "", http.StatusBadRequest)
 		return
 	}
 	filePath = filepath.Clean(filePath)
 
 	fi, err := os.Stat(filePath)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		fileError(w, "not found", filePath, http.StatusNotFound)
 		return
 	}
 
 	// For directories, only allow removing empty ones (os.Remove fails on non-empty)
 	if err := os.Remove(filePath); err != nil {
 		if fi.IsDir() {
-			http.Error(w, "directory not empty, cannot delete", http.StatusBadRequest)
+			fileError(w, "directory not empty, cannot delete", filePath, http.StatusBadRequest)
 		} else {
-			http.Error(w, "failed to delete", http.StatusInternalServerError)
+			fileError(w, "failed to delete", filePath, http.StatusInternalServerError)
 		}
 		return
 	}

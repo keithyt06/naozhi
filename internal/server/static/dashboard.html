@@ -3945,8 +3945,6 @@ function fhDownloadSelected() {
     var p = fhPath.endsWith('/') ? fhPath + entry.name : fhPath + '/' + entry.name;
     var a = document.createElement('a');
     a.href = '/api/files/download?path=' + encodeURIComponent(p);
-    var t = getToken();
-    if (t) a.href += '&token=' + encodeURIComponent(t);
     a.download = entry.name;
     a.style.display = 'none';
     document.body.appendChild(a);
@@ -4018,15 +4016,19 @@ function enhanceLsOutput(text) {
     var line = lines[i];
     if (!line.trim()) continue;
 
-    var dirMatch = line.match(/^([\u2502\u251c\u2514\u2500\s]+)\ud83d\udcc1\s+(.+?)\/?(\s+\(.+\))?$/);
-    var fileMatch = line.match(/^([\u2502\u251c\u2514\u2500\s]+)\ud83d\udcc4\s+(.+?)(\s+\(.+\))?$/);
+    // Actual /ls output format: "  📁 dirname/    6 items" or "  📄 file.txt    1.2K"
+    var dirMatch = line.match(/^(\s+)\ud83d\udcc1\s+(\S+?)\/(.*)$/);
+    var fileMatch = line.match(/^(\s+)\ud83d\udcc4\s+(.+)$/);
+    var summaryMatch = line.match(/^\d+\s+items\s+\(/);
 
     if (dirMatch) {
       var prefix = dirMatch[1];
-      var dirName = dirMatch[2].replace(/\/$/, '');
+      var dirName = dirMatch[2];
       var suffix = dirMatch[3] || '';
       var fullPath = basePath.endsWith('/') ? basePath + dirName : basePath + '/' + dirName;
       html += '<div>' + esc(prefix) + '\ud83d\udcc1 <span class="ls-dir-link" onclick="fhLsNavigate(\'' + escJs(fullPath) + '\')">' + esc(dirName) + '/</span>' + esc(suffix) + '</div>';
+    } else if (summaryMatch) {
+      html += '<div style="margin-top:4px;padding-top:4px;border-top:1px solid #21262d;color:#484f58">' + esc(line) + '</div>';
     } else if (fileMatch) {
       html += '<div>' + esc(line) + '</div>';
     } else {
