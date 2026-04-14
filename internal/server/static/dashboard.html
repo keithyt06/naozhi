@@ -2817,6 +2817,25 @@ const wsm = {
       // duplicate user messages in the UI.
       // For process restarts (dead/suspended → running), onSessionState
       // handles re-subscription exclusively.
+    } else if (msg.status === 'command') {
+      // Slash command result from server (/ls, /help, /cd, /pwd)
+      const el = document.getElementById('events');
+      if (el) {
+        const empty = el.querySelector('.empty-state');
+        if (empty) empty.remove();
+        const enhanced = enhanceLsOutput(msg.reason || '');
+        const content = enhanced || '<pre style="white-space:pre-wrap;margin:0">' + esc(msg.reason || '') + '</pre>';
+        const wasBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
+        el.insertAdjacentHTML('beforeend',
+          '<div class="event-row" style="border-left:3px solid #484f58;padding:8px 12px;margin:4px 0">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+          '<span style="background:#21262d;color:#484f58;padding:2px 8px;border-radius:8px;font-size:10px;border:1px solid #30363d">SYSTEM</span>' +
+          '</div>' + content + '</div>');
+        if (wasBottom) el.scrollTop = el.scrollHeight;
+      }
+      // Remove optimistic message
+      const opt = document.querySelector('.optimistic-msg');
+      if (opt) opt.remove();
     } else if (msg.status === 'error') {
       showToast('send error: ' + (msg.error || 'unknown'), 'error');
       // Remove optimistic message on send failure

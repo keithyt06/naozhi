@@ -12,6 +12,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -94,11 +96,22 @@ type sendParams struct {
 func (h *Hub) sessionSend(p sendParams, onAsyncError func(string)) (bool, error) {
 	key := p.Key
 
-	// Handle /clear and /new — CLI built-in doesn't work in stream-json
+	// Handle slash commands locally — CLI built-in doesn't work in stream-json,
+	// and dispatch-layer commands (/ls, /help, /cd, /pwd) only run for IM platforms.
 	trimmed := strings.TrimSpace(p.Text)
 	if trimmed == "/clear" || trimmed == "/new" {
 		h.router.Reset(key)
 		h.BroadcastSessionsUpdate()
+		return true, nil
+	}
+
+	// Dashboard command handling — returns (result text, handled).
+	if result, handled := h.handleDashboardCommand(key, trimmed); handled {
+		if onAsyncError != nil && result != "" {
+			// Repurpose onAsyncError to deliver command result to the WS/HTTP caller.
+			// The caller checks for the "cmd:" prefix to distinguish from real errors.
+			onAsyncError("cmd:" + result)
+		}
 		return true, nil
 	}
 
@@ -172,4 +185,149 @@ func (h *Hub) sessionSend(p sendParams, onAsyncError func(string)) (bool, error)
 	}()
 
 	return false, nil
+}
+
+// handleDashboardCommand handles slash commands that the dispatch layer handles
+// for IM platforms but that Dashboard messages bypass. Returns (result, true)
+// if the command was handled, ("", false) otherwise.
+func (h *Hub) handleDashboardCommand(key, trimmed string) (string, bool) {
+	// Extract chat key (strip agent suffix) for workspace lookup
+	chatKey := key
+	if idx := strings.LastIndexByte(key, ':'); idx >= 0 {
+		chatKey = key[:idx]
+	}
+
+	switch {
+	case trimmed == "/help":
+		help := "可用命令:\n" +
+			"  /help — 显示此帮助\n" +
+			"  /new — 重置会话\n" +
+			"  /ls [路径] — 列出目录内容\n" +
+			"  /cd <路径> — 切换工作目录\n" +
+			"  /pwd — 显示当前工作目录"
+		return help, true
+
+	case trimmed == "/pwd":
+		ws := h.router.GetWorkspace(chatKey)
+		return "当前工作目录: " + ws, true
+
+	case strings.HasPrefix(trimmed, "/cd "):
+		path := strings.TrimSpace(strings.TrimPrefix(trimmed, "/cd"))
+		if path == "" {
+			return "用法: /cd <目录路径>", true
+		}
+		if strings.HasPrefix(path, "~") {
+			if home, err := os.UserHomeDir(); err == nil {
+				path = filepath.Join(home, path[1:])
+			}
+		}
+		var absPath string
+		if filepath.IsAbs(path) {
+			absPath = filepath.Clean(path)
+		} else {
+			absPath = filepath.Join(h.router.GetWorkspace(chatKey), path)
+		}
+		if info, err := os.Stat(absPath); err != nil || !info.IsDir() {
+			return "❌ 目录不存在: " + absPath, true
+		}
+		if resolved, err := filepath.EvalSymlinks(absPath); err == nil {
+			absPath = resolved
+		}
+		h.router.SetWorkspace(chatKey, absPath)
+		h.router.ResetChat(chatKey)
+		h.BroadcastSessionsUpdate()
+		return "工作目录已切换到: " + absPath + "\n所有会话已重置。", true
+
+	case trimmed == "/ls" || strings.HasPrefix(trimmed, "/ls "):
+		arg := strings.TrimSpace(strings.TrimPrefix(trimmed, "/ls"))
+		cwd := h.router.GetWorkspace(chatKey)
+
+		var target string
+		switch {
+		case arg == "":
+			target = cwd
+		case strings.HasPrefix(arg, "~"):
+			if home, err := os.UserHomeDir(); err == nil {
+				target = filepath.Join(home, arg[1:])
+			} else {
+				return "❌ 无法获取主目录", true
+			}
+		case filepath.IsAbs(arg):
+			target = filepath.Clean(arg)
+		default:
+			target = filepath.Join(cwd, arg)
+		}
+
+		info, err := os.Stat(target)
+		if err != nil {
+			return "❌ 路径不存在: " + target, true
+		}
+		if !info.IsDir() {
+			return "❌ 不是目录: " + target, true
+		}
+
+		entries, err := os.ReadDir(target)
+		if err != nil {
+			return "❌ 权限不足: " + target, true
+		}
+
+		var dirs, files []os.DirEntry
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			if e.IsDir() {
+				dirs = append(dirs, e)
+			} else {
+				files = append(files, e)
+			}
+		}
+
+		var sb strings.Builder
+		sb.WriteString("📂 " + target + "\n\n")
+		const maxItems = 50
+		shown := 0
+
+		for _, e := range dirs {
+			if shown >= maxItems {
+				break
+			}
+			sub, _ := os.ReadDir(filepath.Join(target, e.Name()))
+			count := 0
+			for _, se := range sub {
+				if !strings.HasPrefix(se.Name(), ".") {
+					count++
+				}
+			}
+			fmt.Fprintf(&sb, "  📁 %s/", e.Name())
+			if count > 0 {
+				fmt.Fprintf(&sb, "    %d items", count)
+			}
+			sb.WriteString("\n")
+			shown++
+		}
+		for _, e := range files {
+			if shown >= maxItems {
+				break
+			}
+			fi, _ := e.Info()
+			if fi != nil {
+				fmt.Fprintf(&sb, "  📄 %s    %s\n", e.Name(), formatSize(fi.Size()))
+			} else {
+				fmt.Fprintf(&sb, "  📄 %s\n", e.Name())
+			}
+			shown++
+		}
+		total := len(dirs) + len(files)
+		if total > maxItems {
+			fmt.Fprintf(&sb, "  ... and %d more items\n", total-maxItems)
+		}
+		fmt.Fprintf(&sb, "\n%d items (%d dirs, %d files)", total, len(dirs), len(files))
+
+		slog.Info("dashboard /ls", "path", target, "items", total)
+		return sb.String(), true
+
+	default:
+		return "", false
+	}
 }
