@@ -196,9 +196,19 @@ func (h *Hub) handleDashboardCommand(key, trimmed string) (string, bool) {
 		help := "可用命令:\n" +
 			"  /help — 显示此帮助\n" +
 			"  /new — 重置会话\n" +
+			"  /clear — 重置会话（同 /new）\n" +
 			"  /ls [路径] — 列出目录内容\n" +
 			"  /cd <路径> — 切换工作目录\n" +
-			"  /pwd — 显示当前工作目录"
+			"  /pwd — 显示当前工作目录\n" +
+			"  /rename [名称] — 命名当前会话（空清除）"
+		// Append agent commands if any are configured
+		if len(h.agentCmds) > 0 {
+			help += "\n\n可用 Agent:"
+			for cmd, agentID := range h.agentCmds {
+				help += "\n  /" + cmd + " → " + agentID
+			}
+		}
+		help += "\n\n💡 项目管理和定时任务请使用顶栏面板按钮"
 		return help, true
 
 	case trimmed == "/pwd":
@@ -320,6 +330,17 @@ func (h *Hub) handleDashboardCommand(key, trimmed string) (string, bool) {
 
 		slog.Info("dashboard /ls", "path", target, "items", total)
 		return sb.String(), true
+
+	case trimmed == "/rename" || strings.HasPrefix(trimmed, "/rename "):
+		arg := strings.TrimSpace(strings.TrimPrefix(trimmed, "/rename"))
+		if arg == "" {
+			h.router.RenameSession(key, "")
+			h.BroadcastSessionsUpdate()
+			return "Session 名称已清除", true
+		}
+		h.router.RenameSession(key, arg)
+		h.BroadcastSessionsUpdate()
+		return "Session 已命名: " + arg, true
 
 	default:
 		return "", false

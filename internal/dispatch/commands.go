@@ -64,6 +64,10 @@ func (d *Dispatcher) dispatchCommand(ctx context.Context, msg platform.IncomingM
 		d.handleNewCommand(ctx, msg, trimmed, log)
 		return true
 
+	case trimmed == "/rename" || strings.HasPrefix(trimmed, "/rename "):
+		d.handleRenameCommand(ctx, msg, trimmed, log)
+		return true
+
 	default:
 		return false
 	}
@@ -81,6 +85,7 @@ func (d *Dispatcher) handleHelpCommand(ctx context.Context, msg platform.Incomin
 		"  /cd <路径> — 切换工作目录\n" +
 		"  /pwd — 显示当前工作目录\n" +
 		"  /ls [路径] — 列出目录内容\n" +
+		"  /rename [名称] — 命名当前会话（空清除）\n" +
 		"  /project [name|off|list] — 项目绑定\n" +
 		"  /cron <add|list|del|pause|resume> — 定时任务"
 	if len(d.AgentCommands) > 0 {
@@ -503,6 +508,25 @@ func (d *Dispatcher) handleLsCommand(ctx context.Context, msg platform.IncomingM
 	fmt.Fprintf(&sb, "\n%d items (%d dirs, %d files)", total, len(dirs), len(files))
 
 	p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: sb.String()})
+}
+
+// handleRenameCommand sets or clears the user-defined name for the general session.
+func (d *Dispatcher) handleRenameCommand(ctx context.Context, msg platform.IncomingMessage, trimmed string, log *slog.Logger) {
+	p := d.Platforms[msg.Platform]
+	if p == nil {
+		return
+	}
+	key := session.SessionKey(msg.Platform, msg.ChatType, msg.ChatID, "general")
+	arg := strings.TrimSpace(strings.TrimPrefix(trimmed, "/rename"))
+	if arg == "" {
+		d.Router.RenameSession(key, "")
+		p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "Session 名称已清除"})
+		log.Info("session renamed", "key", key, "name", "")
+		return
+	}
+	d.Router.RenameSession(key, arg)
+	p.Reply(ctx, platform.OutgoingMessage{ChatID: msg.ChatID, Text: "Session 已命名: " + arg})
+	log.Info("session renamed", "key", key, "name", arg)
 }
 
 // formatSize returns a human-readable size string.
