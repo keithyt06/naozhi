@@ -283,6 +283,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .dot-new{background:#1f6feb;border:1px dashed #58a6ff;width:5px;height:5px}
 .sc-time{flex-shrink:0;font-size:12px;color:#8b949e}
 .sc-node{display:inline-block;padding:0 4px;border-radius:3px;font-size:10px;font-weight:600;color:#fff;margin-left:2px}
+.session-card .sc-edit{opacity:0;transition:opacity .15s;font-size:12px;cursor:pointer;margin-left:4px}
+.session-card:hover .sc-edit{opacity:1}
+.session-card .sc-pin{font-size:11px;margin-right:2px;cursor:pointer}
+.session-card .sc-pin-hover{opacity:0;transition:opacity .15s}
+.session-card:hover .sc-pin-hover{opacity:.5}
+.session-card .sc-pin-hover:hover{opacity:1}
+.sc-pin-sep{border:none;border-top:1px dashed #30363d;margin:0}
 /* History bottom sheet (mobile) */
 .history-sheet{position:fixed;bottom:0;left:0;right:0;z-index:200;background:#161b22;border-top:1px solid #30363d;border-radius:16px 16px 0 0;max-height:60vh;overflow-y:auto;animation:sheet-in .25s ease;padding-bottom:max(8px,env(safe-area-inset-bottom))}
 .sheet-handle{width:36px;height:4px;background:#484f58;border-radius:2px;margin:8px auto}
@@ -627,12 +634,21 @@ function renderSidebar(data) {
   // Suspended sessions stay in the workspace (with distinct styling).
   allSessionsCache = allItems;
 
-  // Sort: running > ready > new > suspended, then by last_active desc
+  // Sort: pinned first, then running > ready > new > suspended, then by last_active desc
   const order = {running: 0, ready: 1, new: 2, suspended: 3};
   allItems.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
     const d = (order[a.state] ?? 9) - (order[b.state] ?? 9);
     return d !== 0 ? d : (b.last_active || 0) - (a.last_active || 0);
   });
+  // Helper: render cards with a dashed separator between pinned and non-pinned
+  function renderCards(items) {
+    return items.map((s, i) => {
+      const sep = (i > 0 && items[i - 1].pinned && !s.pinned) ? '<hr class="sc-pin-sep">' : '';
+      return sep + sessionCardHtml(s);
+    }).join('');
+  }
 
   // Always group by project when any session has a project
   const projects = new Set(allItems.map(s => s.project).filter(Boolean));
@@ -657,11 +673,11 @@ function renderSidebar(data) {
     html = '';
     sortedProjects.forEach(p => {
       html += '<div class="section-header">' + esc(p) + '</div>';
-      html += groups[p].map(sessionCardHtml).join('');
+      html += renderCards(groups[p]);
     });
-    html += ungrouped.map(sessionCardHtml).join('');
+    html += renderCards(ungrouped);
   } else {
-    html = allItems.map(sessionCardHtml).join('');
+    html = renderCards(allItems);
   }
 
   if (!html) html = '<div class="no-sessions">no sessions</div>';
@@ -790,8 +806,9 @@ function sessionCardHtml(s) {
   const cls = 'session-card' + (isActive ? ' active' : '') + (isNew ? ' new-card' : '') +
     (isSuspended ? ' suspended-card' : '');
 
-  // Line 1: prompt
-  const prompt = s.summary || s.last_prompt || (isNew ? '(new session)' : '(no prompt)');
+  // Line 1: prompt (prefer name if set)
+  const hasName = s.name && s.name.trim();
+  const prompt = hasName ? s.name : (s.summary || s.last_prompt || (isNew ? '(new session)' : '(no prompt)'));
   const icon = cliIcon(s.cli_name || 'cli');
 
   // Line 2: status dot + meta
@@ -811,7 +828,10 @@ function sessionCardHtml(s) {
     icon +
     '<div class="sc-body">' +
       '<div class="sc-header">' +
-        '<div class="sc-prompt" title="' + escAttr(prompt) + '">' + esc(prompt) + '</div>' +
+        (s.pinned ? '<span class="sc-pin" title="取消置顶" onclick="event.stopPropagation();togglePin(\'' + escAttr(s.key) + '\',\'' + escAttr(sNode) + '\',false)">📌</span>' :
+          '<span class="sc-pin sc-pin-hover" title="置顶" onclick="event.stopPropagation();togglePin(\'' + escAttr(s.key) + '\',\'' + escAttr(sNode) + '\',true)">📌</span>') +
+        '<div class="sc-prompt" title="' + escAttr(prompt) + '"' + (hasName ? '' : ' style="color:#8b949e"') + '>' + esc(prompt) + '</div>' +
+        '<span class="sc-edit" title="重命名" onclick="event.stopPropagation();startRename(\'' + escAttr(s.key) + '\',\'' + escAttr(sNode) + '\')">✏️</span>' +
         (ago ? '<span class="sc-time">' + ago + '</span>' : '') +
       '</div>' +
       '<div class="sc-meta">' + metaHtml + '</div>' +
@@ -1363,11 +1383,33 @@ async function sendMessage() {
       return;
     }
 
+    // Parse response to check for command results (/ls, /help, /cd, /pwd)
+    const resp = await r.json().catch(() => ({}));
+
     // Clear input only after confirmed success
     if (input) clearMsg(input);
     delete sessionDrafts[selectedKey];
     pendingFiles = [];
     renderFilePreviews();
+
+    if (resp.status === 'command') {
+      // Render command result the same way as WS path
+      const el = document.getElementById('events-scroll');
+      if (el) {
+        const empty = el.querySelector('.empty-state');
+        if (empty) empty.remove();
+        const enhanced = enhanceLsOutput(resp.result || '');
+        const content = enhanced || '<pre style="white-space:pre-wrap;margin:0">' + esc(resp.result || '') + '</pre>';
+        const wasBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
+        el.insertAdjacentHTML('beforeend',
+          '<div class="event-row" style="border-left:3px solid #484f58;padding:8px 12px;margin:4px 0">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+          '<span style="background:#21262d;color:#484f58;padding:2px 8px;border-radius:8px;font-size:10px;border:1px solid #30363d">SYSTEM</span>' +
+          '</div>' + content + '</div>');
+        if (wasBottom) el.scrollTop = el.scrollHeight;
+      }
+      return;
+    }
 
     // Speed up polling when WS not connected
     if (!wsm.isConnected()) {
@@ -2181,6 +2223,62 @@ function doCreateSession() {
 }
 
 
+// --- Session Rename & Pin ---
+
+function startRename(key, node) {
+  const card = document.querySelector('.session-card[data-key="' + key + '"][data-node="' + (node || 'local') + '"]');
+  if (!card) return;
+  const promptEl = card.querySelector('.sc-prompt');
+  if (!promptEl) return;
+  const sKey = sid(key, node);
+  const currentName = sessionsData[sKey] ? (sessionsData[sKey].name || '') : '';
+  const input = document.createElement('input');
+  input.value = currentName;
+  input.placeholder = '输入 Session 名称...';
+  input.style.cssText = 'background:#0d1117;border:1px solid #58a6ff;border-radius:4px;padding:2px 6px;color:#e6edf3;font-size:14px;width:100%;outline:none';
+  const editIcon = card.querySelector('.sc-edit');
+  if (editIcon) editIcon.style.display = 'none';
+  promptEl.replaceWith(input);
+  input.focus();
+  input.select();
+  function finish(save) {
+    if (save) renameSession(key, node, input.value.trim());
+    input.replaceWith(Object.assign(document.createElement('div'), {
+      className: 'sc-prompt', textContent: input.value || '(no prompt)'
+    }));
+    if (editIcon) editIcon.style.display = '';
+  }
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+async function renameSession(key, node, name) {
+  const headers = {'Content-Type': 'application/json'};
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    await fetch('/api/sessions/rename', { method: 'PATCH', headers, body: JSON.stringify({key, name}) });
+    const sKey = sid(key, node);
+    if (sessionsData[sKey]) sessionsData[sKey].name = name;
+  } catch (e) { showToast('rename failed: ' + e.message, 'error'); }
+}
+
+async function togglePin(key, node, pinned) {
+  const headers = {'Content-Type': 'application/json'};
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    await fetch('/api/sessions/pin', { method: 'PATCH', headers, body: JSON.stringify({key, pinned}) });
+    const sKey = sid(key, node);
+    if (sessionsData[sKey]) sessionsData[sKey].pinned = pinned;
+    lastVersion = 0;
+    debouncedFetchSessions();
+  } catch (e) { showToast('pin failed: ' + e.message, 'error'); }
+}
+
 // --- Utilities ---
 
 function showToast(msg, type, duration) {
@@ -2819,7 +2917,7 @@ const wsm = {
       // handles re-subscription exclusively.
     } else if (msg.status === 'command') {
       // Slash command result from server (/ls, /help, /cd, /pwd)
-      const el = document.getElementById('events');
+      const el = document.getElementById('events-scroll');
       if (el) {
         const empty = el.querySelector('.empty-state');
         if (empty) empty.remove();
