@@ -134,7 +134,7 @@ func (f *Feishu) handleAudio(ctx context.Context, handler platform.MessageHandle
 		return
 	}
 
-	transcribeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	transcribeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	text, err := f.transcriber.Transcribe(transcribeCtx, data, mime)

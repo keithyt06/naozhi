@@ -1669,7 +1669,7 @@ let audioChunks = [];
 let isUnloading = false;
 let voiceRecTimer = null;
 let voiceRecStart = 0;
-const MAX_REC_SECS = 30;
+const MAX_REC_SECS = 60;
 let pendingMic = false;
 let voiceInputMode = false;
 let voiceTouchStartY = 0;
@@ -1852,7 +1852,7 @@ function startVoiceRecording() {
       if (overlay) overlay.classList.add('transcribing');
       const hint = document.getElementById('vo-hint');
       if (hint) hint.textContent = '\u6b63\u5728\u8bc6\u522b...';
-      transcribeAudio(blob, true);
+      transcribeAudio(blob, false);
     };
     mediaRecorder.start();
     voiceRecStart = Date.now();
