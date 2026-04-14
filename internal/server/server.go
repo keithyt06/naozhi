@@ -59,6 +59,7 @@ type Server struct {
 	sessionH    *SessionHandlers
 	healthH     *HealthHandler
 	sendH       *SendHandler
+	filesH      *FileHandlers
 
 	// Watchdog kill counters — incremented atomically, exposed via /health and /api/sessions.
 	watchdogNoOutputKills atomic.Int64
@@ -176,6 +177,7 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		transcribeH: &TranscribeHandler{
 			transcriber: opts.Transcriber,
 		},
+		filesH: &FileHandlers{},
 	}
 
 	s.nodeAccess = newNodeAccessor(&s.nodesMu, s.nodes, s.knownNodes)

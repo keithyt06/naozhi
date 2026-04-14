@@ -83,6 +83,14 @@ func (s *Server) registerDashboard() {
 	s.mux.HandleFunc("GET /api/cron/preview", auth(s.cronH.handlePreview))
 	s.mux.HandleFunc("POST /api/auth/logout", auth(s.auth.handleLogout))
 
+	// File Hub API
+	s.mux.HandleFunc("GET /api/files/list", auth(s.filesH.handleList))
+	s.mux.HandleFunc("GET /api/files/stat", auth(s.filesH.handleStat))
+	s.mux.HandleFunc("POST /api/files/upload", auth(s.filesH.handleUpload))
+	s.mux.HandleFunc("GET /api/files/download", auth(s.filesH.handleDownload))
+	s.mux.HandleFunc("POST /api/files/mkdir", auth(s.filesH.handleMkdir))
+	s.mux.HandleFunc("DELETE /api/files/delete", auth(s.filesH.handleDelete))
+
 	// Unauthenticated routes (login, static assets, WebSocket with own auth)
 	s.mux.HandleFunc("POST /api/auth/login", s.auth.handleLogin)
 	s.mux.HandleFunc("GET /dashboard", s.handleDashboard)
