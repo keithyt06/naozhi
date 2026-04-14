@@ -1032,8 +1032,8 @@ function renderMainShell() {
 
   const keyParts = (selectedKey || '').split(':');
   const agentIsGeneric = !s.agent || s.agent === 'general';
-  // Primary title: user's latest prompt. Fallback to agent name or key tail.
-  const displayName = s.summary || s.last_prompt || (agentIsGeneric ? '' : s.agent) || keyParts[keyParts.length - 1] || selectedKey || '';
+  // Primary title: prefer name, then prompt. Fallback to agent name or key tail.
+  const displayName = s.name || s.summary || s.last_prompt || (agentIsGeneric ? '' : s.agent) || keyParts[keyParts.length - 1] || selectedKey || '';
 
   // Detail line: left = CLI name + version, right = cost (hidden for kiro)
   const cliLabel = s.cli_name ? esc(s.cli_name) + (s.cli_version ? ' v' + esc(s.cli_version) : '') : '';
@@ -1041,6 +1041,19 @@ function renderMainShell() {
   const cost = s.total_cost || 0;
   const costText = '$' + (cost < 0.01 && cost > 0 ? cost.toFixed(4) : cost.toFixed(2));
   const costClass = 'detail-cost' + (cost >= 1 ? ' high-cost' : cost > 0 ? ' has-cost' : '');
+  // Session ID row (shown when session_id is available)
+  let sidHtml = '';
+  if (s.session_id) {
+    const shortId = s.session_id.length > 16 ? s.session_id.substring(0, 16) : s.session_id;
+    sidHtml = '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px;color:#8b949e">' +
+      '<span style="font-family:monospace;color:#7d8590;background:#21262d;padding:2px 8px;border-radius:4px;font-size:11px">' + esc(shortId) + '</span>' +
+      '<button onclick="copySessionId(\'' + escAttr(s.session_id) + '\')" style="background:none;border:1px solid #30363d;color:#8b949e;font-size:11px;padding:2px 8px;border-radius:4px;cursor:pointer">📋 复制 ID</button>';
+    if (s.state === 'suspended' || s.state === 'dead') {
+      sidHtml += '<button onclick="resumeCurrentSession()" style="background:#238636;border:none;color:#fff;font-size:11px;padding:3px 10px;border-radius:4px;cursor:pointer;font-weight:500">⟳ Resume</button>';
+    }
+    sidHtml += '</div>';
+  }
+
   const workspace = s.workspace || sessionWorkspaces[selectedKey] || '';
   const filesBtn = workspace
     ? '<button class="btn-session-files" onclick="openFileHub(\'' + escJs(workspace) + '\')" title="Browse files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>'
@@ -1055,6 +1068,7 @@ function renderMainShell() {
         '<span class="detail-left">' + cliLabel + '</span>' +
         (showCost ? '<span class="' + costClass + '" id="header-cost">' + costText + '</span>' : '') +
       '</div>' +
+      sidHtml +
       '</div>' +
       filesBtn +
     '</div>' +
@@ -2222,6 +2236,27 @@ function doCreateSession() {
   setTimeout(() => { const input = document.getElementById('msg-input'); if (input) input.focus(); }, 100);
 }
 
+
+// --- Session ID helpers ---
+
+function copySessionId(id) {
+  navigator.clipboard.writeText(id).then(() => showToast('Session ID 已复制')).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = id; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('Session ID 已复制');
+  });
+}
+
+function resumeCurrentSession() {
+  if (!selectedKey) return;
+  const sKey = sid(selectedKey, selectedNode);
+  const s = sessionsData[sKey];
+  if (!s || !s.session_id) return;
+  const input = document.getElementById('msg-input');
+  if (input && !getMsgValue(input)) setMsgValue(input, '继续');
+  sendMessage();
+}
 
 // --- Session Rename & Pin ---
 
