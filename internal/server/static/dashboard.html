@@ -1700,7 +1700,7 @@ function renderMainShell() {
       '</div>' +
       sidHtml +
       '</div>' +
-      '<button onclick="openReplayViewer(\'' + escJs(activeKey) + '\')" title="Replay session" style="background:none;border:none;color:#8b949e;cursor:pointer;padding:4px;font-size:16px">&#9654;</button>' +
+      '<button onclick="openReplayViewer(\'' + escJs(selectedKey) + '\')" title="Replay session" style="background:none;border:none;color:#8b949e;cursor:pointer;padding:4px;font-size:16px">&#9654;</button>' +
       filesBtn +
       '<button class="hdr-btn" onclick="toggleCtxPanel()" title="Context Panel">&#9776;</button>' +
     '</div>' +
@@ -5499,6 +5499,8 @@ function switchView(view, el) {
   } else {
     if (tagFilter) tagFilter.style.display = 'none';
     if (sessionList) sessionList.style.display = 'none';
+    // On mobile, hide sidebar so #main content is visible
+    document.body.classList.remove('mobile-list-view');
     if (view === 'knowledge') renderKnowledgeView();
     else if (view === 'wiki') renderWikiView();
     else if (view === 'patrols') renderPatrolsView();
@@ -6263,11 +6265,11 @@ function renderTreeNode(nodes, depth) {
   let html = '<ul style="padding-left:' + (depth > 0 ? 12 : 0) + 'px">';
   // Sort: dirs first, then files, alphabetical
   const sorted = nodes.slice().sort((a, b) => {
-    if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
     return (a.name || '').localeCompare(b.name || '');
   });
   for (const n of sorted) {
-    if (n.type === 'dir') {
+    if (n.is_dir) {
       const childHtml = renderTreeNode(n.children || [], depth + 1);
       html += '<li>' +
         '<div class="kv-dir" onclick="toggleKvDir(this)">' +
@@ -6393,7 +6395,7 @@ async function kvAiAsk() {
 
     // Send via the sessions API
     var sendPayload = {
-      session_key: key,
+      key: key,
       text: contextMsg,
       workspace: workspace
     };
@@ -6765,7 +6767,7 @@ async function handleMeetingUpload(input) {
     showToast('Uploading...');
     var res = await fetch('/api/meetings/upload', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('naozhi_token') || '') },
+      headers: authHeaders(),
       body: fd
     });
     if (!res.ok) {
