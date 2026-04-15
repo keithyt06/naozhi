@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -23,10 +25,15 @@ type VaultConfig struct {
 	ExcludePaths []string `yaml:"exclude_paths"`
 }
 
+const treeCacheTTL = 60 * time.Second
+
 // Vault provides Obsidian vault file reading and Markdown rendering.
 type Vault struct {
-	cfg VaultConfig
-	md  goldmark.Markdown
+	cfg          VaultConfig
+	md           goldmark.Markdown
+	treeMu       sync.RWMutex
+	cachedTree   *TreeNode
+	treeScannedAt time.Time
 }
 
 // NewVault creates a Vault with goldmark rendering pipeline.
@@ -126,7 +133,7 @@ func processCallouts(src []byte) []byte {
 			calloutType = strings.ToLower(string(m[1]))
 			title := string(m[2])
 			if title == "" {
-				title = strings.Title(calloutType)
+				title = capitalize(calloutType)
 			}
 			result = append(result, []byte(fmt.Sprintf(`<div class="callout %s"><div class="callout-title">%s</div>`, calloutType, title)))
 			inCallout = true
@@ -185,15 +192,34 @@ type TreeNode struct {
 	FileCount int         `json:"file_count,omitempty"`
 }
 
-// BuildTree scans the vault and returns a directory tree.
+// BuildTree returns a cached directory tree, rescanning if older than treeCacheTTL.
 func (v *Vault) BuildTree() (*TreeNode, error) {
+	v.treeMu.RLock()
+	if v.cachedTree != nil && time.Since(v.treeScannedAt) < treeCacheTTL {
+		tree := v.cachedTree
+		v.treeMu.RUnlock()
+		return tree, nil
+	}
+	v.treeMu.RUnlock()
+
+	v.treeMu.Lock()
+	defer v.treeMu.Unlock()
+	// Double-check after acquiring write lock
+	if v.cachedTree != nil && time.Since(v.treeScannedAt) < treeCacheTTL {
+		return v.cachedTree, nil
+	}
+
 	root := &TreeNode{
 		Name:  filepath.Base(v.cfg.VaultPath),
 		Path:  "",
 		IsDir: true,
 	}
-	err := v.buildTreeRecursive(v.cfg.VaultPath, "", root)
-	return root, err
+	if err := v.buildTreeRecursive(v.cfg.VaultPath, "", root); err != nil {
+		return nil, err
+	}
+	v.cachedTree = root
+	v.treeScannedAt = time.Now()
+	return root, nil
 }
 
 func (v *Vault) buildTreeRecursive(absPath, relPath string, node *TreeNode) error {
@@ -228,6 +254,13 @@ func (v *Vault) buildTreeRecursive(absPath, relPath string, node *TreeNode) erro
 		node.Children = append(node.Children, child)
 	}
 	return nil
+}
+
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func countMdFiles(node *TreeNode) int {

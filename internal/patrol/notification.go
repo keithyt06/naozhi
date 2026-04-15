@@ -19,7 +19,8 @@ type Notification struct {
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
-	Urgency     string    `json:"urgency"` // "urgent", "unread", "read"
+	Urgency     string    `json:"urgency"` // "urgent" or "normal" (priority only)
+	Read        bool      `json:"read"`
 	Source      string    `json:"source"`
 	SessionKey  string    `json:"session_key,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -64,7 +65,7 @@ func (s *NotificationStore) Add(n *Notification) error {
 	n.ID = generateNotifID()
 	n.CreatedAt = time.Now()
 	if n.Urgency == "" {
-		n.Urgency = "unread"
+		n.Urgency = "normal"
 	}
 
 	s.notifications = append(s.notifications, n)
@@ -81,9 +82,7 @@ func (s *NotificationStore) MarkRead(id string) error {
 		if n.ID == id {
 			now := time.Now()
 			n.ReadAt = &now
-			if n.Urgency != "urgent" {
-				n.Urgency = "read"
-			}
+			n.Read = true
 			return s.saveLocked()
 		}
 	}
@@ -97,11 +96,9 @@ func (s *NotificationStore) MarkAllRead() error {
 
 	now := time.Now()
 	for _, n := range s.notifications {
-		if n.ReadAt == nil {
+		if !n.Read {
 			n.ReadAt = &now
-		}
-		if n.Urgency == "unread" {
-			n.Urgency = "read"
+			n.Read = true
 		}
 	}
 	return s.saveLocked()
@@ -131,7 +128,7 @@ func (s *NotificationStore) UnreadCount() int {
 
 	count := 0
 	for _, n := range s.notifications {
-		if n.ReadAt == nil {
+		if !n.Read {
 			count++
 		}
 	}
@@ -146,7 +143,7 @@ func (s *NotificationStore) evictLocked() {
 		// Find the oldest read notification.
 		oldestReadIdx := -1
 		for i, n := range s.notifications {
-			if n.ReadAt != nil {
+			if n.Read {
 				oldestReadIdx = i
 				break // earliest in slice is oldest
 			}
