@@ -102,8 +102,11 @@ func (v *Vault) RenderFile(relPath string) (string, map[string]interface{}, erro
 
 // Render converts markdown bytes to HTML, returning rendered HTML and frontmatter.
 func (v *Vault) Render(src []byte) (string, map[string]interface{}, error) {
+	// Pre-process task checkboxes: - [x] text → styled HTML
+	processed := processTaskCheckboxes(src)
+
 	// Pre-process image embeds: ![[image.png]] → <img> tag
-	processed := processImageEmbeds(src)
+	processed = processImageEmbeds(processed)
 
 	// Pre-process wikilinks: [[target]] → <a class="wikilink">target</a>
 	// and [[target|alias]] → <a class="wikilink">alias</a>
@@ -175,7 +178,55 @@ func processWikilinks(src []byte) []byte {
 	})
 }
 
-var calloutRe = regexp.MustCompile(`(?m)^> \[!(\w+)\]\s*(.*)$`)
+var calloutRe = regexp.MustCompile(`(?m)^> \[!(\w+)\](-?)\s*(.*)$`)
+
+// processTaskCheckboxes converts Obsidian task syntax to styled HTML.
+// Supports: [ ] (empty), [x] (done), [-] (cancelled), [>] (forwarded),
+// [<] (scheduled), [?] (question), [!] (important), [*] (star), and more.
+var taskCheckboxRe = regexp.MustCompile(`(?m)^(\s*)- \[(.)\] (.*)$`)
+
+var taskTypeMap = map[byte][2]string{
+	' ': {"empty", ""},
+	'x': {"done", "\u2713"},
+	'X': {"done", "\u2713"},
+	'-': {"cancelled", "\u2014"},
+	'>': {"forwarded", "\u25B6"},
+	'<': {"scheduled", "\u25C0"},
+	'?': {"question", "?"},
+	'!': {"important", "!"},
+	'*': {"star", "\u2605"},
+	'"': {"quote", "\u201C"},
+	'l': {"location", "\u2691"},
+	'b': {"bookmark", "\u2606"},
+	'/': {"partial", "\u00BD"},
+}
+
+func processTaskCheckboxes(src []byte) []byte {
+	return taskCheckboxRe.ReplaceAllFunc(src, func(match []byte) []byte {
+		parts := taskCheckboxRe.FindSubmatch(match)
+		indent := string(parts[1])
+		checkChar := parts[2][0]
+		text := string(parts[3])
+
+		typeName := "empty"
+		icon := ""
+		if entry, ok := taskTypeMap[checkChar]; ok {
+			typeName = entry[0]
+			icon = entry[1]
+		} else {
+			typeName = "custom"
+			icon = string(checkChar)
+		}
+
+		textClass := ""
+		if typeName == "done" || typeName == "cancelled" {
+			textClass = " " + typeName
+		}
+
+		return []byte(fmt.Sprintf(`%s<div class="obs-task"><span class="obs-task-check obs-task-%s">%s</span> <span class="obs-task-text%s">%s</span></div>`,
+			indent, typeName, icon, textClass, text))
+	})
+}
 
 func processCallouts(src []byte) []byte {
 	lines := bytes.Split(src, []byte("\n"))
@@ -186,14 +237,21 @@ func processCallouts(src []byte) []byte {
 	for _, line := range lines {
 		if m := calloutRe.FindSubmatch(line); m != nil {
 			if inCallout {
-				result = append(result, []byte("</div>"))
+				result = append(result, []byte("</div></div>")) // close callout-content + callout
 			}
 			calloutType = strings.ToLower(string(m[1]))
-			title := string(m[2])
+			folded := string(m[2]) == "-"
+			title := string(m[3])
 			if title == "" {
 				title = capitalize(calloutType)
 			}
-			result = append(result, []byte(fmt.Sprintf(`<div class="callout %s"><div class="callout-title">%s</div>`, calloutType, title)))
+			foldClass := ""
+			foldAttr := ""
+			if folded {
+				foldClass = " folded"
+				foldAttr = ` onclick="this.classList.toggle('folded')"`
+			}
+			result = append(result, []byte(fmt.Sprintf(`<div class="callout %s%s"%s><div class="callout-title">%s</div><div class="callout-content">`, calloutType, foldClass, foldAttr, title)))
 			inCallout = true
 			continue
 		}
@@ -201,7 +259,7 @@ func processCallouts(src []byte) []byte {
 			trimmed := bytes.TrimPrefix(line, []byte("> "))
 			trimmed = bytes.TrimPrefix(trimmed, []byte(">"))
 			if len(line) > 0 && line[0] != '>' {
-				result = append(result, []byte("</div>"))
+				result = append(result, []byte("</div></div>")) // close callout-content + callout
 				inCallout = false
 				result = append(result, line)
 			} else {
@@ -212,7 +270,7 @@ func processCallouts(src []byte) []byte {
 		}
 	}
 	if inCallout {
-		result = append(result, []byte("</div>"))
+		result = append(result, []byte("</div></div>")) // close callout-content + callout
 	}
 	return bytes.Join(result, []byte("\n"))
 }

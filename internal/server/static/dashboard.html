@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-<title>Naozhi — CTO Second Brain</title>
+<title>Naozhi — CC Second Brain</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23a376ff'/%3E%3Cstop offset='100%25' stop-color='%2358a6ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='48' fill='%230d1117' stroke='url(%23g)' stroke-width='3'/%3E%3Cpath d='M35 58c0-12 8-22 15-22s15 10 15 22' fill='none' stroke='url(%23g)' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M30 52c-3-8 0-18 8-22s18-2 22 6' fill='none' stroke='%23a376ff' stroke-width='3' stroke-linecap='round' opacity='.7'/%3E%3Cpath d='M70 52c3-8 0-18-8-22s-18-2-22 6' fill='none' stroke='%2358a6ff' stroke-width='3' stroke-linecap='round' opacity='.7'/%3E%3Cpath d='M50 36v28M44 48l6-8 6 8' fill='none' stroke='%23f0f6fc' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="manifest" href="/manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
@@ -756,6 +756,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .kv-rendered a[data-wiki]:hover{text-decoration:underline}
 .kv-rendered a[data-wiki].broken{color:#da3633;text-decoration:line-through}
 .kv-rendered .obs-img{max-width:100%;height:auto;border-radius:6px;margin:8px 0;border:1px solid #30363d}
+/* Obsidian task checkboxes */
+.obs-task{display:flex;align-items:flex-start;gap:6px;padding:2px 0;line-height:1.6}
+.obs-task-check{width:18px;height:18px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:3px;font-weight:700}
+.obs-task-empty{border:1.5px solid #484f58}
+.obs-task-done{background:#238636;color:#fff}
+.obs-task-cancelled{background:#484f58;color:#8b949e}
+.obs-task-forwarded{background:#1f6feb22;color:#58a6ff;border:1px solid #1f6feb}
+.obs-task-scheduled{background:#9e6a0322;color:#d29922;border:1px solid #9e6a03}
+.obs-task-question{background:#d2992233;color:#d29922}
+.obs-task-important{background:#da363333;color:#da3633}
+.obs-task-star{background:#d2992233;color:#d29922}
+.obs-task-quote{background:#a376ff22;color:#a376ff}
+.obs-task-location{background:#3fb95022;color:#3fb950}
+.obs-task-bookmark{background:#58a6ff22;color:#58a6ff}
+.obs-task-partial{background:#484f58;color:#c9d1d9}
+.obs-task-custom{background:#21262d;color:#8b949e;border:1px solid #30363d}
+.obs-task-text.done{text-decoration:line-through;color:#8b949e}
+.obs-task-text.cancelled{text-decoration:line-through;color:#6e7681}
+/* Foldable callouts */
+.callout-content{}
+.callout.folded .callout-content{display:none}
+.callout.folded .callout-title{cursor:pointer}
+.callout.folded .callout-title::after{content:' ▶';font-size:10px;color:#484f58}
+.callout:not(.folded) .callout-title::after{content:''}
+.callout[onclick]{cursor:pointer}
 .kv-rendered .callout{border-left:3px solid #484f58;border-radius:4px;padding:10px 14px;margin:8px 0;background:#161b22}
 .kv-rendered .callout.note{border-left-color:#58a6ff;background:rgba(88,166,255,.06)}
 .kv-rendered .callout.tip{border-left-color:#3fb950;background:rgba(63,185,80,.06)}
@@ -6312,6 +6337,7 @@ async function loadVaultTree() {
       return;
     }
     kvCachedTree = tree.children || [tree];
+    container._treeData = kvCachedTree;
     container.innerHTML = renderTreeNode(kvCachedTree, 0);
   } catch (e) {
     container.innerHTML = '<div class="kv-loading" style="color:#6e7681">' + esc(e.message || 'Failed to load vault') + '</div>';
@@ -6398,6 +6424,27 @@ function toggleKvDir(el) {
   if (arrow) arrow.classList.toggle('open');
 }
 
+// Find a vault file path matching a wikilink target name
+function findVaultFilePath(target) {
+  if (!target) return null;
+  var name = target.replace(/\.md$/, '').toLowerCase();
+  var found = null;
+  function search(nodes) {
+    if (!nodes || found) return;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (!n.is_dir) {
+        var fname = (n.name || '').replace(/\.md$/, '').toLowerCase();
+        if (fname === name) { found = n.path; return; }
+      }
+      if (n.children) search(n.children);
+    }
+  }
+  var tree = document.getElementById('kvTreeContent');
+  if (tree && tree._treeData) search(tree._treeData);
+  return found;
+}
+
 async function loadVaultFile(path) {
   kvCurrentPath = path;
   // Highlight active file
@@ -6452,13 +6499,24 @@ async function loadVaultFile(path) {
     html += data.html || '<p style="color:#6e7681">Empty file</p>';
     content.innerHTML = html;
     // Wire wikilink clicks
-    content.querySelectorAll('a[data-wiki]').forEach(function(a) {
+    content.querySelectorAll('a.wikilink[data-target], a[data-wiki]').forEach(function(a) {
       a.addEventListener('click', function(e) {
         e.preventDefault();
-        var target = this.getAttribute('data-wiki');
-        if (target) loadVaultFile(target.endsWith('.md') ? target : target + '.md');
+        var target = this.getAttribute('data-target') || this.getAttribute('data-wiki');
+        if (target) {
+          // Search vault tree for matching file
+          var filePath = findVaultFilePath(target);
+          if (filePath) loadVaultFile(filePath);
+          else loadVaultFile(target.endsWith('.md') ? target : target + '.md');
+        }
       });
     });
+    // Apply Shiki syntax highlighting to code blocks in vault content
+    if (window.shikiHighlighter) {
+      content.querySelectorAll('pre code, .md-pre[data-lang]').forEach(function(el) {
+        try { highlightBlock(el); } catch(ex) {}
+      });
+    }
     // Mobile: hide tree, show content
     var container = document.getElementById('kvContainer');
     if (container) container.classList.remove('show-tree');
