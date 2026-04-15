@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Naozhi V2.0 Vision — Think Big</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e14;--card:#111820;--border:#1e2530;--text:#c9d1d9;--text2:#8b949e;--white:#f0f6fc;--blue:#58a6ff;--green:#3fb950;--purple:#a376ff;--yellow:#d29922;--red:#da3633;--pink:#f778ba}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+.hero{padding:48px 40px 32px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(163,118,255,.12),transparent 70%);pointer-events:none}
+.hero h1{font-size:36px;color:var(--white);font-weight:700;position:relative}
+.hero h1 span{background:linear-gradient(135deg,var(--purple),var(--blue),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero .tagline{font-size:16px;color:var(--text2);margin-top:8px;position:relative}
+.hero .subtitle{font-size:13px;color:#484f58;margin-top:16px;position:relative;max-width:700px;margin-left:auto;margin-right:auto;line-height:1.6}
+
+.container{max-width:1200px;margin:0 auto;padding:0 32px 48px}
+
+/* Section headers */
+.section{margin-top:48px}
+.section-hdr{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.section-num{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.section-hdr h2{font-size:20px;color:var(--white);font-weight:600}
+.section-hdr .sh-sub{font-size:12px;color:var(--text2);margin-top:2px}
+
+/* Feature cards */
+.features{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.feat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative;overflow:hidden;transition:all .25s;cursor:default}
+.feat:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.feat.span-2{grid-column:span 2}
+.feat .f-icon{font-size:28px;margin-bottom:10px}
+.feat h3{font-size:15px;color:var(--white);font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.feat h3 .new-badge{font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700;letter-spacing:.5px}
+.feat p{font-size:12px;color:var(--text2);line-height:1.6}
+.feat .f-details{margin-top:10px;font-size:11px;color:var(--text);line-height:1.6}
+.feat .f-details li{margin:3px 0;padding-left:4px}
+.feat .f-example{margin-top:10px;background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:'SF Mono',monospace;font-size:11px;color:var(--text);line-height:1.5;overflow-x:auto}
+.feat .f-impact{position:absolute;top:12px;right:12px;font-size:9px;padding:2px 8px;border-radius:8px;font-weight:600;letter-spacing:.3px}
+
+/* Color themes per section */
+.purple .section-num{background:rgba(163,118,255,.15);color:var(--purple)}
+.purple .feat{border-color:rgba(163,118,255,.15)}
+.purple .feat:hover{border-color:rgba(163,118,255,.3)}
+.blue .section-num{background:rgba(88,166,255,.15);color:var(--blue)}
+.blue .feat{border-color:rgba(88,166,255,.15)}
+.blue .feat:hover{border-color:rgba(88,166,255,.3)}
+.green .section-num{background:rgba(63,185,80,.15);color:var(--green)}
+.green .feat{border-color:rgba(63,185,80,.15)}
+.green .feat:hover{border-color:rgba(63,185,80,.3)}
+.yellow .section-num{background:rgba(210,168,34,.15);color:var(--yellow)}
+.yellow .feat{border-color:rgba(210,168,34,.15)}
+.yellow .feat:hover{border-color:rgba(210,168,34,.3)}
+.red .section-num{background:rgba(218,54,51,.15);color:var(--red)}
+.red .feat{border-color:rgba(218,54,51,.15)}
+.red .feat:hover{border-color:rgba(218,54,51,.3)}
+.pink .section-num{background:rgba(247,120,186,.15);color:var(--pink)}
+.pink .feat{border-color:rgba(247,120,186,.15)}
+.pink .feat:hover{border-color:rgba(247,120,186,.3)}
+
+.impact-high{background:rgba(218,54,51,.15);color:var(--red)}
+.impact-game{background:rgba(163,118,255,.15);color:var(--purple)}
+.impact-diff{background:rgba(63,185,80,.15);color:var(--green)}
+
+/* Comparison table */
+.compare-table{width:100%;border-collapse:collapse;margin-top:16px;font-size:12px}
+.compare-table th{background:#161b22;color:var(--white);font-weight:600;text-align:left;padding:10px 14px;border:1px solid var(--border)}
+.compare-table td{padding:10px 14px;border:1px solid var(--border);vertical-align:top}
+.compare-table .check{color:var(--green)}.compare-table .cross{color:#484f58}
+
+/* Timeline */
+.timeline{display:flex;gap:0;margin-top:32px;position:relative}
+.timeline::after{content:'';position:absolute;top:24px;left:0;right:0;height:2px;background:var(--border)}
+.tl-phase{flex:1;position:relative;padding-top:40px}
+.tl-phase .tl-dot{position:absolute;top:16px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:var(--bg);z-index:1}
+.tl-phase.done .tl-dot{background:var(--green);border-color:var(--green)}
+.tl-phase.active .tl-dot{background:var(--blue);border-color:var(--blue);box-shadow:0 0 12px rgba(88,166,255,.4)}
+.tl-phase .tl-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin:0 4px}
+.tl-phase .tl-time{font-size:10px;color:var(--text2);text-align:center;margin-bottom:4px;font-weight:600}
+.tl-phase .tl-title{font-size:12px;color:var(--white);font-weight:600;text-align:center}
+.tl-phase .tl-items{font-size:10px;color:var(--text2);margin-top:6px;line-height:1.5}
+
+/* Bottom CTA */
+.cta{text-align:center;padding:48px 0 24px;position:relative}
+.cta::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:400px;height:200px;background:radial-gradient(ellipse,rgba(88,166,255,.08),transparent 70%);pointer-events:none}
+.cta h2{font-size:24px;color:var(--white);font-weight:600;position:relative}
+.cta p{font-size:14px;color:var(--text2);margin-top:8px;position:relative}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Naozhi <span>V2.0</span></h1>
+  <div class="tagline">From AI Gateway to Autonomous CTO Operating System</div>
+  <div class="subtitle">
+    V1 solved "how to talk to Claude from anywhere".<br>
+    V2 solves "how to make Claude an autonomous member of your engineering org."
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ==================== 1. AUTONOMOUS AGENTS ==================== -->
+<div class="section purple">
+  <div class="section-hdr">
+    <div class="section-num">1</div>
+    <div><h2>Autonomous Agent Crews</h2><div class="sh-sub">从"你问它答"到"它主动为你工作"</div></div>
+  </div>
+  <div class="features">
+    <div class="feat">
+      <span class="f-impact impact-game">GAME CHANGER</span>
+      <div class="f-icon">&#128373;</div>
+      <h3>Patrol Mode (巡逻模式)</h3>
+      <p>Agent 不需要你发消息才行动。配置 Patrol 后，它们会自主监控并在发现问题时主动通知你。</p>
+      <ul class="f-details">
+        <li>&#128994; <strong>PR Sentinel</strong> — 新 PR 自动 review，发现问题通知飞书</li>
+        <li>&#128308; <strong>Cost Watchdog</strong> — 每小时检查 AWS Cost Explorer，异常自动告警</li>
+        <li>&#128992; <strong>Dependency Auditor</strong> — 每日扫描 CVE，高危自动创建 PR 修复</li>
+        <li>&#128309; <strong>Infra Health</strong> — 定时检查 EKS/RDS/ALB 健康状态</li>
+      </ul>
+      <div class="f-example">
+# config.yaml<br>
+patrols:<br>
+&nbsp;&nbsp;pr-review:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;trigger: "github:pr_opened"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;agent: code-reviewer<br>
+&nbsp;&nbsp;&nbsp;&nbsp;prompt: "Review this PR for security issues"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;notify: feishu<br>
+&nbsp;&nbsp;cost-alert:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;schedule: "@every 1h"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;agent: general<br>
+&nbsp;&nbsp;&nbsp;&nbsp;prompt: "Check AWS cost anomalies vs yesterday"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;notify: [feishu, dashboard]
+      </div>
+    </div>
+    <div class="feat">
+      <span class="f-impact impact-game">GAME CHANGER</span>
+      <div class="f-icon">&#127919;</div>
+      <h3>Agent Workflows (可视化编排)</h3>
+      <p>拖拽式 DAG 编排多个 Agent 组成工作流。前一个 Agent 的输出自动传递给下一个。</p>
+      <ul class="f-details">
+        <li><strong>示例 Pipeline:</strong> PR Opened → Code Review Agent → Security Scan Agent → If issues found → Fix Agent → Re-review → Auto Merge</li>
+        <li>条件分支、并行执行、失败重试</li>
+        <li>Dashboard 实时可视化执行进度</li>
+        <li>Workflow 模板市场（社区共享）</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128101;</div>
+      <h3>Team Agent Delegation</h3>
+      <p>团队成员在飞书 @naozhi 时，Agent 先查你的知识库（Wiki + Obsidian）再回答，保持团队信息一致性。CTO 可以设置"代理回答"规则。</p>
+      <div class="f-example">
+团队成员: @naozhi 我们的 WAF 误拦截率是多少？<br>
+Naozhi: [查询 Wiki "AWS WAF" 页面]<br>
+&nbsp;&nbsp;"根据 4/11 的调优记录，当前误拦截率 0.4%<br>
+&nbsp;&nbsp;&nbsp;(调整前 3.2%)。配置见 terraform-waf 模块。"
+      </div>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128276;</div>
+      <h3>Proactive Insights (主动洞察)</h3>
+      <p>基于你的知识图谱和对话历史，Agent 主动发现关联信息并推送。不是被动等你问。</p>
+      <ul class="f-details">
+        <li>"你昨天讨论的 Zeelool WAF 配置和上周 Giikin 遇到的 SizeRestrictions 问题相同，要不要统一修复？"</li>
+        <li>"检测到 terraform-waf 模块 3 天没更新，但 WAF Rule 优化的结论还未 apply"</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 2. DEEP INTEGRATIONS ==================== -->
+<div class="section blue">
+  <div class="section-hdr">
+    <div class="section-num">2</div>
+    <div><h2>Deep Platform Integrations</h2><div class="sh-sub">不只是 IM 网关，是开发全链路的神经系统</div></div>
+  </div>
+  <div class="features">
+    <div class="feat">
+      <span class="f-impact impact-high">HIGH IMPACT</span>
+      <div class="f-icon">&#128025;</div>
+      <h3>GitHub Deep Integration</h3>
+      <p>不只是接收 webhook，是完整的 GitHub 工作台。</p>
+      <ul class="f-details">
+        <li>PR 时间线直接嵌入 Dashboard — 看 review、CI 状态、合并</li>
+        <li>一键 "Fix this PR" — Agent 读取 review comments，自动修复并 push</li>
+        <li>Issue → Session 自动创建 — 有人开 issue，Agent 自动调研并给出方案</li>
+        <li>Commit history 纳入知识编译 — 为什么改了这行？git blame + AI 解释</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <span class="f-impact impact-high">HIGH IMPACT</span>
+      <div class="f-icon">&#9729;&#65039;</div>
+      <h3>AWS Console in Dashboard</h3>
+      <p>不用切换到 AWS Console，在 Dashboard 里直接查询和操作基础设施。</p>
+      <ul class="f-details">
+        <li>"Show me the ALB target health for production" → 实时表格 + 状态灯</li>
+        <li>"What's the p99 latency for the CloudFront distribution?" → 内嵌图表</li>
+        <li>基于 MCP Server 实现 — 接入 AWS CLI / SDK 作为 tool</li>
+        <li>操作需二次确认（CTO 级别的安全门控）</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128231;</div>
+      <h3>Meeting Intelligence</h3>
+      <p>接入会议录音 (飞书/Zoom/腾讯会议)，自动提取决策、Action Items，写入知识库。</p>
+      <ul class="f-details">
+        <li>会后自动生成 summary → 写入 Obsidian journal</li>
+        <li>提取 Action Items → 创建 Cron 任务或 Agent Patrol</li>
+        <li>"上次和 Zeelool 开会说的 deadline 是什么时候？" → 即时回答</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128202;</div>
+      <h3>Observability Bridge</h3>
+      <p>接入 Grafana/CloudWatch/Datadog 告警，Agent 自动调查根因。</p>
+      <div class="f-example">
+[CloudWatch Alert] ALB 5xx rate &gt; 1%<br>
+→ Naozhi Agent: "调查中..."<br>
+→ [Read recent deploys] [Check EKS pod status] [Analyze logs]<br>
+→ "根因: 15:30 部署的 auth middleware 变更导致，<br>
+&nbsp;&nbsp;&nbsp;建议 rollback commit abc123。已准备 revert PR。"
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 3. INTELLIGENCE LAYER ==================== -->
+<div class="section green">
+  <div class="section-hdr">
+    <div class="section-num">3</div>
+    <div><h2>Intelligence Layer (知识增强)</h2><div class="sh-sub">从"记录"到"理解" — 知识不再沉默</div></div>
+  </div>
+  <div class="features">
+    <div class="feat span-2">
+      <span class="f-impact impact-game">GAME CHANGER</span>
+      <div class="f-icon">&#128280;</div>
+      <h3>Knowledge Graph Visualization</h3>
+      <p>不只是搜索，是可视化的知识网络。看到项目、人、技术、决策之间的关系。</p>
+      <ul class="f-details" style="columns:2;column-gap:24px">
+        <li>力导向图：节点 = 实体（项目/服务/人/决策），边 = 引用关系</li>
+        <li>时间轴模式：按时间展开决策链</li>
+        <li>影响分析："如果我换掉 CloudFlare，哪些项目受影响？" → 高亮关联节点</li>
+        <li>知识热力图：哪些领域知识丰富，哪些有盲区</li>
+        <li>点击节点跳转到 Wiki 页面 / Obsidian 笔记 / Dashboard 对话</li>
+        <li>社区检测（Louvain 算法）自动聚类知识领域</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <span class="f-impact impact-diff">DIFFERENTIATOR</span>
+      <div class="f-icon">&#128337;</div>
+      <h3>Decision Journal (决策日志)</h3>
+      <p>自动从对话中提取架构决策，生成 ADR (Architecture Decision Records)。永远不再忘记"为什么当初这么做"。</p>
+      <ul class="f-details">
+        <li>Agent 识别对话中的决策模式："我们决定用 X 而不是 Y，因为..."</li>
+        <li>自动生成 ADR: Context → Decision → Consequences</li>
+        <li>写入 Obsidian vault（可配置路径）</li>
+        <li>后续对话自动引用相关决策："这个方案和 ADR-042 冲突"</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <span class="f-impact impact-diff">DIFFERENTIATOR</span>
+      <div class="f-icon">&#128640;</div>
+      <h3>Session Replay & Sharing</h3>
+      <p>完整回放一次问题解决过程，像看录像一样。可以分享给团队成员学习。</p>
+      <ul class="f-details">
+        <li>带时间轴的回放：看到 Agent 的思考过程、工具调用、决策点</li>
+        <li>可标注：在关键节点加注释（"这步是关键"）</li>
+        <li>生成链接分享（token-based auth）</li>
+        <li>用于团队 onboarding："看看 CTO 是怎么 debug 这个问题的"</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 4. MULTI-DEVICE ==================== -->
+<div class="section yellow">
+  <div class="section-hdr">
+    <div class="section-num">4</div>
+    <div><h2>Seamless Multi-Device</h2><div class="sh-sub">手机上开始，电脑上继续，从不丢失上下文</div></div>
+  </div>
+  <div class="features">
+    <div class="feat">
+      <span class="f-impact impact-high">HIGH IMPACT</span>
+      <div class="f-icon">&#128241;</div>
+      <h3>Mobile Command Center</h3>
+      <p>不是"能用"的移动端，是"想用"的移动端。</p>
+      <ul class="f-details">
+        <li><strong>Quick Actions Widget</strong> — iOS/Android 桌面 widget，一键触发常用 Patrol</li>
+        <li><strong>Voice-First</strong> — 长按说话，Agent 执行，语音播报结果</li>
+        <li><strong>Push Notifications</strong> — Patrol 发现问题实时推送，点击直达上下文</li>
+        <li><strong>Approval Queue</strong> — Agent 需要确认的操作排队等你审批（如 merge PR、terraform apply）</li>
+        <li><strong>Offline Queue</strong> — 地铁里编辑消息，恢复网络后自动发送</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128260;</div>
+      <h3>Session Teleport</h3>
+      <p>借鉴 Claude Code 的 --teleport 机制，在设备间无缝转移对话上下文。</p>
+      <ul class="f-details">
+        <li>手机上和 Agent 讨论方案 → 到电脑前 "teleport" → 继续写代码</li>
+        <li>CLI 里的 session → Dashboard 一键接管 → 飞书同步摘要</li>
+        <li>反向：Dashboard session → push to CLI terminal</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128225;</div>
+      <h3>Approval Gateway</h3>
+      <p>Agent 自主执行到关键节点时暂停，等待你在任何设备上审批。</p>
+      <div class="f-example">
+[Agent] 已准备好 terraform plan:<br>
+&nbsp;&nbsp;+ 3 resources, ~ 2 resources, - 0 resources<br>
+&nbsp;&nbsp;预估成本变化: +$12.40/month<br>
+<br>
+[Approve] [Reject] [View Details]<br>
+<br>
+&darr; 你在手机上点了 [Approve]<br>
+<br>
+[Agent] terraform apply 完成 &#10003;
+      </div>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128242;</div>
+      <h3>Wearable Quick Glance</h3>
+      <p>Apple Watch / Android Wear 上的极简视图。</p>
+      <ul class="f-details">
+        <li>手腕一抬：3 个 Patrol 正在运行，1 个需要审批</li>
+        <li>语音快速指令："Naozhi, approve the PR"</li>
+        <li>Haptic 震动告警推送</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 5. DEVELOPER EXPERIENCE ==================== -->
+<div class="section red">
+  <div class="section-hdr">
+    <div class="section-num">5</div>
+    <div><h2>Developer Experience</h2><div class="sh-sub">让 Naozhi 本身也是可扩展的平台</div></div>
+  </div>
+  <div class="features">
+    <div class="feat">
+      <div class="f-icon">&#129520;</div>
+      <h3>Plugin / Skill Marketplace</h3>
+      <p>类似 LobeChat 的插件生态。社区可以贡献 Agent Skills、Workflow Templates、Dashboard Widgets。</p>
+      <ul class="f-details">
+        <li><strong>Skills:</strong> aws-cost-optimizer, k8s-debugger, pr-reviewer-pro</li>
+        <li><strong>Workflows:</strong> incident-response-pipeline, release-checklist</li>
+        <li><strong>Widgets:</strong> cost-dashboard, deployment-tracker, team-activity</li>
+        <li>一键安装，YAML 配置，无需编码</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128736;</div>
+      <h3>Custom Dashboard Widgets</h3>
+      <p>Dashboard 首页不再只是 session 列表，是可定制的 CTO 仪表板。</p>
+      <ul class="f-details">
+        <li>拖拽布局：今日 cost、活跃 session、Patrol 状态、知识图谱小窗</li>
+        <li>Widget API — 第三方可以开发嵌入式组件</li>
+        <li>预设布局：CTO View / Developer View / DevOps View</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#128268;</div>
+      <h3>Naozhi API & SDK</h3>
+      <p>完整的 REST + WebSocket API，让其他工具可以嵌入 Naozhi 能力。</p>
+      <ul class="f-details">
+        <li>Terraform Provider for Naozhi — IaC 管理 Patrol / Workflow</li>
+        <li>GitHub Action — CI 中调用 Naozhi Agent 做 review</li>
+        <li>VSCode Extension — IDE 内直接查看 Naozhi session</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <div class="f-icon">&#127981;</div>
+      <h3>Multi-Tenant (团队版)</h3>
+      <p>从个人工具到团队平台的飞跃。</p>
+      <ul class="f-details">
+        <li>RBAC: 谁可以触发哪些 Patrol，谁可以审批操作</li>
+        <li>Shared Knowledge: 团队共享 Wiki，个人笔记隔离</li>
+        <li>Audit Log: 所有 Agent 操作可审计</li>
+        <li>SSO: OIDC / SAML 企业单点登录</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 6. MOONSHOT ==================== -->
+<div class="section pink">
+  <div class="section-hdr">
+    <div class="section-num">&#127775;</div>
+    <div><h2>Moonshot Ideas</h2><div class="sh-sub">疯狂但可能改变一切的功能</div></div>
+  </div>
+  <div class="features">
+    <div class="feat">
+      <span class="f-impact impact-game">MOONSHOT</span>
+      <div class="f-icon">&#129302;</div>
+      <h3>CTO Digital Twin</h3>
+      <p>基于你所有的对话历史、决策记录、Obsidian 笔记，训练一个 "你的 Agent"。当你不在时，它可以代表你的决策风格和知识回答团队问题。</p>
+      <ul class="f-details">
+        <li>团队成员问技术问题 → 先查 CTO Wiki → 用 CTO 的语气和判断风格回答</li>
+        <li>不确定时标记 "需要 Keith 确认" 而不是乱答</li>
+        <li>每周 Lint: 对比 Digital Twin 的回答和 CTO 的实际决策，持续校准</li>
+      </ul>
+    </div>
+    <div class="feat">
+      <span class="f-impact impact-game">MOONSHOT</span>
+      <div class="f-icon">&#127760;</div>
+      <h3>Predictive Architecture</h3>
+      <p>基于项目历史和行业模式，预测架构瓶颈。</p>
+      <ul class="f-details">
+        <li>"按当前 DAU 增长趋势，3 个月后 RDS 会达到 IOPS 上限"</li>
+        <li>"Zeelool 的 CDN 配置和你处理 Giikin 时遇到的模式一致，建议提前..."</li>
+        <li>Weekly Architecture Review 自动生成并发送</li>
+      </ul>
+    </div>
+    <div class="feat span-2">
+      <span class="f-impact impact-game">MOONSHOT</span>
+      <div class="f-icon">&#127919;</div>
+      <h3>Self-Improving System</h3>
+      <p>Naozhi 观察你的使用模式，自动优化自己。</p>
+      <ul class="f-details" style="columns:2;column-gap:24px">
+        <li>检测到你每次 review PR 都会问同样的安全问题 → 自动加入 Patrol</li>
+        <li>发现你经常搜索某类知识 → 自动触发 Ingest 编译相关 Wiki</li>
+        <li>学习你的审批模式 → 低风险操作自动通过，只在高风险时暂停</li>
+        <li>使用频率分析 → 自动调整 session TTL 和 max_procs</li>
+        <li>检测到某个 Workflow 经常失败 → 建议优化或替换步骤</li>
+        <li>周报: "本周 Naozhi 为你节省了约 X 小时"</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== COMPETITIVE COMPARISON ==================== -->
+<div class="section" style="margin-top:48px">
+  <div class="section-hdr">
+    <div class="section-num" style="background:rgba(255,255,255,.05);color:var(--white)">VS</div>
+    <div><h2>竞品对比：V2.0 后的护城河</h2></div>
+  </div>
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th>Naozhi V2</th>
+        <th>Open WebUI</th>
+        <th>LobeChat</th>
+        <th>Claude.ai</th>
+        <th>Cursor</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Full CLI Agent Capability</td>
+        <td class="check">&#10003; Native</td>
+        <td class="cross">&#10007; API only</td>
+        <td class="cross">&#10007; API only</td>
+        <td class="check">&#10003; Web only</td>
+        <td class="check">&#10003; IDE only</td>
+      </tr>
+      <tr>
+        <td>IM Platform Integration</td>
+        <td class="check">&#10003; 4 platforms</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+      </tr>
+      <tr>
+        <td>Autonomous Patrols</td>
+        <td class="check">&#10003;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td style="color:var(--yellow)">~ Routines</td>
+        <td class="cross">&#10007;</td>
+      </tr>
+      <tr>
+        <td>Knowledge Compilation (Wiki)</td>
+        <td class="check">&#10003; Karpathy method</td>
+        <td style="color:var(--yellow)">~ RAG only</td>
+        <td style="color:var(--yellow)">~ RAG only</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+      </tr>
+      <tr>
+        <td>Obsidian Vault Integration</td>
+        <td class="check">&#10003; Native render</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+      </tr>
+      <tr>
+        <td>CLI Session Sync</td>
+        <td class="check">&#10003; Bidirectional</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td style="color:var(--yellow)">~ Teleport</td>
+        <td class="cross">&#10007;</td>
+      </tr>
+      <tr>
+        <td>Multi-Node NAT Traversal</td>
+        <td class="check">&#10003;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+      </tr>
+      <tr>
+        <td>Knowledge Graph Viz</td>
+        <td class="check">&#10003;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+        <td class="cross">&#10007;</td>
+      </tr>
+      <tr>
+        <td>Self-hosted / Zero Cloud</td>
+        <td class="check">&#10003; Single binary</td>
+        <td class="check">&#10003;</td>
+        <td class="check">&#10003;</td>
+        <td class="cross">&#10007; Cloud</td>
+        <td class="cross">&#10007; Cloud</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== ROADMAP ==================== -->
+<div class="section" style="margin-top:48px">
+  <div class="section-hdr">
+    <div class="section-num" style="background:rgba(255,255,255,.05);color:var(--white)">&#128197;</div>
+    <div><h2>Roadmap: 从今天到 V2.0</h2></div>
+  </div>
+  <div class="timeline">
+    <div class="tl-phase done">
+      <div class="tl-dot"></div>
+      <div class="tl-card">
+        <div class="tl-time">Phase 1 (1-2 weeks)</div>
+        <div class="tl-title">UI Quick Wins</div>
+        <div class="tl-items">
+          &#10003; Code syntax highlighting<br>
+          &#10003; Tool card visualization<br>
+          &#10003; Diff rendering<br>
+          &#10003; Long output collapse<br>
+          &#10003; Cmd+K search<br>
+          &#10003; Session tags<br>
+          &#10003; New session modal<br>
+          &#10003; Mobile gesture
+        </div>
+      </div>
+    </div>
+    <div class="tl-phase active">
+      <div class="tl-dot"></div>
+      <div class="tl-card">
+        <div class="tl-time">Phase 2 (3-4 weeks)</div>
+        <div class="tl-title">Knowledge Layer</div>
+        <div class="tl-items">
+          &#9679; Obsidian vault browser<br>
+          &#9679; Karpathy Wiki engine<br>
+          &#9679; CLI session sync<br>
+          &#9679; Unified search (bleve)<br>
+          &#9679; Bookmark system<br>
+          &#9679; Decision Journal
+        </div>
+      </div>
+    </div>
+    <div class="tl-phase">
+      <div class="tl-dot"></div>
+      <div class="tl-card">
+        <div class="tl-time">Phase 3 (4-6 weeks)</div>
+        <div class="tl-title">Autonomous Agents</div>
+        <div class="tl-items">
+          &#9675; Patrol Mode<br>
+          &#9675; Agent Workflows<br>
+          &#9675; GitHub integration<br>
+          &#9675; Approval Gateway<br>
+          &#9675; Proactive Insights
+        </div>
+      </div>
+    </div>
+    <div class="tl-phase">
+      <div class="tl-dot"></div>
+      <div class="tl-card">
+        <div class="tl-time">Phase 4 (6-8 weeks)</div>
+        <div class="tl-title">Platform & Moonshots</div>
+        <div class="tl-items">
+          &#9675; Knowledge Graph viz<br>
+          &#9675; Plugin marketplace<br>
+          &#9675; Custom widgets<br>
+          &#9675; Multi-tenant<br>
+          &#9675; CTO Digital Twin
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CTA -->
+<div class="cta">
+  <h2>From Gateway to Operating System</h2>
+  <p>V1 让你随时随地和 AI 对话。V2 让 AI 随时随地为你工作。</p>
+</div>
+
+</div>
+</body>
+</html>

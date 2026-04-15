@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1117">
+<title>Naozhi V2.0 — Mobile CTO Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#1c2128;--bg4:#21262d;
+  --border:#30363d;--border2:#21262d;
+  --text:#c9d1d9;--text2:#8b949e;--text3:#6e7681;--text4:#484f58;
+  --white:#f0f6fc;--bright:#e6edf3;
+  --blue:#58a6ff;--green:#3fb950;--red:#da3633;--yellow:#d29922;--purple:#a376ff;--pink:#f778ba;
+  --blue-dim:#1f6feb22;--green-dim:#23863622;--red-dim:#da363322;--yellow-dim:#9e6a0322;--purple-dim:#a371f722;
+  --mono:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',system-ui,sans-serif;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+  --tab-h:82px;
+  --header-h:52px;
+}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{display:none}
+input,textarea,button{font-family:var(--sans)}
+
+/* ===== APP SHELL ===== */
+.app{display:flex;flex-direction:column;height:100%;padding-top:var(--safe-top)}
+
+/* Top status bar */
+.status-bar{height:var(--header-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;flex-shrink:0;z-index:100;gap:10px}
+.sb-title{font-size:15px;font-weight:700;color:var(--white);flex:1;display:flex;align-items:center;gap:6px}
+.sb-title .logo{background:linear-gradient(135deg,var(--purple),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sb-title .ver{font-size:10px;font-weight:400;color:var(--text3)}
+.sb-btn{width:36px;height:36px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;position:relative;min-width:36px}
+.sb-btn:active{background:var(--bg4);transform:scale(.95)}
+.sb-btn .badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0 4px}
+
+/* Content area */
+.content-area{flex:1;overflow:hidden;position:relative}
+.tab-view{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;opacity:0;pointer-events:none;transition:opacity .2s ease,transform .2s ease;transform:scale(.98);will-change:transform,opacity}
+.tab-view.active{opacity:1;pointer-events:auto;transform:scale(1)}
+
+/* Bottom tab bar */
+.tab-bar{background:var(--bg2);border-top:1px solid var(--border);display:flex;padding-bottom:var(--safe-bottom);flex-shrink:0;z-index:100;position:relative}
+.tab-bar::before{content:'';position:absolute;top:-1px;left:0;right:0;height:1px;background:var(--border)}
+.tab-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0 6px;cursor:pointer;position:relative;min-height:50px}
+.tab-item:active{opacity:.7}
+.tab-item .ti-icon{font-size:22px;line-height:1;margin-bottom:2px;transition:transform .15s}
+.tab-item.active .ti-icon{transform:scale(1.1)}
+.tab-item .ti-label{font-size:10px;font-weight:500;color:var(--text3);transition:color .15s}
+.tab-item.active .ti-label{color:var(--blue)}
+.tab-item .ti-dot{position:absolute;top:6px;right:50%;margin-right:-14px;width:7px;height:7px;border-radius:50%;background:var(--red)}
+
+/* ===== HOME TAB ===== */
+.home{padding:16px;padding-bottom:20px}
+.home-greeting{margin-bottom:16px}
+.home-greeting h1{font-size:22px;font-weight:700;color:var(--white)}
+.home-greeting .date{font-size:13px;color:var(--text2);margin-top:2px}
+
+/* Stats row */
+.stats-row{display:flex;gap:10px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px}
+.stat-card{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
+.stat-card .s-num{font-size:22px;font-weight:700;line-height:1.2}
+.stat-card .s-label{font-size:10px;color:var(--text2);margin-top:2px}
+.stat-card.green .s-num{color:var(--green)}
+.stat-card.blue .s-num{color:var(--blue)}
+.stat-card.yellow .s-num{color:var(--yellow)}
+
+/* Patrol compact list */
+.section-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.section-hdr{display:flex;align-items:center;gap:8px;padding:12px 14px;font-size:14px;font-weight:600;color:var(--white)}
+.section-hdr .s-action{font-size:12px;color:var(--blue);font-weight:500;margin-left:auto}
+.patrol-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--border2);min-height:44px}
+.patrol-row .pr-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.patrol-row .pr-dot.running{background:var(--green);animation:pulse 1.5s infinite}
+.patrol-row .pr-dot.paused{background:var(--yellow)}
+.patrol-row .pr-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.patrol-row .pr-name{flex:1;font-size:14px;color:var(--bright)}
+.patrol-row .pr-status{font-size:12px;color:var(--text2)}
+
+/* Approval banner */
+.approval-banner{background:linear-gradient(135deg,rgba(218,54,51,.12),rgba(218,54,51,.05));border:1px solid rgba(218,54,51,.3);border-radius:12px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;cursor:pointer;min-height:52px}
+.approval-banner:active{opacity:.8}
+.approval-banner .ab-icon{font-size:24px}
+.approval-banner .ab-text{flex:1}
+.approval-banner .ab-text strong{font-size:14px;color:var(--red);display:block}
+.approval-banner .ab-text span{font-size:12px;color:var(--text2)}
+.approval-banner .ab-arrow{font-size:18px;color:var(--text3)}
+
+/* Activity feed */
+.activity-item{display:flex;gap:10px;padding:11px 14px;border-top:1px solid var(--border2);min-height:44px}
+.activity-item .ai-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.activity-item .ai-text{flex:1;font-size:13px;color:var(--text);line-height:1.5}
+.activity-item .ai-text strong{color:var(--bright)}
+.activity-item .ai-text a{color:var(--blue);text-decoration:none}
+.activity-item .ai-time{font-size:11px;color:var(--text3);flex-shrink:0}
+
+/* FAB */
+.fab{position:fixed;bottom:calc(var(--tab-h) + var(--safe-bottom) + 16px);right:16px;width:56px;height:56px;border-radius:28px;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;font-size:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(88,166,255,.3);cursor:pointer;z-index:50;border:none;transition:transform .15s,box-shadow .15s}
+.fab:active{transform:scale(.9);box-shadow:0 2px 10px rgba(88,166,255,.2)}
+.fab.hidden{display:none}
+
+/* ===== CHAT TAB ===== */
+/* Session list */
+.chat-list{height:100%;display:flex;flex-direction:column}
+.chat-search{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center}
+.chat-search input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;min-height:40px}
+.chat-search input:focus{border-color:var(--blue)}
+.chat-search input::placeholder{color:var(--text4)}
+
+/* Filter pills */
+.filter-pills{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;border-bottom:1px solid var(--border)}
+.pill{padding:6px 14px;border-radius:16px;font-size:12px;font-weight:500;border:1px solid var(--border);color:var(--text2);cursor:pointer;white-space:nowrap;min-height:32px;display:flex;align-items:center}
+.pill:active{opacity:.7}
+.pill.active{background:var(--blue-dim);border-color:rgba(88,166,255,.3);color:var(--blue)}
+
+/* Session items */
+.session-group{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;background:var(--bg);z-index:1}
+.session-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.session-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border2);cursor:pointer;min-height:60px;position:relative;overflow:hidden;transition:background .1s}
+.session-item:active{background:var(--bg2)}
+.session-item .si-icon{width:40px;height:40px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--bg4)}
+.session-item .si-body{flex:1;min-width:0}
+.session-item .si-name{font-size:15px;color:var(--bright);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.session-item .si-name .pin{font-size:12px}
+.session-item .si-meta{font-size:12px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-item .si-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
+.session-item .si-time{font-size:11px;color:var(--text3)}
+.session-item .si-unread{width:8px;height:8px;border-radius:50%;background:var(--blue)}
+
+/* Swipe delete reveal */
+.session-item .swipe-reveal{position:absolute;top:0;right:0;bottom:0;width:80px;background:var(--red);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;transform:translateX(80px);transition:transform .2s}
+.session-item.swiped .swipe-reveal{transform:translateX(0)}
+
+/* ===== CONVERSATION VIEW ===== */
+.conv-view{position:absolute;inset:0;background:var(--bg);z-index:20;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);will-change:transform}
+.conv-view.open{transform:translateX(0)}
+
+.conv-header{height:var(--header-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 10px;gap:8px;flex-shrink:0}
+.conv-back{width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--blue);cursor:pointer;border:none;background:none;flex-shrink:0}
+.conv-back:active{opacity:.6}
+.conv-info{flex:1;min-width:0}
+.conv-info .ci-name{font-size:15px;font-weight:600;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conv-info .ci-meta{font-size:11px;color:var(--text2)}
+.conv-actions{display:flex;gap:4px}
+.conv-btn{width:34px;height:34px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer}
+.conv-btn:active{background:var(--bg4)}
+.conv-btn.on{color:var(--purple);border-color:var(--purple)}
+
+/* Messages */
+.msg-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px}
+.msg{display:flex;gap:8px;margin-bottom:12px;animation:msgIn .25s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{flex-direction:row-reverse}
+.msg .avatar{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.msg.user .avatar{background:rgba(88,166,255,.15);color:var(--blue)}
+.msg.ai .avatar{background:rgba(163,118,255,.15);color:var(--purple)}
+.msg.user .bubble{background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);padding:10px 14px;border-radius:18px 18px 4px 18px;color:var(--bright);max-width:80%;font-size:15px;line-height:1.5}
+.msg.ai .content{max-width:92%;font-size:14px;line-height:1.7;position:relative}
+
+/* Tool cards compact */
+.tool-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden}
+.tool-hdr{display:flex;align-items:center;gap:6px;padding:10px 12px;cursor:pointer;min-height:44px}
+.tool-hdr:active{background:var(--bg3)}
+.tool-hdr .th-icon{font-size:14px}
+.tool-hdr .th-name{font-size:13px;color:var(--blue);font-weight:600}
+.tool-hdr .th-detail{font-size:12px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool-hdr .th-status{font-size:13px;color:var(--green)}
+.tool-hdr .th-expand{font-size:10px;color:var(--text4);transition:transform .2s}
+.tool-hdr .th-expand.open{transform:rotate(180deg)}
+.tool-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.tool-body.open{max-height:300px}
+.tool-body-inner{padding:10px 12px;font-size:12px;border-top:1px solid var(--border)}
+
+/* Code blocks */
+.code-block{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden}
+.code-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--border)}
+.code-lang{font-size:11px;color:var(--text2);font-weight:600}
+.code-copy{background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;padding:4px 10px;cursor:pointer;min-height:28px}
+.code-copy:active{background:var(--border)}
+.code-copy.copied{color:var(--green);border-color:var(--green)}
+.code-pre{padding:10px 12px;font-family:var(--mono);font-size:12px;line-height:1.6;overflow-x:auto;white-space:pre;color:var(--bright);-webkit-overflow-scrolling:touch}
+.kw{color:#ff7b72}.str{color:#a5d6ff}.fn{color:#d2a8ff}.cm{color:var(--text2)}.num{color:#79c0ff}
+
+/* Diff */
+.diff{font-family:var(--mono);font-size:11px;line-height:1.7}
+.diff .dl{padding:0 12px;white-space:pre;overflow-x:auto}
+.diff .dl.add{background:rgba(63,185,80,.08);color:#aff5b4}
+.diff .dl.del{background:rgba(218,54,51,.08);color:#ffa198}
+.diff .dl.ctx{color:var(--text2)}
+
+/* Callout */
+.callout{border-radius:10px;padding:12px 14px;margin:8px 0;border-left:3px solid;font-size:13px;line-height:1.6}
+.callout.danger{background:var(--red-dim);border-left-color:var(--red)}
+.callout.danger .ct{color:var(--red);font-weight:600;margin-bottom:4px}
+.callout.tip{background:var(--green-dim);border-left-color:var(--green)}
+.callout.tip .ct{color:var(--green);font-weight:600;margin-bottom:4px}
+.callout.warn{background:var(--yellow-dim);border-left-color:var(--yellow)}
+.callout.warn .ct{color:var(--yellow);font-weight:600;margin-bottom:4px}
+
+/* Bookmark button on AI messages */
+.bm-btn{position:absolute;right:0;top:-4px;width:30px;height:30px;border-radius:50%;background:var(--bg4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--yellow);cursor:pointer;opacity:0;transition:opacity .2s}
+.msg.ai .content:active .bm-btn,.bm-btn.on{opacity:1}
+.bm-btn.on{background:var(--yellow-dim);border-color:var(--yellow)}
+
+/* Chat input */
+.chat-input{border-top:1px solid var(--border);padding:8px 12px;padding-bottom:calc(8px + var(--safe-bottom));display:flex;gap:8px;align-items:flex-end;background:var(--bg);flex-shrink:0}
+.chat-input textarea{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:20px;color:var(--text);padding:10px 16px;font-size:15px;min-height:40px;max-height:120px;outline:none;resize:none;line-height:1.4}
+.chat-input textarea:focus{border-color:var(--blue)}
+.chat-input textarea::placeholder{color:var(--text4)}
+.input-btn{width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;border:none;flex-shrink:0}
+.input-btn.mic{background:var(--bg3);color:var(--text2)}
+.input-btn.mic:active{background:var(--bg4)}
+.input-btn.send{background:#238636;color:#fff}
+.input-btn.send:active{background:#2ea043;transform:scale(.9)}
+
+/* Voice overlay */
+.voice-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.8);display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;backdrop-filter:blur(6px)}
+.voice-overlay.show{display:flex}
+.voice-ring{width:120px;height:120px;border-radius:60px;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:40px;animation:voicePulse 1s infinite}
+@keyframes voicePulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(88,166,255,.4)}50%{transform:scale(1.05);box-shadow:0 0 0 20px rgba(88,166,255,0)}}
+.voice-text{font-size:16px;color:var(--white);font-weight:500}
+.voice-hint{font-size:13px;color:var(--text2)}
+
+/* ===== KNOWLEDGE TAB ===== */
+.knowledge-view{height:100%;display:flex;flex-direction:column}
+.knowledge-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+
+/* Vault tree */
+.vault-header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.vault-header .vh-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.vault-header .vh-name{font-size:13px;color:var(--purple);font-weight:600;flex:1}
+.tree-folder{border-bottom:1px solid var(--border2)}
+.tree-folder-hdr{display:flex;align-items:center;gap:8px;padding:12px 14px;font-size:15px;color:var(--bright);font-weight:500;cursor:pointer;min-height:48px}
+.tree-folder-hdr:active{background:var(--bg2)}
+.tree-folder-hdr .f-arrow{color:var(--text4);font-size:10px;width:16px;text-align:center;flex-shrink:0;transition:transform .15s}
+.tree-folder-hdr .f-arrow.open{transform:rotate(90deg)}
+.tree-folder-hdr .f-emoji{font-size:18px;flex-shrink:0}
+.tree-folder-hdr .f-name{flex:1}
+.tree-folder-hdr .f-count{font-size:12px;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:10px}
+.tree-items{overflow:hidden;transition:max-height .3s ease}
+.tree-items.collapsed{max-height:0!important}
+.tree-file{display:flex;align-items:center;gap:8px;padding:12px 14px 12px 48px;font-size:14px;color:var(--text);cursor:pointer;min-height:48px;border-top:1px solid var(--border2)}
+.tree-file:active{background:var(--bg2)}
+.tree-file.active{background:rgba(163,118,255,.06);color:var(--white);border-left:3px solid var(--purple)}
+.tree-file .tf-icon{font-size:16px;color:var(--text2)}
+
+/* Knowledge render view (push screen) */
+.note-view{position:absolute;inset:0;background:var(--bg);z-index:20;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);will-change:transform}
+.note-view.open{transform:translateX(0)}
+.note-header{height:var(--header-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 10px;gap:8px;flex-shrink:0}
+.note-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px}
+
+/* Obsidian content */
+.obs-props{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px}
+.obs-props .op-key{color:var(--text2);font-weight:500}
+.obs-props .op-val{color:var(--bright)}
+.obs h1{font-size:22px;color:var(--white);font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border2)}
+.obs h2{font-size:18px;color:var(--white);font-weight:600;margin:20px 0 10px}
+.obs p{font-size:15px;line-height:1.7;margin-bottom:10px}
+.obs .wikilink{color:var(--purple);border-bottom:1px dashed rgba(163,118,255,.4);text-decoration:none;cursor:pointer}
+.obs .wikilink:active{opacity:.7}
+.obs table{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.obs table th{background:var(--bg2);color:var(--white);padding:8px 12px;border:1px solid var(--border);text-align:left;white-space:nowrap}
+.obs table td{padding:8px 12px;border:1px solid var(--border);white-space:nowrap}
+.obs .task{display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:14px;min-height:36px}
+.obs .task input[type="checkbox"]{width:20px;height:20px;margin-top:1px;accent-color:var(--purple);flex-shrink:0}
+
+/* AI bottom sheet */
+.ai-sheet{position:fixed;bottom:0;left:0;right:0;z-index:80;background:var(--bg2);border-top:1px solid var(--border);border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);padding-bottom:var(--safe-bottom);max-height:60vh}
+.ai-sheet.open{transform:translateY(0)}
+.ai-sheet .as-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:8px auto}
+.ai-sheet .as-title{padding:4px 16px 10px;font-size:14px;color:var(--purple);font-weight:600;display:flex;align-items:center;gap:6px}
+.ai-sheet .as-body{max-height:calc(60vh - 120px);overflow-y:auto;padding:0 16px}
+.ai-sheet .as-input{padding:10px 16px;display:flex;gap:8px;align-items:center}
+.ai-sheet .as-input input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:10px 14px;color:var(--text);font-size:14px;outline:none}
+.ai-sheet .as-input button{width:36px;height:36px;border-radius:18px;background:#238636;border:none;color:#fff;font-size:14px;cursor:pointer}
+
+/* AI FAB on knowledge note */
+.ai-fab{position:fixed;bottom:calc(var(--tab-h) + var(--safe-bottom) + 16px);right:16px;width:52px;height:52px;border-radius:26px;background:linear-gradient(135deg,var(--purple),var(--pink));color:#fff;font-size:22px;display:none;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(163,118,255,.3);cursor:pointer;z-index:50;border:none}
+.ai-fab.show{display:flex}
+.ai-fab:active{transform:scale(.9)}
+
+/* ===== NEW SESSION SHEET ===== */
+.ns-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
+.ns-overlay.show{display:flex}
+.ns-sheet{background:var(--bg2);border-radius:16px 16px 0 0;width:100%;max-height:80vh;overflow-y:auto;padding-bottom:var(--safe-bottom);animation:sheet-up .25s ease}
+@keyframes sheet-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.ns-sheet .ns-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:8px auto}
+.ns-sheet .ns-hdr{padding:4px 16px 12px}
+.ns-sheet .ns-hdr h3{font-size:17px;color:var(--white);font-weight:600}
+.ns-sheet .ns-hdr p{font-size:12px;color:var(--text2);margin-top:2px}
+.ns-sheet .ns-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;font-weight:600;padding:0 16px;margin-bottom:8px}
+.ns-agents-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px;margin-bottom:16px}
+.ns-agent-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:all .15s;min-height:44px}
+.ns-agent-card:active{transform:scale(.97)}
+.ns-agent-card.sel{border-color:var(--blue);background:var(--blue-dim)}
+.ns-agent-card .nac-name{font-size:13px;color:var(--bright);font-weight:500;display:flex;align-items:center;gap:5px}
+.ns-agent-card .nac-desc{font-size:11px;color:var(--text2);margin-top:3px}
+.ns-projects-list{padding:0 16px;margin-bottom:16px;max-height:140px;overflow-y:auto}
+.ns-proj-item{padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .15s;min-height:44px}
+.ns-proj-item:active{transform:scale(.98)}
+.ns-proj-item.sel{border-color:var(--green);background:var(--green-dim)}
+.ns-proj-item .npi-name{font-size:13px;color:var(--bright);font-weight:500}
+.ns-proj-item .npi-path{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px}
+.ns-sheet .ns-btns{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border)}
+.ns-sheet .ns-btns button{flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;border:none;font-family:var(--sans);min-height:44px}
+.ns-sheet .ns-btn-cancel{background:var(--bg4);color:var(--text)}
+.ns-sheet .ns-btn-cancel:active{background:var(--border)}
+.ns-sheet .ns-btn-create{background:#238636;color:#fff}
+.ns-sheet .ns-btn-create:active{background:#2ea043}
+
+/* ===== PATROLS TAB ===== */
+.patrols-view{padding:16px;padding-bottom:20px}
+.patrols-hdr{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.patrols-hdr h2{font-size:20px;color:var(--white);font-weight:700;flex:1}
+.patrols-hdr .ph-btn{padding:8px 16px;border-radius:10px;border:none;background:#238636;color:#fff;font-size:14px;font-weight:500;cursor:pointer;min-height:36px}
+.patrols-hdr .ph-btn:active{background:#2ea043}
+
+/* Pull to refresh hint */
+.ptr-hint{text-align:center;padding:8px;font-size:12px;color:var(--text3);margin-bottom:8px}
+
+.patrol-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;overflow:hidden;transition:border-color .2s}
+.patrol-card:active{border-color:var(--text4)}
+.patrol-top{padding:14px 16px;display:flex;gap:12px}
+.patrol-top .pt-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.patrol-top .pt-info{flex:1;min-width:0}
+.patrol-top .pt-name{font-size:16px;color:var(--white);font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.patrol-badge{font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600}
+.patrol-badge.running{background:var(--green-dim);color:var(--green)}
+.patrol-badge.paused{background:var(--yellow-dim);color:var(--yellow)}
+.patrol-top .pt-desc{font-size:13px;color:var(--text2);margin-top:4px;line-height:1.5}
+.patrol-top .pt-schedule{font-size:11px;color:var(--text3);margin-top:4px;font-family:var(--mono)}
+.patrol-log{border-top:1px solid var(--border);max-height:0;overflow:hidden;transition:max-height .3s ease}
+.patrol-log.open{max-height:200px}
+.patrol-log .log-inner{padding:10px 16px;font-size:12px}
+.log-entry{display:flex;gap:8px;padding:4px 0;line-height:1.5}
+.log-entry .le-time{color:var(--text3);flex-shrink:0;font-family:var(--mono)}
+.log-entry .le-ok{color:var(--green)}
+.log-entry .le-warn{color:var(--yellow)}
+.log-entry .le-err{color:var(--red)}
+
+/* ===== APPROVALS TAB ===== */
+.approvals-view{padding:16px;padding-bottom:20px}
+.approvals-hdr{margin-bottom:16px}
+.approvals-hdr h2{font-size:20px;color:var(--white);font-weight:700}
+.approvals-hdr .ah-sub{font-size:13px;color:var(--text2);margin-top:2px}
+
+.approval-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;overflow:hidden;position:relative}
+.approval-card.urgent{border-color:rgba(218,54,51,.4)}
+.approval-card .ac-swipe-bg{position:absolute;inset:0;display:flex}
+.approval-card .ac-swipe-bg .ac-approve-bg{flex:1;background:rgba(35,134,54,.9);display:flex;align-items:center;padding-left:20px;font-size:14px;font-weight:600;color:#fff}
+.approval-card .ac-swipe-bg .ac-reject-bg{flex:1;background:rgba(218,54,51,.9);display:flex;align-items:center;justify-content:flex-end;padding-right:20px;font-size:14px;font-weight:600;color:#fff}
+.approval-card .ac-content{position:relative;background:var(--bg2);transition:transform .2s}
+.approval-card .ac-top{padding:14px 16px}
+.approval-card .ac-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.approval-card .ac-icon{font-size:20px}
+.approval-card .ac-title{font-size:15px;color:var(--white);font-weight:600;flex:1}
+.approval-card .ac-time{font-size:11px;color:var(--text3)}
+.approval-card .ac-body{font-size:14px;color:var(--text);line-height:1.6}
+.approval-card .ac-body code{background:var(--bg4);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:12px}
+.approval-card .ac-from{font-size:11px;color:var(--text3);margin-top:8px;display:flex;align-items:center;gap:4px}
+.approval-card .ac-buttons{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border)}
+.approval-card .ac-btn{flex:1;padding:10px;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;border:none;text-align:center;min-height:44px}
+.approval-card .ac-btn:active{opacity:.8}
+.approval-card .ac-btn.approve{background:#238636;color:#fff}
+.approval-card .ac-btn.reject{background:var(--bg4);color:var(--text)}
+.approval-card .ac-btn.detail{background:var(--bg4);color:var(--blue)}
+
+/* Empty state */
+.empty-state{display:none;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center}
+.empty-state.show{display:flex}
+.empty-state .es-icon{font-size:48px;margin-bottom:12px;opacity:.5}
+.empty-state .es-title{font-size:17px;color:var(--white);font-weight:600;margin-bottom:4px}
+.empty-state .es-sub{font-size:14px;color:var(--text2)}
+
+/* Approved animation */
+.approval-card.approved{animation:cardSlideOut .4s ease forwards}
+@keyframes cardSlideOut{to{opacity:0;transform:translateX(100%);max-height:0;margin-bottom:0;padding:0;border:0;overflow:hidden}}
+.approval-card.rejected{animation:cardSlideLeft .4s ease forwards}
+@keyframes cardSlideLeft{to{opacity:0;transform:translateX(-100%);max-height:0;margin-bottom:0;padding:0;border:0;overflow:hidden}}
+
+/* ===== TOAST ===== */
+.toast{position:fixed;top:calc(var(--safe-top) + 8px);left:16px;right:16px;padding:14px 18px;border-radius:14px;font-size:14px;font-weight:500;z-index:600;opacity:0;transform:translateY(-20px);pointer-events:none;transition:all .3s cubic-bezier(.4,0,.2,1);box-shadow:0 8px 30px rgba(0,0,0,.4);color:#fff;text-align:center}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ok{background:rgba(35,134,54,.95);backdrop-filter:blur(8px)}
+.toast.warn{background:rgba(158,106,3,.95);backdrop-filter:blur(8px)}
+.toast.err{background:rgba(218,54,51,.95);backdrop-filter:blur(8px)}
+
+/* ===== NOTIFICATION PANEL ===== */
+.notif-panel{position:fixed;top:0;left:0;right:0;z-index:300;background:var(--bg2);border-bottom:1px solid var(--border);transform:translateY(-100%);transition:transform .3s cubic-bezier(.4,0,.2,1);padding-top:var(--safe-top);max-height:70vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.notif-panel.open{transform:translateY(0)}
+.notif-backdrop{position:fixed;inset:0;z-index:299;background:rgba(0,0,0,.5);display:none}
+.notif-backdrop.show{display:block}
+.notif-hdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.notif-hdr h3{font-size:16px;color:var(--white);font-weight:600}
+.notif-hdr .n-close{font-size:20px;color:var(--text2);cursor:pointer;padding:4px}
+.notif-item{padding:14px 16px;border-bottom:1px solid var(--border2);display:flex;gap:12px;cursor:pointer;min-height:56px}
+.notif-item:active{background:var(--bg3)}
+.notif-item.unread{background:rgba(31,111,235,.05)}
+.notif-item.urgent{border-left:3px solid var(--red)}
+.notif-item .ni-icon{font-size:20px;flex-shrink:0}
+.notif-item .ni-body{flex:1}
+.notif-item .ni-title{font-size:14px;color:var(--bright);font-weight:500}
+.notif-item .ni-desc{font-size:13px;color:var(--text2);margin-top:2px;line-height:1.4}
+.notif-item .ni-time{font-size:11px;color:var(--text3);margin-top:4px}
+
+/* ===== SEARCH OVERLAY ===== */
+.search-overlay{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.7);display:none;flex-direction:column;backdrop-filter:blur(4px);padding-top:var(--safe-top)}
+.search-overlay.show{display:flex}
+.search-box{padding:12px 14px;display:flex;gap:8px;align-items:center}
+.search-box input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 16px;color:var(--white);font-size:16px;outline:none}
+.search-box input:focus{border-color:var(--blue)}
+.search-box .s-cancel{font-size:15px;color:var(--blue);cursor:pointer;padding:8px;white-space:nowrap}
+.search-results{flex:1;overflow-y:auto;background:var(--bg);-webkit-overflow-scrolling:touch}
+.sr-group{padding:8px 16px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;background:var(--bg2);position:sticky;top:0}
+.sr-item{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border2);cursor:pointer;min-height:56px}
+.sr-item:active{background:var(--bg2)}
+.sr-item .ri-icon{font-size:18px;width:28px;text-align:center;flex-shrink:0}
+.sr-item .ri-body{flex:1;min-width:0}
+.sr-item .ri-title{font-size:14px;color:var(--bright);font-weight:500}
+.sr-item .ri-desc{font-size:12px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Top Bar -->
+  <div class="status-bar">
+    <div class="sb-title">&#129504; <span class="logo">Naozhi</span> <span class="ver">V2.0</span></div>
+    <button class="sb-btn" onclick="openSearch()">&#128269;</button>
+    <button class="sb-btn" onclick="toggleNotif()"><span class="badge" id="notif-badge">3</span>&#128276;</button>
+  </div>
+
+  <!-- Content Area -->
+  <div class="content-area">
+
+    <!-- ==================== HOME TAB ==================== -->
+    <div class="tab-view active" id="tab-home">
+      <div class="home">
+        <div class="home-greeting">
+          <h1>Good afternoon, Keith</h1>
+          <div class="date">Tuesday, April 15, 2026</div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="stats-row">
+          <div class="stat-card green"><div class="s-num">5</div><div class="s-label">Sessions</div></div>
+          <div class="stat-card blue"><div class="s-num">4</div><div class="s-label">Patrols</div></div>
+          <div class="stat-card yellow"><div class="s-num">$3.42</div><div class="s-label">Cost</div></div>
+        </div>
+
+        <!-- Patrol Status -->
+        <div class="section-card">
+          <div class="section-hdr">&#128373; Patrol Status <span class="s-action" onclick="switchTab('patrols')">Manage</span></div>
+          <div class="patrol-row"><span class="pr-dot running"></span><span class="pr-name">PR Sentinel</span><span class="pr-status">3 reviewed</span></div>
+          <div class="patrol-row"><span class="pr-dot running"></span><span class="pr-name">Cost Watchdog</span><span class="pr-status">normal</span></div>
+          <div class="patrol-row"><span class="pr-dot running"></span><span class="pr-name">Infra Health</span><span class="pr-status">all green</span></div>
+          <div class="patrol-row"><span class="pr-dot paused"></span><span class="pr-name">Dep Auditor</span><span class="pr-status">paused</span></div>
+        </div>
+
+        <!-- Pending Approvals Banner -->
+        <div class="approval-banner" onclick="switchTab('approvals')">
+          <span class="ab-icon">&#128680;</span>
+          <div class="ab-text"><strong>2 Pending Approvals</strong><span>1 urgent &middot; Terraform Apply: EKS node</span></div>
+          <span class="ab-arrow">&#8250;</span>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="section-card">
+          <div class="section-hdr">&#128196; Activity Feed</div>
+          <div class="activity-item"><span class="ai-icon">&#128373;</span><div class="ai-text"><strong>PR Sentinel</strong> reviewed <a>#148 CloudFront cache policy</a> &mdash; 2 suggestions</div><span class="ai-time">2m</span></div>
+          <div class="activity-item"><span class="ai-icon">&#128218;</span><div class="ai-text"><strong>Wiki</strong> auto-compiled <a>CloudFront</a> page &mdash; 2 sources</div><span class="ai-time">15m</span></div>
+          <div class="activity-item"><span class="ai-icon">&#128276;</span><div class="ai-text"><strong>Cost Watchdog</strong> &mdash; daily spend on track ($3.42 / $5.00)</div><span class="ai-time">30m</span></div>
+          <div class="activity-item"><span class="ai-icon">&#129302;</span><div class="ai-text"><strong>CLI Session</strong> completed in <a>~/infra/terraform-waf</a></div><span class="ai-time">1h</span></div>
+          <div class="activity-item"><span class="ai-icon">&#128172;</span><div class="ai-text"><strong>Feishu</strong> &mdash; team member asked about WAF rate limit</div><span class="ai-time">2h</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== CHAT TAB ==================== -->
+    <div class="tab-view" id="tab-chat">
+      <div class="chat-list" id="chat-list-view">
+        <div class="chat-search"><input type="text" placeholder="Search sessions..." onfocus="openSearch()"></div>
+        <div class="filter-pills">
+          <span class="pill active" onclick="filterPill(this)">All</span>
+          <span class="pill" onclick="filterPill(this)">Review</span>
+          <span class="pill" onclick="filterPill(this)">Projects</span>
+          <span class="pill" onclick="filterPill(this)">CLI</span>
+        </div>
+        <div class="session-list">
+          <div class="session-group">&#128204; Pinned</div>
+          <div class="session-item" onclick="openConversation(0)">
+            <div class="si-icon" style="background:var(--blue-dim)">&#129302;</div>
+            <div class="si-body"><div class="si-name"><span class="pin">&#128204;</span> Auth Middleware 重构</div><div class="si-meta">code-reviewer &middot; $0.42</div></div>
+            <div class="si-right"><span class="si-time">2h</span><span class="si-unread"></span></div>
+            <div class="swipe-reveal">Delete</div>
+          </div>
+          <div class="session-item" onclick="openConversation(1)">
+            <div class="si-icon" style="background:var(--purple-dim)">&#128230;</div>
+            <div class="si-body"><div class="si-name"><span class="pin">&#128204;</span> naozhi planner</div><div class="si-meta">planner &middot; $1.24</div></div>
+            <div class="si-right"><span class="si-time">5h</span></div>
+            <div class="swipe-reveal">Delete</div>
+          </div>
+
+          <div class="session-group">Today</div>
+          <div class="session-item" onclick="openConversation(2)">
+            <div class="si-icon" style="background:var(--blue-dim)">&#128270;</div>
+            <div class="si-body"><div class="si-name">CloudFront Cache Policy</div><div class="si-meta">research &middot; $0.18</div></div>
+            <div class="si-right"><span class="si-time">30m</span></div>
+            <div class="swipe-reveal">Delete</div>
+          </div>
+          <div class="session-item" onclick="openConversation(3)">
+            <div class="si-icon">&#129302;</div>
+            <div class="si-body"><div class="si-name">Terraform State 迁移</div><div class="si-meta">general &middot; $0.52</div></div>
+            <div class="si-right"><span class="si-time">1h</span></div>
+            <div class="swipe-reveal">Delete</div>
+          </div>
+          <div class="session-item" onclick="openConversation(4)">
+            <div class="si-icon" style="background:var(--green-dim);color:var(--green);font-size:12px;font-family:var(--mono);font-weight:700">&gt;_</div>
+            <div class="si-body"><div class="si-name">WAF Terraform 模块</div><div class="si-meta" style="font-family:var(--mono);font-size:11px">~/infra/terraform-waf</div></div>
+            <div class="si-right"><span class="si-time">4d</span></div>
+            <div class="swipe-reveal">Delete</div>
+          </div>
+
+          <div class="session-group">Yesterday</div>
+          <div class="session-item" onclick="openConversation(5)">
+            <div class="si-icon">&#128172;</div>
+            <div class="si-body"><div class="si-name">EKS Node Group 扩容</div><div class="si-meta">general &middot; $0.31</div></div>
+            <div class="si-right"><span class="si-time">1d</span></div>
+            <div class="swipe-reveal">Delete</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conversation View (push from right) -->
+      <div class="conv-view" id="conv-view">
+        <div class="conv-header">
+          <button class="conv-back" onclick="closeConversation()">&#8249;</button>
+          <div class="conv-info">
+            <div class="ci-name" id="conv-title">Auth Middleware 重构</div>
+            <div class="ci-meta" id="conv-meta">code-reviewer &middot; $0.42</div>
+          </div>
+          <div class="conv-actions">
+            <button class="conv-btn" onclick="toggleBookmark(this)" title="Bookmark">&#128278;</button>
+            <button class="conv-btn" title="More">&#8943;</button>
+          </div>
+        </div>
+
+        <div class="msg-area" id="msg-area">
+          <!-- User message -->
+          <div class="msg user">
+            <div class="avatar">K</div>
+            <div class="bubble">review auth middleware 安全性，重点看 session token 存储</div>
+          </div>
+
+          <!-- AI response with tool cards -->
+          <div class="msg ai">
+            <div class="avatar">AI</div>
+            <div class="content">
+              <div style="margin-bottom:8px">审查 auth middleware 实现：</div>
+
+              <!-- Tool card: Read -->
+              <div class="tool-card">
+                <div class="tool-hdr" onclick="toggleTool(this)">
+                  <span class="th-icon">&#128196;</span>
+                  <span class="th-name">Read</span>
+                  <span class="th-detail">middleware/auth.go</span>
+                  <span class="th-status">&#10003;</span>
+                  <span class="th-expand">&#9660;</span>
+                </div>
+                <div class="tool-body">
+                  <div class="tool-body-inner" style="font-family:var(--mono);font-size:11px;color:var(--text2);white-space:pre;overflow-x:auto">package middleware
+func AuthMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w, r) {
+        token := r.Header.Get("X-Session-Token")
+        ...</div>
+                </div>
+              </div>
+
+              <!-- Tool card: Edit -->
+              <div class="tool-card">
+                <div class="tool-hdr" onclick="toggleTool(this)">
+                  <span class="th-icon">&#9998;</span>
+                  <span class="th-name">Edit</span>
+                  <span class="th-detail">middleware/auth.go</span>
+                  <span class="th-status" style="color:var(--green)">+5 -2</span>
+                  <span class="th-expand">&#9660;</span>
+                </div>
+                <div class="tool-body">
+                  <div class="tool-body-inner" style="padding:0">
+                    <div class="diff">
+                      <div class="dl ctx"> func SetSession(w http.ResponseWriter, t string) {</div>
+                      <div class="dl del">-    w.Header().Set("X-Session-Token", t)</div>
+                      <div class="dl add">+    http.SetCookie(w, &amp;http.Cookie{</div>
+                      <div class="dl add">+        Name: "session", Value: t,</div>
+                      <div class="dl add">+        HttpOnly: true, Secure: true,</div>
+                      <div class="dl add">+        SameSite: http.SameSiteStrictMode,</div>
+                      <div class="dl add">+    })</div>
+                      <div class="dl ctx"> }</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Callout -->
+              <div class="callout danger">
+                <div class="ct">&#9888; 3 Security Issues</div>
+                1. <code style="background:var(--bg4);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:12px">localStorage</code> storing token &rarr; switched to HttpOnly cookie<br>
+                2. Missing CSRF token validation<br>
+                3. Token expiry 7d too long &rarr; recommend 24h + refresh
+                <span class="bm-btn" onclick="bookmarkMsg(this)">&#128278;</span>
+              </div>
+
+              <!-- Code block -->
+              <div class="code-block">
+                <div class="code-hdr">
+                  <span class="code-lang">auth.go</span>
+                  <span class="code-copy" onclick="copyCode(this)">Copy</span>
+                </div>
+                <div class="code-pre"><span class="kw">func</span> <span class="fn">SetSession</span>(w http.ResponseWriter, t <span class="kw">string</span>) {
+    http.<span class="fn">SetCookie</span>(w, &amp;http.Cookie{
+        Name: <span class="str">"session"</span>, Value: t,
+        HttpOnly: <span class="kw">true</span>,  <span class="cm">// XSS safe</span>
+        Secure:   <span class="kw">true</span>,  <span class="cm">// HTTPS only</span>
+        MaxAge:   <span class="num">86400</span>, <span class="cm">// 24h</span>
+    })
+}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Another user message -->
+          <div class="msg user">
+            <div class="avatar">K</div>
+            <div class="bubble">CSRF 保护怎么加？给个具体实现</div>
+          </div>
+
+          <!-- AI response -->
+          <div class="msg ai">
+            <div class="avatar">AI</div>
+            <div class="content">
+              <div style="margin-bottom:8px">建议使用 double-submit cookie pattern：</div>
+              <div class="callout tip">
+                <div class="ct">&#128161; Recommended Approach</div>
+                Double-submit cookie + SameSite=Strict provides robust CSRF protection with minimal overhead.
+                <span class="bm-btn" onclick="bookmarkMsg(this)">&#128278;</span>
+              </div>
+              <div class="code-block">
+                <div class="code-hdr"><span class="code-lang">csrf.go</span><span class="code-copy" onclick="copyCode(this)">Copy</span></div>
+                <div class="code-pre"><span class="kw">func</span> <span class="fn">CSRFMiddleware</span>(next http.Handler) http.Handler {
+    <span class="kw">return</span> http.<span class="fn">HandlerFunc</span>(<span class="kw">func</span>(w, r) {
+        <span class="kw">if</span> r.Method != <span class="str">"GET"</span> {
+            cookie, _ := r.<span class="fn">Cookie</span>(<span class="str">"csrf"</span>)
+            header := r.Header.<span class="fn">Get</span>(<span class="str">"X-CSRF-Token"</span>)
+            <span class="kw">if</span> !<span class="fn">hmac.Equal</span>([]<span class="kw">byte</span>(cookie.Value),
+                         []<span class="kw">byte</span>(header)) {
+                http.<span class="fn">Error</span>(w, <span class="str">"forbidden"</span>, <span class="num">403</span>)
+                <span class="kw">return</span>
+            }
+        }
+        next.<span class="fn">ServeHTTP</span>(w, r)
+    })
+}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input -->
+        <div class="chat-input">
+          <textarea rows="1" placeholder="Message..." oninput="autoGrow(this)"></textarea>
+          <button class="input-btn mic" onmousedown="startVoice()" onmouseup="endVoice()" ontouchstart="startVoice()" ontouchend="endVoice()">&#127908;</button>
+          <button class="input-btn send" onclick="sendMsg()">&#9650;</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== KNOWLEDGE TAB ==================== -->
+    <div class="tab-view" id="tab-knowledge">
+      <div class="knowledge-view" id="knowledge-list">
+        <div class="vault-header">
+          <span class="vh-label">Vault</span>
+          <span class="vh-name">Keith_Space_2026</span>
+        </div>
+        <div class="knowledge-list">
+          <!-- Things folder -->
+          <div class="tree-folder">
+            <div class="tree-folder-hdr" onclick="toggleFolder(this)">
+              <span class="f-arrow open">&#9654;</span>
+              <span class="f-emoji">&#128188;</span>
+              <span class="f-name">Things</span>
+              <span class="f-count">240</span>
+            </div>
+            <div class="tree-items" style="max-height:600px">
+              <!-- AWS sub-folder -->
+              <div class="tree-folder" style="border-bottom:none">
+                <div class="tree-folder-hdr" onclick="toggleFolder(this)" style="padding-left:32px">
+                  <span class="f-arrow open">&#9654;</span>
+                  <span class="f-emoji">&#9729;</span>
+                  <span class="f-name">AWS Projects</span>
+                  <span class="f-count">18</span>
+                </div>
+                <div class="tree-items" style="max-height:400px">
+                  <div class="tree-file active" onclick="openNote('zeelool')">
+                    <span class="tf-icon">&#128196;</span> Zeelool CDN 迁移
+                  </div>
+                  <div class="tree-file" onclick="openNote('yihai')">
+                    <span class="tf-icon">&#128196;</span> YiHai-预测补货
+                  </div>
+                  <div class="tree-file" onclick="openNote('longqi')">
+                    <span class="tf-icon">&#128196;</span> LongQi-CloudFront
+                  </div>
+                  <div class="tree-file" onclick="openNote('giikin')">
+                    <span class="tf-icon">&#128196;</span> Giikin-选品Agent
+                  </div>
+                </div>
+              </div>
+              <!-- Service folder -->
+              <div class="tree-folder" style="border-bottom:none">
+                <div class="tree-folder-hdr" onclick="toggleFolder(this)" style="padding-left:32px">
+                  <span class="f-arrow">&#9654;</span>
+                  <span class="f-emoji">&#128218;</span>
+                  <span class="f-name">AWS Service</span>
+                  <span class="f-count">12</span>
+                </div>
+                <div class="tree-items collapsed" style="max-height:300px">
+                  <div class="tree-file" onclick="openNote('cloudfront')"><span class="tf-icon">&#128196;</span> CloudFront</div>
+                  <div class="tree-file" onclick="openNote('waf')"><span class="tf-icon">&#128196;</span> AWS WAF</div>
+                  <div class="tree-file" onclick="openNote('eks')"><span class="tf-icon">&#128196;</span> EKS</div>
+                  <div class="tree-file" onclick="openNote('bedrock')"><span class="tf-icon">&#128196;</span> Bedrock</div>
+                </div>
+              </div>
+              <!-- ML folder -->
+              <div class="tree-folder" style="border-bottom:none">
+                <div class="tree-folder-hdr" onclick="toggleFolder(this)" style="padding-left:32px">
+                  <span class="f-arrow">&#9654;</span>
+                  <span class="f-emoji">&#127891;</span>
+                  <span class="f-name">ML-DL Learning</span>
+                  <span class="f-count">35</span>
+                </div>
+                <div class="tree-items collapsed" style="max-height:300px">
+                  <div class="tree-file" onclick="openNote('pytorch')"><span class="tf-icon">&#128196;</span> PyTorch Basics</div>
+                  <div class="tree-file" onclick="openNote('transformer')"><span class="tf-icon">&#128196;</span> Transformer</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Journals folder -->
+          <div class="tree-folder">
+            <div class="tree-folder-hdr" onclick="toggleFolder(this)">
+              <span class="f-arrow">&#9654;</span>
+              <span class="f-emoji">&#128197;</span>
+              <span class="f-name">Journals</span>
+              <span class="f-count">5</span>
+            </div>
+            <div class="tree-items collapsed" style="max-height:300px">
+              <div class="tree-file" onclick="openNote('journal')"><span class="tf-icon">&#128196;</span> 2026-04-15</div>
+              <div class="tree-file" onclick="openNote('journal2')"><span class="tf-icon">&#128196;</span> 2026-04-14</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Note Render View -->
+      <div class="note-view" id="note-view">
+        <div class="note-header">
+          <button class="conv-back" onclick="closeNote()">&#8249;</button>
+          <div class="conv-info">
+            <div class="ci-name" id="note-title">Zeelool CDN 迁移</div>
+            <div class="ci-meta">Things / AWS Projects</div>
+          </div>
+          <button class="conv-btn" title="Link">&#128279;</button>
+        </div>
+        <div class="note-body obs" id="note-body">
+          <!-- Frontmatter -->
+          <div class="obs-props">
+            <span class="op-key">status</span><span class="op-val">&#128994; 进行中</span>
+            <span class="op-key">customer</span><span class="op-val">Zeelool</span>
+            <span class="op-key">tags</span><span class="op-val" style="color:var(--yellow)">#CDN #CloudFront #Migration</span>
+          </div>
+
+          <h1>【Zeelool】2026 CDN 迁移改造</h1>
+
+          <h2>项目背景</h2>
+          <p>Zeelool 当前使用 Cloudflare CDN，需迁移到 <a class="wikilink" onclick="toast('Opening [[CloudFront]]...','ok')">[[CloudFront]]</a> 以统一架构。</p>
+
+          <div class="callout tip">
+            <div class="ct">&#128161; Key Decision</div>
+            使用 CloudFront Functions 处理 URL 重写，不用 Lambda@Edge。参考 <a class="wikilink" onclick="toast('Opening note...','ok')">[[LongQi-CloudFront-Demo]]</a>
+          </div>
+
+          <h2>迁移方案</h2>
+          <table>
+            <thead><tr><th>阶段</th><th>内容</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr><td>Phase 1</td><td>静态资源迁移</td><td style="color:var(--green)">&#10003; 完成</td></tr>
+              <tr><td>Phase 2</td><td>API 加速</td><td style="color:var(--yellow)">&#9679; 进行中</td></tr>
+              <tr><td>Phase 3</td><td>LiteLLM 推理加速</td><td style="color:var(--text2)">&#9675; 待开始</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout warn">
+            <div class="ct">&#9888; Warning</div>
+            Cloudflare orange cloud 必须先关闭才能切 CNAME，否则 SSL 冲突
+          </div>
+
+          <h2>Tasks</h2>
+          <div class="task"><input type="checkbox" checked disabled> DNS 切换准备</div>
+          <div class="task"><input type="checkbox" checked disabled> S3 origin 配置</div>
+          <div class="task"><input type="checkbox" disabled> OAC 策略配置</div>
+          <div class="task"><input type="checkbox" disabled> WAF 规则同步</div>
+          <div class="task"><input type="checkbox" disabled> 灰度切量测试</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PATROLS TAB ==================== -->
+    <div class="tab-view" id="tab-patrols">
+      <div class="patrols-view">
+        <div class="patrols-hdr">
+          <h2>&#128373; Patrols</h2>
+          <button class="ph-btn" onclick="toast('New patrol created','ok')">+ New</button>
+        </div>
+
+        <div class="ptr-hint">&#8595; Pull down to refresh</div>
+
+        <div class="patrol-card" onclick="togglePatrolLog(this)">
+          <div class="patrol-top">
+            <div class="pt-icon" style="background:var(--green-dim)">&#128269;</div>
+            <div class="pt-info">
+              <div class="pt-name">PR Sentinel <span class="patrol-badge running">Running</span></div>
+              <div class="pt-desc">Auto-review new PRs for security issues, code quality, and best practices</div>
+              <div class="pt-schedule">trigger: github:pr_opened &middot; agent: code-reviewer</div>
+            </div>
+          </div>
+          <div class="patrol-log">
+            <div class="log-inner">
+              <div class="log-entry"><span class="le-time">14:32</span><span class="le-ok">&#10003;</span> Reviewed PR #148 &mdash; 2 suggestions</div>
+              <div class="log-entry"><span class="le-time">13:15</span><span class="le-ok">&#10003;</span> Reviewed PR #147 &mdash; approved</div>
+              <div class="log-entry"><span class="le-time">11:42</span><span class="le-warn">&#9888;</span> Reviewed PR #146 &mdash; 1 security issue</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="patrol-card" onclick="togglePatrolLog(this)">
+          <div class="patrol-top">
+            <div class="pt-icon" style="background:var(--yellow-dim)">&#128176;</div>
+            <div class="pt-info">
+              <div class="pt-name">Cost Watchdog <span class="patrol-badge running">Running</span></div>
+              <div class="pt-desc">Monitor AWS Cost Explorer hourly. Alert if daily spend exceeds budget.</div>
+              <div class="pt-schedule">schedule: @every 1h &middot; budget: $5.00/day</div>
+            </div>
+          </div>
+          <div class="patrol-log">
+            <div class="log-inner">
+              <div class="log-entry"><span class="le-time">14:00</span><span class="le-ok">&#10003;</span> $3.42 / $5.00 &mdash; on track (68%)</div>
+              <div class="log-entry"><span class="le-time">13:00</span><span class="le-ok">&#10003;</span> $2.85 / $5.00 &mdash; normal</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="patrol-card" onclick="togglePatrolLog(this)">
+          <div class="patrol-top">
+            <div class="pt-icon" style="background:var(--green-dim)">&#9729;&#65039;</div>
+            <div class="pt-info">
+              <div class="pt-name">Infra Health <span class="patrol-badge running">Running</span></div>
+              <div class="pt-desc">Check EKS cluster, RDS, ALB target health, and CloudFront error rates.</div>
+              <div class="pt-schedule">schedule: @every 30m &middot; via: AWS MCP Server</div>
+            </div>
+          </div>
+          <div class="patrol-log">
+            <div class="log-inner">
+              <div class="log-entry"><span class="le-time">14:30</span><span class="le-ok">&#10003;</span> All green &mdash; EKS 3/3, RDS ok, ALB 100%, CF 0.01% error</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="patrol-card" onclick="togglePatrolLog(this)">
+          <div class="patrol-top">
+            <div class="pt-icon" style="background:rgba(72,79,88,.15)">&#128274;</div>
+            <div class="pt-info">
+              <div class="pt-name">Dependency Auditor <span class="patrol-badge paused">Paused</span></div>
+              <div class="pt-desc">Daily scan for CVEs in project dependencies. Auto-create PRs for critical fixes.</div>
+              <div class="pt-schedule">schedule: 0 9 * * *</div>
+            </div>
+          </div>
+          <div class="patrol-log">
+            <div class="log-inner">
+              <div class="log-entry"><span class="le-time">09:00</span><span class="le-ok">&#10003;</span> Last run: 0 CVEs found in 4 projects</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== APPROVALS TAB ==================== -->
+    <div class="tab-view" id="tab-approvals">
+      <div class="approvals-view" id="approvals-container">
+        <div class="approvals-hdr">
+          <h2>&#128225; Approvals</h2>
+          <div class="ah-sub" id="approval-count">2 pending</div>
+        </div>
+
+        <div id="approval-list">
+          <div class="approval-card urgent" id="appr-1">
+            <div class="ac-content">
+              <div class="ac-top">
+                <div class="ac-header">
+                  <span class="ac-icon">&#9888;&#65039;</span>
+                  <span class="ac-title">Terraform Apply: EKS node group scale-up</span>
+                  <span class="ac-time">5m ago</span>
+                </div>
+                <div class="ac-body">
+                  Patrol <code>Infra Health</code> requests permission to apply Terraform changes:<br>
+                  <code>aws_eks_node_group.main</code>: desired_size 3 &rarr; 5<br>
+                  Estimated cost: +$4.80/day
+                </div>
+                <div class="ac-from">&#128373; From: Infra Health patrol &middot; auto-triggered by CPU > 80%</div>
+              </div>
+              <div class="ac-buttons">
+                <button class="ac-btn approve" onclick="approveCard('appr-1')">&#10003; Approve</button>
+                <button class="ac-btn reject" onclick="rejectCard('appr-1')">Reject</button>
+                <button class="ac-btn detail" onclick="toast('Opening details...','ok')">Details</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="approval-card" id="appr-2">
+            <div class="ac-content">
+              <div class="ac-top">
+                <div class="ac-header">
+                  <span class="ac-icon">&#128280;</span>
+                  <span class="ac-title">Merge PR #142: WAF rule fix</span>
+                  <span class="ac-time">15m ago</span>
+                </div>
+                <div class="ac-body">
+                  PR Sentinel reviewed and approved <code>PR #142</code>. Changes: fix SQLi false positive for JSON bodies. 2 files changed, +15 -3.
+                </div>
+                <div class="ac-from">&#128373; From: PR Sentinel patrol &middot; auto-approved by AI</div>
+              </div>
+              <div class="ac-buttons">
+                <button class="ac-btn approve" onclick="approveCard('appr-2')">&#10003; Approve</button>
+                <button class="ac-btn reject" onclick="rejectCard('appr-2')">Reject</button>
+                <button class="ac-btn detail" onclick="toast('Opening PR #142...','ok')">View PR</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty state (hidden initially) -->
+        <div class="empty-state" id="empty-approvals">
+          <span class="es-icon">&#10003;</span>
+          <div class="es-title">All Clear</div>
+          <div class="es-sub">No pending approvals. Your patrols are running smoothly.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Action Button -->
+  <button class="fab" id="fab" onclick="openNewSession()">+</button>
+
+  <!-- AI FAB for Knowledge -->
+  <button class="ai-fab" id="ai-fab" onclick="toggleAISheet()">&#129302;</button>
+
+  <!-- Bottom Tab Bar -->
+  <div class="tab-bar">
+    <div class="tab-item active" onclick="switchTab('home')">
+      <span class="ti-icon">&#127968;</span>
+      <span class="ti-label">Home</span>
+    </div>
+    <div class="tab-item" onclick="switchTab('chat')">
+      <span class="ti-icon">&#128172;</span>
+      <span class="ti-label">Chat</span>
+      <span class="ti-dot"></span>
+    </div>
+    <div class="tab-item" onclick="switchTab('knowledge')">
+      <span class="ti-icon">&#128214;</span>
+      <span class="ti-label">Knowledge</span>
+    </div>
+    <div class="tab-item" onclick="switchTab('patrols')">
+      <span class="ti-icon">&#128373;</span>
+      <span class="ti-label">Patrols</span>
+    </div>
+    <div class="tab-item" onclick="switchTab('approvals')">
+      <span class="ti-icon">&#128225;</span>
+      <span class="ti-label">Approvals</span>
+      <span class="ti-dot"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast" id="toast"></div>
+
+<!-- Notification Panel -->
+<div class="notif-backdrop" id="notif-backdrop" onclick="toggleNotif()"></div>
+<div class="notif-panel" id="notif-panel">
+  <div class="notif-hdr">
+    <h3>Notifications</h3>
+    <span class="n-close" onclick="toggleNotif()">&#10005;</span>
+  </div>
+  <div class="notif-item urgent unread">
+    <span class="ni-icon">&#9888;&#65039;</span>
+    <div class="ni-body">
+      <div class="ni-title">Terraform Apply Pending</div>
+      <div class="ni-desc">Infra Health patrol requests EKS scale-up (3 &rarr; 5 nodes)</div>
+      <div class="ni-time">5 minutes ago</div>
+    </div>
+  </div>
+  <div class="notif-item unread">
+    <span class="ni-icon">&#128373;</span>
+    <div class="ni-body">
+      <div class="ni-title">PR Sentinel: 2 suggestions on #148</div>
+      <div class="ni-desc">CloudFront cache policy PR needs attention</div>
+      <div class="ni-time">15 minutes ago</div>
+    </div>
+  </div>
+  <div class="notif-item unread">
+    <span class="ni-icon">&#128218;</span>
+    <div class="ni-body">
+      <div class="ni-title">Wiki Updated: CloudFront</div>
+      <div class="ni-desc">2 new sources ingested, page auto-compiled</div>
+      <div class="ni-time">20 minutes ago</div>
+    </div>
+  </div>
+  <div class="notif-item">
+    <span class="ni-icon">&#128176;</span>
+    <div class="ni-body">
+      <div class="ni-title">Cost Report</div>
+      <div class="ni-desc">Daily spend $3.42 / $5.00 budget (68%)</div>
+      <div class="ni-time">30 minutes ago</div>
+    </div>
+  </div>
+</div>
+
+<!-- Search Overlay -->
+<div class="search-overlay" id="search-overlay">
+  <div class="search-box">
+    <input type="text" id="search-input" placeholder="Search everything..." autofocus>
+    <span class="s-cancel" onclick="closeSearch()">Cancel</span>
+  </div>
+  <div class="search-results">
+    <div class="sr-group">Sessions</div>
+    <div class="sr-item" onclick="closeSearch();switchTab('chat');setTimeout(()=>openConversation(0),300)">
+      <span class="ri-icon">&#129302;</span>
+      <div class="ri-body"><div class="ri-title">Auth Middleware 重构</div><div class="ri-desc">code-reviewer &middot; 3 security issues found</div></div>
+    </div>
+    <div class="sr-item" onclick="closeSearch();switchTab('chat')">
+      <span class="ri-icon">&#128270;</span>
+      <div class="ri-body"><div class="ri-title">CloudFront Cache Policy</div><div class="ri-desc">research &middot; CachingOptimized vs custom policy</div></div>
+    </div>
+    <div class="sr-group">Knowledge</div>
+    <div class="sr-item" onclick="closeSearch();switchTab('knowledge');setTimeout(()=>openNote('zeelool'),300)">
+      <span class="ri-icon">&#128196;</span>
+      <div class="ri-body"><div class="ri-title">Zeelool CDN 迁移</div><div class="ri-desc">Things / AWS Projects &middot; Phase 2 in progress</div></div>
+    </div>
+    <div class="sr-item" onclick="closeSearch();switchTab('knowledge')">
+      <span class="ri-icon">&#128196;</span>
+      <div class="ri-body"><div class="ri-title">AWS WAF 最佳实践</div><div class="ri-desc">Things / AWS Service &middot; Rule optimization guide</div></div>
+    </div>
+    <div class="sr-group">Patrols</div>
+    <div class="sr-item" onclick="closeSearch();switchTab('patrols')">
+      <span class="ri-icon">&#128373;</span>
+      <div class="ri-body"><div class="ri-title">PR Sentinel</div><div class="ri-desc">Running &middot; 3 PRs reviewed today</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Voice Overlay -->
+<div class="voice-overlay" id="voice-overlay">
+  <div class="voice-ring">&#127908;</div>
+  <div class="voice-text">Listening...</div>
+  <div class="voice-hint">Release to send</div>
+</div>
+
+<!-- New Session Bottom Sheet -->
+<div class="ns-overlay" id="ns-overlay" onclick="if(event.target===this)closeNewSession()">
+  <div class="ns-sheet">
+    <div class="ns-handle"></div>
+    <div class="ns-hdr"><h3>New Session</h3><p>Choose an agent and optionally bind to a project</p></div>
+    <div class="ns-label">Agent</div>
+    <div class="ns-agents-grid">
+      <div class="ns-agent-card sel" onclick="selNSAgent(this)"><div class="nac-name">&#129302; General</div><div class="nac-desc">Default &middot; opus</div></div>
+      <div class="ns-agent-card" onclick="selNSAgent(this)"><div class="nac-name">&#128269; Reviewer</div><div class="nac-desc">Code review &middot; sonnet</div></div>
+      <div class="ns-agent-card" onclick="selNSAgent(this)"><div class="nac-name">&#128214; Researcher</div><div class="nac-desc">Deep analysis &middot; opus</div></div>
+      <div class="ns-agent-card" onclick="selNSAgent(this)"><div class="nac-name">&#128230; Planner</div><div class="nac-desc">Project planning &middot; opus</div></div>
+    </div>
+    <div class="ns-label">Project (optional)</div>
+    <div class="ns-projects-list">
+      <div class="ns-proj-item" onclick="selNSProj(this)"><div class="npi-name">naozhi</div><div class="npi-path">~/keith-space/AWS/EC2-Workload/naozhi</div></div>
+      <div class="ns-proj-item" onclick="selNSProj(this)"><div class="npi-name">longqi-cloudfront</div><div class="npi-path">~/keith-space/2026-project/longqi-cloudfront</div></div>
+      <div class="ns-proj-item" onclick="selNSProj(this)"><div class="npi-name">terraform-devlake</div><div class="npi-path">~/keith-space/AWS/EKS-Workload/terraform-devlake</div></div>
+    </div>
+    <div class="ns-btns">
+      <button class="ns-btn-cancel" onclick="closeNewSession()">Cancel</button>
+      <button class="ns-btn-create" onclick="createNewSession()">Create Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI Bottom Sheet -->
+<div class="ai-sheet" id="ai-sheet">
+  <div class="as-handle"></div>
+  <div class="as-title">&#129302; Ask AI about this note</div>
+  <div class="as-body">
+    <div style="margin-bottom:10px">
+      <div style="margin-left:30px;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);padding:8px 12px;border-radius:14px 14px 4px 14px;font-size:13px;color:var(--bright);display:inline-block">Phase 2 需要注意什么?</div>
+    </div>
+    <div style="margin-bottom:10px;display:flex;gap:8px">
+      <div style="width:26px;height:26px;border-radius:50%;background:rgba(163,118,255,.15);color:var(--purple);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">AI</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.6">
+        1. <strong>Cache Policy</strong> &mdash; API cannot use CachingOptimized<br>
+        2. <strong>WAF</strong> &mdash; SQLi rule false positives on JSON body, start with Count mode<br>
+        3. <strong>Origin</strong> &mdash; ALB must forward Host header
+      </div>
+    </div>
+  </div>
+  <div class="as-input">
+    <input placeholder="Ask about this note...">
+    <button onclick="toast('AI is thinking...','ok')">&#9650;</button>
+  </div>
+</div>
+
+<script>
+// ========== TAB SWITCHING ==========
+let currentTab = 'home';
+const tabs = ['home','chat','knowledge','patrols','approvals'];
+
+function switchTab(name) {
+  if (currentTab === name) return;
+  currentTab = name;
+
+  // Update tab views
+  tabs.forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.classList.toggle('active', t === name);
+  });
+
+  // Update tab bar
+  document.querySelectorAll('.tab-item').forEach((el, i) => {
+    el.classList.toggle('active', tabs[i] === name);
+  });
+
+  // Show/hide FAB
+  const fab = document.getElementById('fab');
+  fab.classList.toggle('hidden', name !== 'home' && name !== 'chat');
+
+  // AI FAB for knowledge note view
+  const aiFab = document.getElementById('ai-fab');
+  const noteOpen = document.getElementById('note-view').classList.contains('open');
+  aiFab.classList.toggle('show', name === 'knowledge' && noteOpen);
+
+  // Close overlays
+  closeConversation();
+  closeNote();
+  closeAISheet();
+}
+
+// ========== CONVERSATION VIEW ==========
+const sessions = [
+  { name: 'Auth Middleware 重构', meta: 'code-reviewer · $0.42' },
+  { name: 'naozhi planner', meta: 'planner · $1.24' },
+  { name: 'CloudFront Cache Policy', meta: 'research · $0.18' },
+  { name: 'Terraform State 迁移', meta: 'general · $0.52' },
+  { name: 'WAF Terraform 模块', meta: 'CLI · ~/infra/terraform-waf' },
+  { name: 'EKS Node Group 扩容', meta: 'general · $0.31' },
+];
+
+function openConversation(idx) {
+  const s = sessions[idx] || sessions[0];
+  document.getElementById('conv-title').textContent = s.name;
+  document.getElementById('conv-meta').textContent = s.meta;
+  document.getElementById('conv-view').classList.add('open');
+  document.getElementById('fab').classList.add('hidden');
+}
+
+function closeConversation() {
+  document.getElementById('conv-view').classList.remove('open');
+  if (currentTab === 'home' || currentTab === 'chat') {
+    document.getElementById('fab').classList.remove('hidden');
+  }
+}
+
+// ========== TOOL CARD TOGGLE ==========
+function toggleTool(el) {
+  const body = el.nextElementSibling;
+  const arrow = el.querySelector('.th-expand');
+  body.classList.toggle('open');
+  if (arrow) arrow.classList.toggle('open');
+}
+
+// ========== CODE COPY ==========
+function copyCode(el) {
+  el.textContent = 'Copied!';
+  el.classList.add('copied');
+  toast('Code copied to clipboard', 'ok');
+  setTimeout(() => {
+    el.textContent = 'Copy';
+    el.classList.remove('copied');
+  }, 2000);
+}
+
+// ========== BOOKMARK ==========
+function bookmarkMsg(el) {
+  el.classList.toggle('on');
+  if (el.classList.contains('on')) {
+    toast('Bookmarked', 'ok');
+  }
+}
+
+function toggleBookmark(el) {
+  el.classList.toggle('on');
+  if (el.classList.contains('on')) {
+    toast('Session bookmarked', 'ok');
+  }
+}
+
+// ========== FILTER PILLS ==========
+function filterPill(el) {
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ========== KNOWLEDGE VIEW ==========
+function toggleFolder(el) {
+  const arrow = el.querySelector('.f-arrow');
+  const items = el.nextElementSibling;
+  if (arrow) arrow.classList.toggle('open');
+  if (items) items.classList.toggle('collapsed');
+}
+
+function openNote(id) {
+  document.querySelectorAll('.tree-file').forEach(f => f.classList.remove('active'));
+  event.target.closest('.tree-file').classList.add('active');
+  document.getElementById('note-view').classList.add('open');
+  document.getElementById('ai-fab').classList.add('show');
+  document.getElementById('fab').classList.add('hidden');
+
+  // Update title based on selection
+  const names = {
+    zeelool: 'Zeelool CDN 迁移',
+    yihai: 'YiHai-预测补货',
+    longqi: 'LongQi-CloudFront',
+    giikin: 'Giikin-选品Agent',
+    cloudfront: 'CloudFront',
+    waf: 'AWS WAF',
+    eks: 'EKS',
+    bedrock: 'Bedrock',
+    pytorch: 'PyTorch Basics',
+    transformer: 'Transformer',
+    journal: '2026-04-15',
+    journal2: '2026-04-14',
+  };
+  document.getElementById('note-title').textContent = names[id] || id;
+}
+
+function closeNote() {
+  document.getElementById('note-view').classList.remove('open');
+  document.getElementById('ai-fab').classList.remove('show');
+  closeAISheet();
+}
+
+// ========== AI BOTTOM SHEET ==========
+// ===== New Session =====
+function openNewSession() {
+  document.getElementById('ns-overlay').classList.add('show');
+}
+function closeNewSession() {
+  document.getElementById('ns-overlay').classList.remove('show');
+}
+function selNSAgent(el) {
+  el.closest('.ns-agents-grid').querySelectorAll('.ns-agent-card').forEach(a => a.classList.remove('sel'));
+  el.classList.add('sel');
+}
+function selNSProj(el) {
+  const was = el.classList.contains('sel');
+  el.closest('.ns-projects-list').querySelectorAll('.ns-proj-item').forEach(p => p.classList.remove('sel'));
+  if (!was) el.classList.add('sel');
+}
+function createNewSession() {
+  const agentEl = document.querySelector('.ns-agent-card.sel .nac-name');
+  const agent = agentEl ? agentEl.textContent.trim() : 'General';
+  closeNewSession();
+  toast('Session created — ' + agent, 'ok');
+  // Switch to chat tab and show the new session
+  switchTab('chat');
+}
+
+function toggleAISheet() {
+  document.getElementById('ai-sheet').classList.toggle('open');
+}
+function closeAISheet() {
+  document.getElementById('ai-sheet').classList.remove('open');
+}
+
+// ========== PATROL LOG TOGGLE ==========
+function togglePatrolLog(el) {
+  const log = el.querySelector('.patrol-log');
+  if (log) log.classList.toggle('open');
+}
+
+// ========== APPROVALS ==========
+let approvalCount = 2;
+
+function approveCard(id) {
+  const card = document.getElementById(id);
+  if (!card) return;
+  card.classList.add('approved');
+  toast('Approved', 'ok');
+  approvalCount--;
+  updateApprovalCount();
+  setTimeout(() => { card.style.display = 'none'; checkEmpty(); }, 500);
+}
+
+function rejectCard(id) {
+  const card = document.getElementById(id);
+  if (!card) return;
+  card.classList.add('rejected');
+  toast('Rejected', 'warn');
+  approvalCount--;
+  updateApprovalCount();
+  setTimeout(() => { card.style.display = 'none'; checkEmpty(); }, 500);
+}
+
+function updateApprovalCount() {
+  const el = document.getElementById('approval-count');
+  if (approvalCount > 0) {
+    el.textContent = approvalCount + ' pending';
+  } else {
+    el.textContent = 'All clear';
+  }
+  // Update tab dot
+  const dots = document.querySelectorAll('.tab-item .ti-dot');
+  if (dots[1] && approvalCount <= 0) {
+    // remove from approvals tab (index 4)
+  }
+}
+
+function checkEmpty() {
+  if (approvalCount <= 0) {
+    document.getElementById('empty-approvals').classList.add('show');
+  }
+}
+
+// ========== NOTIFICATIONS ==========
+function toggleNotif() {
+  const panel = document.getElementById('notif-panel');
+  const backdrop = document.getElementById('notif-backdrop');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open');
+  backdrop.classList.toggle('show');
+  if (!isOpen) {
+    // Clear badge on open
+    setTimeout(() => {
+      document.getElementById('notif-badge').style.display = 'none';
+    }, 500);
+  }
+}
+
+// ========== SEARCH ==========
+function openSearch() {
+  document.getElementById('search-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('search-input').focus(), 100);
+}
+
+function closeSearch() {
+  document.getElementById('search-overlay').classList.remove('show');
+}
+
+// ========== VOICE ==========
+function startVoice() {
+  document.getElementById('voice-overlay').classList.add('show');
+}
+
+function endVoice() {
+  document.getElementById('voice-overlay').classList.remove('show');
+  toast('Voice message processing...', 'ok');
+}
+
+// ========== SEND MESSAGE ==========
+function sendMsg() {
+  const area = document.getElementById('msg-area');
+  const ta = document.querySelector('.chat-input textarea');
+  const text = ta.value.trim();
+  if (!text) {
+    toast('Type a message first', 'warn');
+    return;
+  }
+
+  // Add user message
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'msg user';
+  msgDiv.innerHTML = '<div class="avatar">K</div><div class="bubble">' + escapeHtml(text) + '</div>';
+  area.appendChild(msgDiv);
+  ta.value = '';
+  ta.style.height = 'auto';
+  area.scrollTop = area.scrollHeight;
+
+  // Simulate AI typing
+  setTimeout(() => {
+    const aiMsg = document.createElement('div');
+    aiMsg.className = 'msg ai';
+    aiMsg.innerHTML = '<div class="avatar">AI</div><div class="content"><div style="color:var(--text2)">Thinking...</div></div>';
+    area.appendChild(aiMsg);
+    area.scrollTop = area.scrollHeight;
+
+    setTimeout(() => {
+      aiMsg.querySelector('.content').innerHTML = '<div>Based on the auth middleware analysis, I recommend implementing the CSRF protection as discussed. The double-submit cookie pattern is well-suited for this architecture.</div><div class="callout tip"><div class="ct">&#128161; Next Steps</div>1. Add CSRFMiddleware to the handler chain<br>2. Update frontend to include X-CSRF-Token header<br>3. Run integration tests<span class="bm-btn" onclick="bookmarkMsg(this)">&#128278;</span></div>';
+      area.scrollTop = area.scrollHeight;
+    }, 1500);
+  }, 300);
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+// ========== TOAST ==========
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (type || 'ok');
+  // Force reflow
+  void t.offsetWidth;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ========== SWIPE GESTURES ON SESSION ITEMS ==========
+let touchStartX = 0;
+let touchCurrentItem = null;
+
+document.querySelectorAll('.session-item').forEach(item => {
+  item.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchCurrentItem = item;
+  }, { passive: true });
+
+  item.addEventListener('touchmove', (e) => {
+    if (!touchCurrentItem) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    if (dx < -40) {
+      touchCurrentItem.classList.add('swiped');
+    } else {
+      touchCurrentItem.classList.remove('swiped');
+    }
+  }, { passive: true });
+
+  item.addEventListener('touchend', () => {
+    // Keep swiped state until tapped elsewhere
+    touchCurrentItem = null;
+  }, { passive: true });
+});
+
+// Reset swiped state on tap elsewhere
+document.addEventListener('touchstart', (e) => {
+  if (!e.target.closest('.session-item')) {
+    document.querySelectorAll('.session-item.swiped').forEach(el => el.classList.remove('swiped'));
+  }
+}, { passive: true });
+
+// ========== APPROVAL SWIPE GESTURES ==========
+document.querySelectorAll('.approval-card .ac-content').forEach(content => {
+  let startX = 0;
+  content.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+  }, { passive: true });
+
+  content.addEventListener('touchmove', (e) => {
+    const dx = e.touches[0].clientX - startX;
+    const clamped = Math.max(-100, Math.min(100, dx));
+    content.style.transform = 'translateX(' + clamped + 'px)';
+  }, { passive: true });
+
+  content.addEventListener('touchend', (e) => {
+    const dx = parseInt(content.style.transform.replace(/[^-\d]/g, '')) || 0;
+    content.style.transform = '';
+    const card = content.closest('.approval-card');
+    if (dx > 60) {
+      approveCard(card.id);
+    } else if (dx < -60) {
+      rejectCard(card.id);
+    }
+  }, { passive: true });
+});
+
+// ========== KEYBOARD SHORTCUTS ==========
+document.addEventListener('keydown', (e) => {
+  // Cmd+K or Ctrl+K for search
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    openSearch();
+  }
+  // Escape to close overlays
+  if (e.key === 'Escape') {
+    closeSearch();
+    closeConversation();
+    closeNote();
+    closeAISheet();
+    const notifPanel = document.getElementById('notif-panel');
+    if (notifPanel.classList.contains('open')) toggleNotif();
+  }
+});
+
+// Elapsed timer for running banner simulation
+let elapsed = 4;
+setInterval(() => {
+  elapsed++;
+  // Just for show
+}, 1000);
+</script>
+</body>
+</html>

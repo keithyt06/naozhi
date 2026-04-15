@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Naozhi V2.0 — Full Interactive Prototype</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#1c2128;--bg4:#21262d;
+  --border:#30363d;--border2:#21262d;
+  --text:#c9d1d9;--text2:#8b949e;--text3:#6e7681;--text4:#484f58;
+  --white:#f0f6fc;--bright:#e6edf3;
+  --blue:#58a6ff;--green:#3fb950;--red:#da3633;--yellow:#d29922;--purple:#a376ff;--pink:#f778ba;
+  --blue-dim:#1f6feb22;--green-dim:#23863622;--red-dim:#da363322;--yellow-dim:#9e6a0322;--purple-dim:#a371f722;
+  --mono:'SF Mono',SFMono-Regular,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ===== SHELL ===== */
+.shell{display:flex;flex-direction:column;height:100%}
+
+/* Top bar */
+.topbar{height:42px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:100}
+.topbar .logo{font-size:14px;font-weight:700;color:var(--white);display:flex;align-items:center;gap:6px}
+.topbar .logo span{background:linear-gradient(135deg,var(--purple),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-tabs{display:flex;gap:1px;background:var(--bg);border-radius:6px;padding:2px;margin-left:8px}
+.nav-tab{padding:5px 14px;border-radius:4px;font-size:11px;color:var(--text2);cursor:pointer;border:none;background:none;font-family:var(--sans);transition:all .15s;position:relative;white-space:nowrap}
+.nav-tab:hover{color:var(--text)}
+.nav-tab.active{background:var(--blue-dim);color:var(--blue)}
+.nav-tab .tab-badge{position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--red);color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.topbar-right{margin-left:auto;display:flex;gap:6px;align-items:center}
+.top-btn{width:30px;height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;transition:all .15s;position:relative}
+.top-btn:hover{color:var(--white);border-color:var(--text4)}
+.top-btn .tb-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;background:var(--red);color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0 4px}
+
+/* Main */
+.main-area{flex:1;overflow:hidden;position:relative}
+.view{display:none;height:100%;opacity:0;transition:opacity .2s ease}
+.view.active{display:flex;opacity:1}
+#v-home.active{display:block;overflow-y:auto;opacity:1}
+
+/* Notification panel */
+.notif-panel{position:absolute;top:42px;right:16px;width:360px;max-height:420px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:500;display:none;overflow:hidden;animation:modal-in .15s ease}
+.notif-panel.show{display:block}
+.notif-hdr{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.notif-hdr h3{font-size:13px;color:var(--white);font-weight:600}
+.notif-hdr .n-clear{font-size:10px;color:var(--blue);cursor:pointer}
+.notif-list{max-height:350px;overflow-y:auto}
+.notif-item{padding:10px 16px;border-bottom:1px solid var(--border2);display:flex;gap:10px;cursor:pointer;transition:background .1s}
+.notif-item:hover{background:var(--bg3)}
+.notif-item.unread{background:rgba(31,111,235,.05);border-left:3px solid var(--blue)}
+.notif-item.urgent{border-left:3px solid var(--red)}
+.notif-item .ni-icon{font-size:16px;flex-shrink:0;margin-top:2px}
+.notif-item .ni-body{flex:1;min-width:0}
+.notif-item .ni-title{font-size:12px;color:var(--bright);font-weight:500}
+.notif-item .ni-desc{font-size:11px;color:var(--text2);margin-top:2px;line-height:1.4}
+.notif-item .ni-time{font-size:10px;color:var(--text3);margin-top:3px}
+
+/* ===== HOME VIEW ===== */
+.home{padding:24px;overflow-y:auto}
+.home-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;max-width:1100px;margin:0 auto}
+.home-grid .span-2{grid-column:span 2}
+.widget{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;transition:all .2s}
+.widget:hover{border-color:var(--text4)}
+.w-hdr{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.w-hdr .w-icon{font-size:16px}
+.w-hdr h3{font-size:13px;color:var(--white);font-weight:600;flex:1}
+.w-hdr .w-action{font-size:10px;color:var(--blue);cursor:pointer}
+
+/* Stats row */
+.stats-row{display:flex;gap:16px}
+.stat{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+.stat .st-num{font-size:24px;font-weight:700;color:var(--white)}
+.stat .st-label{font-size:10px;color:var(--text2);margin-top:2px}
+.stat.green .st-num{color:var(--green)}
+.stat.blue .st-num{color:var(--blue)}
+.stat.yellow .st-num{color:var(--yellow)}
+.stat.purple .st-num{color:var(--purple)}
+
+/* Patrol list in widget */
+.patrol-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px}
+.patrol-item:last-child{border-bottom:none}
+.patrol-item .p-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.patrol-item .p-dot.running{background:var(--green);animation:pulse 1.5s infinite}
+.patrol-item .p-dot.paused{background:var(--yellow)}
+.patrol-item .p-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.patrol-item .p-name{flex:1;color:var(--bright)}
+.patrol-item .p-status{color:var(--text2);font-size:10px}
+.patrol-item .p-time{color:var(--text3);font-size:10px}
+
+/* Activity feed */
+.activity-item{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--border2);font-size:11px}
+.activity-item:last-child{border-bottom:none}
+.activity-item .a-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.activity-item .a-text{flex:1;color:var(--text);line-height:1.4}
+.activity-item .a-text strong{color:var(--bright)}
+.activity-item .a-text a{color:var(--blue);text-decoration:none;cursor:pointer}
+.activity-item .a-time{color:var(--text3);font-size:10px;flex-shrink:0}
+
+/* Quick actions */
+.quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qa-btn{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px}
+.qa-btn:hover{border-color:var(--blue);background:var(--blue-dim)}
+.qa-btn .qa-icon{font-size:18px}
+.qa-btn .qa-text{font-size:11px;color:var(--text)}
+.qa-btn .qa-text strong{display:block;color:var(--bright);font-size:12px}
+
+/* ===== CHAT VIEW ===== */
+.chat-layout{display:flex;height:100%}
+.sidebar{width:300px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sb-search{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px}
+.sb-search input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;outline:none}
+.sb-search input:focus{border-color:var(--blue)}
+.new-btn{width:32px;height:32px;border:1px dashed var(--border);border-radius:6px;background:none;color:var(--text2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.new-btn:hover{border-color:var(--blue);color:var(--blue);border-style:solid;background:var(--blue-dim)}
+.sb-tags{display:flex;gap:4px;padding:6px 12px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border)}
+.sb-tag{padding:3px 10px;border-radius:12px;font-size:10px;border:1px solid var(--border);color:var(--text2);cursor:pointer;white-space:nowrap;transition:all .15s}
+.sb-tag.active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue)}
+.sb-tag:hover:not(.active){color:var(--text)}
+.sb-list{flex:1;overflow-y:auto}
+.sb-group{padding:5px 12px;font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;background:var(--bg2);border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:1}
+.sb-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border2);cursor:pointer;transition:all .12s;border-left:3px solid transparent}
+.sb-item:hover{background:var(--bg2)}
+.sb-item.active{background:#1f2937;border-left-color:var(--blue)}
+.sb-item .si-icon{width:30px;height:30px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--bg4)}
+.sb-item .si-body{flex:1;min-width:0}
+.sb-item .si-name{font-size:12px;color:var(--bright);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-item .si-meta{font-size:10px;color:var(--text2);margin-top:1px}
+.sb-item .si-time{font-size:10px;color:var(--text3);flex-shrink:0}
+.sb-status{padding:6px 12px;border-top:1px solid var(--border);font-size:10px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.sb-status .sd{width:6px;height:6px;border-radius:50%;background:var(--green)}
+
+/* Chat main */
+.chat-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.chat-hdr{padding:8px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;min-height:44px}
+.chat-hdr h2{font-size:14px;color:var(--white);font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-hdr .ch-meta{font-size:11px;color:var(--text2)}
+.ch-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;transition:all .15s}
+.ch-btn:hover{color:var(--text);border-color:var(--text4)}
+.ch-btn.on{color:var(--purple);border-color:var(--purple)}
+.chat-body{flex:1;overflow-y:auto;padding:16px 20px}
+.chat-input{border-top:1px solid var(--border);padding:10px 16px;display:flex;gap:8px;align-items:flex-end}
+.chat-input textarea{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:9px 14px;font-family:var(--sans);font-size:13px;min-height:40px;max-height:100px;outline:none;resize:none;transition:border-color .15s}
+.chat-input textarea:focus{border-color:var(--blue)}
+.ci-btn{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);transition:all .15s;flex-shrink:0}
+.ci-btn:hover{background:var(--bg4);color:var(--text)}
+.ci-btn.send{background:#238636;border-color:#238636;color:#fff}
+
+/* Messages */
+.msg{display:flex;gap:10px;margin-bottom:14px;animation:msg-in .25s ease}
+@keyframes msg-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{flex-direction:row-reverse}
+.msg .av{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
+.msg.user .av{background:rgba(88,166,255,.15);color:var(--blue)}
+.msg.ai .av{background:rgba(163,118,255,.15);color:var(--purple)}
+.msg.user .bubble{background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.18);padding:8px 14px;border-radius:14px 14px 4px 14px;color:var(--bright);max-width:70%;font-size:13px}
+.msg.ai .content{max-width:90%;font-size:13px;line-height:1.7}
+
+/* Tool cards */
+.tc{background:var(--bg2);border:1px solid var(--border);border-radius:7px;margin:6px 0;overflow:hidden}
+.tc .tc-h{display:flex;align-items:center;gap:5px;padding:6px 10px;background:var(--bg3);border-bottom:1px solid var(--border);cursor:pointer;font-size:11px;transition:background .12s}
+.tc .tc-h:hover{background:var(--bg4)}
+.tc .tc-h .tc-n{color:var(--blue);font-weight:600}
+.tc .tc-h .tc-d{color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc .tc-h .tc-s{color:var(--green)}
+.tc .tc-h .tc-x{color:var(--text4);font-size:9px;transition:transform .15s}
+.tc .tc-b{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.tc .tc-b.open{max-height:250px}
+.tc .tc-b-inner{padding:8px 10px;font-size:11px}
+
+/* Code block */
+.code{background:var(--bg2);border:1px solid var(--border);border-radius:7px;margin:6px 0;overflow:hidden}
+.code .code-h{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:var(--bg3);border-bottom:1px solid var(--border);font-size:10px}
+.code .code-l{color:var(--text2);font-weight:600}
+.code .code-c{background:var(--bg4);border:1px solid var(--border);border-radius:3px;color:var(--text2);font-size:9px;padding:1px 7px;cursor:pointer;font-family:var(--sans)}
+.code pre{padding:8px 10px;font-family:var(--mono);font-size:11px;line-height:1.6;overflow-x:auto;color:var(--bright)}
+.kw{color:#ff7b72}.str{color:#a5d6ff}.fn{color:#d2a8ff}.cm{color:var(--text2)}.num{color:#79c0ff}
+
+/* Diff */
+.diff{font-family:var(--mono);font-size:11px;line-height:1.7}
+.diff .dl{padding:0 10px;white-space:pre}
+.diff .dl.add{background:rgba(63,185,80,.07);color:#aff5b4}
+.diff .dl.del{background:rgba(218,54,51,.07);color:#ffa198}
+.diff .dl.ctx{color:var(--text2)}
+
+/* Callout */
+.callout{border-radius:6px;padding:10px 12px;margin:8px 0;border-left:3px solid;font-size:12px;line-height:1.6}
+.callout.danger{background:var(--red-dim);border-left-color:var(--red)}
+.callout.danger .ct{color:var(--red);font-weight:600;margin-bottom:4px}
+.callout.tip{background:var(--green-dim);border-left-color:var(--green)}
+.callout.tip .ct{color:var(--green);font-weight:600;margin-bottom:4px}
+.callout.warn{background:var(--yellow-dim);border-left-color:var(--yellow)}
+.callout.warn .ct{color:var(--yellow);font-weight:600;margin-bottom:4px}
+
+/* Bookmark hover */
+.bm-h{position:absolute;right:-4px;top:-4px;width:22px;height:22px;border-radius:50%;background:var(--bg4);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--yellow);cursor:pointer;opacity:0;transition:all .2s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.msg.ai .content:hover .bm-h{opacity:1}
+.bm-h:hover{transform:scale(1.12);background:var(--yellow-dim);border-color:var(--yellow)}
+.bm-h.on{opacity:1;background:var(--yellow-dim);border-color:var(--yellow)}
+
+/* Running banner */
+.run-ban{background:#1a2332;border-bottom:1px solid rgba(31,111,235,.2);padding:5px 16px;display:none;align-items:center;gap:8px;font-size:12px;color:var(--blue);flex-shrink:0;animation:ban-in .2s ease}
+@keyframes ban-in{from{opacity:0;max-height:0}to{opacity:1;max-height:40px}}
+.run-ban.show{display:flex}
+.run-ban .rd{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:pulse 1.5s infinite}
+.run-ban .rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.run-ban .re{color:var(--text2);font-size:11px;font-variant-numeric:tabular-nums}
+
+/* ===== PATROL VIEW ===== */
+.patrol-layout{display:flex;flex-direction:column;height:100%;overflow-y:auto;padding:24px;gap:16px}
+.patrol-hdr{display:flex;align-items:center;gap:12px}
+.patrol-hdr h2{font-size:18px;color:var(--white);font-weight:600;flex:1}
+.patrol-hdr .ph-btn{padding:6px 16px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;font-family:var(--sans)}
+.patrol-hdr .ph-btn:hover{border-color:var(--blue);color:var(--blue)}
+.patrol-hdr .ph-btn.primary{background:#238636;border-color:#238636;color:#fff}
+.patrol-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;max-width:1100px}
+.pc{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:all .2s}
+.pc:hover{border-color:var(--text4);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.pc .pc-top{padding:14px 16px;display:flex;align-items:flex-start;gap:10px}
+.pc .pc-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.pc .pc-info{flex:1;min-width:0}
+.pc .pc-name{font-size:14px;color:var(--white);font-weight:600;display:flex;align-items:center;gap:6px}
+.pc .pc-name .pc-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weight:600}
+.pc .pc-name .pc-badge.running{background:var(--green-dim);color:var(--green)}
+.pc .pc-name .pc-badge.paused{background:var(--yellow-dim);color:var(--yellow)}
+.pc .pc-desc{font-size:11px;color:var(--text2);margin-top:4px;line-height:1.4}
+.pc .pc-schedule{font-size:10px;color:var(--text3);margin-top:4px;font-family:var(--mono)}
+.pc .pc-actions{display:flex;gap:4px;margin-top:8px}
+.pc .pc-btn{font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg4);color:var(--text2);cursor:pointer;transition:all .12s;font-family:var(--sans)}
+.pc .pc-btn:hover{color:var(--text);border-color:var(--text4)}
+.pc .pc-log{border-top:1px solid var(--border);padding:10px 16px;max-height:120px;overflow-y:auto;font-size:10px;color:var(--text2);line-height:1.5}
+.pc .pc-log .log-entry{display:flex;gap:6px;padding:2px 0}
+.pc .pc-log .log-time{color:var(--text3);flex-shrink:0;font-family:var(--mono)}
+.pc .pc-log .log-ok{color:var(--green)}.pc .pc-log .log-warn{color:var(--yellow)}.pc .pc-log .log-err{color:var(--red)}
+
+/* ===== APPROVAL VIEW ===== */
+.approval-layout{display:flex;flex-direction:column;height:100%;overflow-y:auto;padding:24px;gap:16px}
+.approval-hdr{display:flex;align-items:center;gap:12px}
+.approval-hdr h2{font-size:18px;color:var(--white);font-weight:600;flex:1}
+.approval-cards{display:flex;flex-direction:column;gap:12px;max-width:700px}
+.ac{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:all .2s}
+.ac:hover{border-color:var(--text4)}
+.ac.urgent{border-left:3px solid var(--red)}
+.ac.normal{border-left:3px solid var(--yellow)}
+.ac .ac-top{padding:14px 16px}
+.ac .ac-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ac .ac-hdr .ac-icon{font-size:16px}
+.ac .ac-hdr .ac-title{font-size:14px;color:var(--white);font-weight:600;flex:1}
+.ac .ac-hdr .ac-time{font-size:10px;color:var(--text3)}
+.ac .ac-body{font-size:12px;color:var(--text);line-height:1.6}
+.ac .ac-body code{background:var(--bg4);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px}
+.ac .ac-detail{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:8px;font-size:11px;font-family:var(--mono);color:var(--text2);max-height:100px;overflow-y:auto;line-height:1.5}
+.ac .ac-from{font-size:10px;color:var(--text3);margin-top:8px;display:flex;align-items:center;gap:4px}
+.ac .ac-btns{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border)}
+.ac .ac-btn{flex:1;padding:8px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);font-family:var(--sans);transition:all .15s;text-align:center}
+.ac .ac-btn.approve{background:#238636;border-color:#238636;color:#fff}
+.ac .ac-btn.approve:hover{background:#2ea043}
+.ac .ac-btn.reject{background:var(--bg4);color:var(--text)}
+.ac .ac-btn.reject:hover{background:var(--border)}
+.ac .ac-btn.detail{background:var(--bg4);color:var(--blue)}
+
+/* ===== KNOWLEDGE GRAPH ===== */
+.graph-layout{display:flex;height:100%}
+.graph-canvas{flex:1;position:relative;overflow:hidden;background:var(--bg)}
+.graph-canvas svg{width:100%;height:100%}
+.g-node{cursor:pointer;transition:all .15s}
+.g-node:hover{filter:brightness(1.3)}
+.g-node circle{transition:r .2s}
+.g-node:hover circle{r:22}
+.g-node text{font-family:var(--sans);font-size:10px;fill:var(--text);pointer-events:none}
+.g-edge{stroke:var(--border);stroke-width:1;opacity:.4}
+.graph-sidebar{width:280px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.gs-hdr{padding:12px 14px;border-bottom:1px solid var(--border)}
+.gs-hdr h3{font-size:13px;color:var(--white);font-weight:600}
+.gs-hdr p{font-size:10px;color:var(--text2);margin-top:2px}
+.gs-body{flex:1;overflow-y:auto;padding:10px}
+.gs-item{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer;transition:all .12s;font-size:11px}
+.gs-item:hover{border-color:var(--text4)}
+.gs-item .gi-title{color:var(--bright);font-weight:500;margin-bottom:2px}
+.gs-item .gi-desc{color:var(--text2);font-size:10px;line-height:1.4}
+.gs-item .gi-src{font-size:9px;color:var(--text3);margin-top:4px}
+.graph-legend{position:absolute;bottom:16px;left:16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;gap:12px;font-size:10px}
+.graph-legend .gl-item{display:flex;align-items:center;gap:4px}
+.graph-legend .gl-dot{width:10px;height:10px;border-radius:50%}
+.graph-controls{position:absolute;top:16px;right:296px;display:flex;gap:4px}
+.graph-controls button{width:30px;height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.graph-controls button:hover{color:var(--white);border-color:var(--text4)}
+
+/* ===== SEARCH OVERLAY ===== */
+.search-ov{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.6);display:none;align-items:flex-start;justify-content:center;padding-top:80px;backdrop-filter:blur(3px)}
+.search-ov.show{display:flex}
+.search-modal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:580px;max-height:480px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);animation:modal-in .15s ease}
+@keyframes modal-in{from{opacity:0;transform:scale(.97) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.sm-hdr{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.sm-hdr input{flex:1;background:none;border:none;color:var(--white);font-size:15px;outline:none;font-family:var(--sans)}
+.sm-body{max-height:380px;overflow-y:auto}
+.sm-g{padding:6px 16px;font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;background:rgba(13,17,23,.6);position:sticky;top:0;backdrop-filter:blur(8px)}
+.sm-i{padding:10px 16px;display:flex;gap:10px;cursor:pointer;transition:background .08s;border-bottom:1px solid var(--border2)}
+.sm-i:hover,.sm-i.sel{background:var(--bg3)}
+.sm-i .si-ic{font-size:14px;width:24px;text-align:center;flex-shrink:0}
+.sm-i .si-c{flex:1;min-width:0}
+.sm-i .si-t{font-size:12px;color:var(--bright);font-weight:500}
+.sm-i .si-m{font-size:11px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-i .si-m mark{background:none;color:var(--blue);font-weight:600}
+.sm-i .si-x{font-size:10px;color:var(--text3);margin-top:2px}
+
+/* ===== NEW SESSION MODAL ===== */
+.ns-ov{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.ns-ov.show{display:flex}
+.ns-modal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:460px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5);animation:modal-in .15s ease}
+.ns-hdr{padding:16px 20px 10px}
+.ns-hdr h3{font-size:16px;color:var(--white);font-weight:600}
+.ns-hdr p{font-size:11px;color:var(--text2);margin-top:3px}
+.ns-body{padding:12px 20px}
+.ns-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;font-weight:600;margin-bottom:6px}
+.ns-agents{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px}
+.ns-agent{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;transition:all .12s}
+.ns-agent:hover{border-color:var(--text4)}
+.ns-agent.sel{border-color:var(--blue);background:var(--blue-dim)}
+.ns-agent .na-n{font-size:12px;color:var(--bright);font-weight:500;display:flex;align-items:center;gap:5px}
+.ns-agent .na-d{font-size:10px;color:var(--text2);margin-top:2px}
+.ns-projs{max-height:120px;overflow-y:auto;margin-bottom:14px}
+.ns-proj{padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer;transition:all .12s}
+.ns-proj:hover{border-color:var(--text4)}
+.ns-proj.sel{border-color:var(--green);background:var(--green-dim)}
+.ns-proj .np-n{font-size:11px;color:var(--bright);font-weight:500}
+.ns-proj .np-p{font-size:9px;color:var(--text3);font-family:var(--mono);margin-top:1px}
+.ns-foot{padding:10px 20px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border)}
+.ns-foot button{padding:7px 18px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--sans);border:1px solid var(--border);transition:all .12s}
+.ns-foot .ns-cancel{background:var(--bg4);color:var(--text)}
+.ns-foot .ns-go{background:#238636;border-color:#238636;color:#fff}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 20px;border-radius:8px;font-size:13px;z-index:600;opacity:0;transform:translateY(8px);pointer-events:none;transition:all .3s;box-shadow:0 4px 16px rgba(0,0,0,.3);color:#fff}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ok{background:#238636}.toast.warn{background:#9e6a03}.toast.err{background:var(--red)}
+
+/* Context panel toggle */
+#ctx-panel{display:none}
+#ctx-panel.open{display:flex}
+
+/* Responsive home grid */
+@media(max-width:900px){
+  .home-grid{grid-template-columns:1fr 1fr}
+  .home-grid .span-2{grid-column:span 2}
+}
+@media(max-width:600px){
+  .home-grid{grid-template-columns:1fr}
+  .home-grid .span-2{grid-column:span 1}
+  .stats-row{flex-wrap:wrap}
+  .stats-row .stat{min-width:calc(50% - 8px)}
+}
+
+/* Patrol card log clamping */
+.pc .pc-log{max-height:100px;overflow-y:auto}
+
+/* Graph SVG fill */
+.graph-canvas svg{display:block;width:100%;height:100%}
+
+/* Approval empty state */
+.approval-empty{text-align:center;padding:40px 20px;color:var(--text2);font-size:14px}
+.approval-empty .ae-icon{font-size:40px;margin-bottom:12px;opacity:.5}
+.approval-empty .ae-text{color:var(--text3);font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- ===== TOP BAR ===== -->
+  <div class="topbar">
+    <div class="logo">&#129504; <span>Naozhi</span> <span style="font-weight:400;font-size:11px;color:var(--text3)">V2.0</span></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-view="home" onclick="go('home')">&#127968; Home</button>
+      <button class="nav-tab" data-view="chat" onclick="go('chat')">&#128172; Chat</button>
+      <button class="nav-tab" data-view="knowledge" onclick="go('knowledge')">&#128214; Knowledge</button>
+      <button class="nav-tab" data-view="wiki" onclick="go('wiki')">&#128218; Wiki</button>
+      <button class="nav-tab" data-view="patrol" onclick="go('patrol')">&#128373; Patrols</button>
+      <button class="nav-tab" data-view="graph" onclick="go('graph')">&#128280; Graph</button>
+      <button class="nav-tab" data-view="approval" onclick="go('approval')">&#128225; Approvals<span class="tab-badge">2</span></button>
+    </div>
+    <div class="topbar-right">
+      <button class="top-btn" onclick="toggleSearch()" title="Search (Cmd+K)">&#128269;</button>
+      <button class="top-btn" title="Notifications" onclick="toggleNotif()"><span class="tb-badge" id="notif-badge">3</span>&#128276;</button>
+      <button class="top-btn" onclick="openNS()" title="New Session (Cmd+N)">+</button>
+    </div>
+  </div>
+
+  <div class="main-area">
+    <!-- ===== HOME ===== -->
+    <div class="view active" id="v-home">
+      <div class="home">
+        <div class="home-grid">
+          <!-- Stats -->
+          <div class="widget span-2">
+            <div class="w-hdr"><span class="w-icon">&#128200;</span><h3>Today's Overview</h3><span class="w-action">View Details</span></div>
+            <div class="stats-row">
+              <div class="stat green"><div class="st-num" id="stat-sessions">5</div><div class="st-label">Active Sessions</div></div>
+              <div class="stat blue"><div class="st-num">4</div><div class="st-label">Patrols Running</div></div>
+              <div class="stat yellow"><div class="st-num">$3.42</div><div class="st-label">Today's Cost</div></div>
+              <div class="stat purple"><div class="st-num">12</div><div class="st-label">Wiki Pages</div></div>
+            </div>
+          </div>
+          <!-- Quick Actions -->
+          <div class="widget">
+            <div class="w-hdr"><span class="w-icon">&#9889;</span><h3>Quick Actions</h3></div>
+            <div class="quick-actions">
+              <div class="qa-btn" onclick="openNS()"><span class="qa-icon">&#128172;</span><div class="qa-text"><strong>New Chat</strong>Start a session</div></div>
+              <div class="qa-btn" onclick="go('patrol')"><span class="qa-icon">&#128373;</span><div class="qa-text"><strong>Patrols</strong>4 running</div></div>
+              <div class="qa-btn" onclick="go('approval')"><span class="qa-icon">&#128225;</span><div class="qa-text"><strong>Approvals</strong><span style="color:var(--red)">2 pending</span></div></div>
+              <div class="qa-btn" onclick="go('graph')"><span class="qa-icon">&#128280;</span><div class="qa-text"><strong>Graph</strong>Explore knowledge</div></div>
+            </div>
+          </div>
+          <!-- Patrols -->
+          <div class="widget">
+            <div class="w-hdr"><span class="w-icon">&#128373;</span><h3>Patrol Status</h3><span class="w-action" onclick="go('patrol')">Manage</span></div>
+            <div class="patrol-item"><span class="p-dot running"></span><span class="p-name">PR Sentinel</span><span class="p-status">3 reviewed</span><span class="p-time">2m ago</span></div>
+            <div class="patrol-item"><span class="p-dot running"></span><span class="p-name">Cost Watchdog</span><span class="p-status">normal</span><span class="p-time">15m ago</span></div>
+            <div class="patrol-item"><span class="p-dot running"></span><span class="p-name">Infra Health</span><span class="p-status">all green</span><span class="p-time">30m ago</span></div>
+            <div class="patrol-item"><span class="p-dot paused"></span><span class="p-name">Dep Auditor</span><span class="p-status">paused</span><span class="p-time">1d ago</span></div>
+          </div>
+          <!-- Pending Approvals -->
+          <div class="widget">
+            <div class="w-hdr"><span class="w-icon">&#128225;</span><h3>Pending Approvals</h3><span class="w-action" onclick="go('approval')">View All</span></div>
+            <div class="patrol-item"><span class="p-dot error"></span><span class="p-name">Terraform Apply: EKS node</span><span class="p-time" style="color:var(--red)">urgent</span></div>
+            <div class="patrol-item"><span class="p-dot" style="background:var(--yellow)"></span><span class="p-name">Merge PR #142: WAF fix</span><span class="p-time">5m ago</span></div>
+          </div>
+          <!-- Activity Feed -->
+          <div class="widget span-2">
+            <div class="w-hdr"><span class="w-icon">&#128196;</span><h3>Activity Feed</h3></div>
+            <div class="activity-item"><span class="a-icon">&#128373;</span><div class="a-text"><strong>PR Sentinel</strong> reviewed <a>#148 Add CloudFront cache policy</a> — 2 suggestions</div><span class="a-time">2m</span></div>
+            <div class="activity-item"><span class="a-icon">&#128218;</span><div class="a-text"><strong>Wiki</strong> auto-compiled <a>CloudFront</a> page — 2 new sources ingested</div><span class="a-time">15m</span></div>
+            <div class="activity-item"><span class="a-icon">&#128276;</span><div class="a-text"><strong>Cost Watchdog</strong> — daily spend on track ($3.42 / $5.00 budget)</div><span class="a-time">30m</span></div>
+            <div class="activity-item"><span class="a-icon">&#129302;</span><div class="a-text"><strong>CLI Session</strong> completed in <a>~/infra/terraform-waf</a> — $0.28</div><span class="a-time">1h</span></div>
+            <div class="activity-item"><span class="a-icon">&#128172;</span><div class="a-text"><strong>Feishu</strong> — team member asked about WAF rate limit, <a>answered from Wiki</a></div><span class="a-time">2h</span></div>
+          </div>
+          <!-- Recent Knowledge -->
+          <div class="widget">
+            <div class="w-hdr"><span class="w-icon">&#129504;</span><h3>Recently Compiled</h3><span class="w-action" onclick="go('knowledge')">Browse</span></div>
+            <div class="patrol-item"><span class="p-dot" style="background:var(--purple)"></span><span class="p-name">AWS WAF</span><span class="p-status">6 sources</span><span class="p-time">1d</span></div>
+            <div class="patrol-item"><span class="p-dot" style="background:var(--purple)"></span><span class="p-name">CloudFront</span><span class="p-status">8 sources</span><span class="p-time">15m</span></div>
+            <div class="patrol-item"><span class="p-dot" style="background:var(--purple)"></span><span class="p-name">Naozhi Architecture</span><span class="p-status">12 sources</span><span class="p-time">5h</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== CHAT ===== -->
+    <div class="view" id="v-chat">
+      <div class="chat-layout">
+        <div class="sidebar">
+          <div class="sb-search">
+            <input placeholder="Search sessions..." onclick="toggleSearch()">
+            <button class="new-btn" onclick="openNS()">+</button>
+          </div>
+          <div class="sb-tags">
+            <span class="sb-tag active">All</span><span class="sb-tag">Review</span><span class="sb-tag">Projects</span><span class="sb-tag">CLI</span><span class="sb-tag">Research</span>
+          </div>
+          <div class="sb-list">
+            <div class="sb-group">&#128204; Pinned</div>
+            <div class="sb-item active"><div class="si-icon">&#129302;</div><div class="si-body"><div class="si-name">&#128204; Auth Middleware 重构</div><div class="si-meta">code-reviewer &middot; $0.42</div></div><div class="si-time">2h</div></div>
+            <div class="sb-item"><div class="si-icon">&#128230;</div><div class="si-body"><div class="si-name">&#128204; naozhi planner</div><div class="si-meta">planner &middot; $1.24</div></div><div class="si-time">5h</div></div>
+            <div class="sb-group">Today</div>
+            <div class="sb-item"><div class="si-icon" style="background:var(--blue-dim)">&#128270;</div><div class="si-body"><div class="si-name">CloudFront Cache Policy</div><div class="si-meta">research</div></div><div class="si-time">30m</div></div>
+            <div class="sb-item"><div class="si-icon">&#129302;</div><div class="si-body"><div class="si-name">Terraform State 迁移</div><div class="si-meta">general &middot; $0.52</div></div><div class="si-time">1h</div></div>
+            <div class="sb-group">&#128187; CLI</div>
+            <div class="sb-item"><div class="si-icon" style="background:var(--green-dim);color:var(--green);font-size:10px;font-family:var(--mono);font-weight:700">&gt;_</div><div class="si-body"><div class="si-name">WAF Terraform 模块</div><div class="si-meta" style="font-family:var(--mono);font-size:9px">~/infra/terraform-waf</div></div><div class="si-time">4d</div></div>
+          </div>
+          <div class="sb-status"><span class="sd"></span>Connected &middot; 5 sessions</div>
+        </div>
+        <div class="chat-main">
+          <div class="chat-hdr">
+            <h2>&#128204; Auth Middleware 重构</h2>
+            <span class="ch-meta">code-reviewer &middot; $0.42</span>
+            <button class="ch-btn" title="Bookmark">&#128278;</button>
+            <button class="ch-btn" id="ctx-toggle" onclick="toggleCtx()" title="Context">&#9776;</button>
+          </div>
+          <div class="run-ban" id="run-banner"><span class="rd"></span><span class="rt" id="run-text">Reading middleware/auth.go...</span><span class="re" id="run-elapsed">0:04</span></div>
+          <div class="chat-body">
+            <div class="msg user"><div class="av">K</div><div class="bubble">review auth middleware 安全性，重点看 session token 存储</div></div>
+            <div class="msg ai"><div class="av">AI</div><div class="content">
+              <div>审查 auth middleware 实现：</div>
+              <div class="tc"><div class="tc-h" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.tc-x').classList.toggle('open')"><span>&#128196;</span><span class="tc-n">Read</span><span class="tc-d">middleware/auth.go</span><span class="tc-s">&#10003;</span><span class="tc-x">&#9660;</span></div><div class="tc-b"><div class="tc-b-inner" style="font-family:var(--mono);font-size:10px;color:var(--text2);white-space:pre">package middleware
+func AuthMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w, r) {
+        token := r.Header.Get("X-Session-Token") ...</div></div></div>
+              <div class="tc"><div class="tc-h" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.tc-x').classList.toggle('open')"><span>&#9998;</span><span class="tc-n">Edit</span><span class="tc-d">middleware/auth.go</span><span class="tc-s" style="color:var(--green)">+5 -2</span><span class="tc-x">&#9660;</span></div><div class="tc-b"><div class="tc-b-inner" style="padding:0"><div class="diff"><div class="dl ctx"> func SetSession(w http.ResponseWriter, t string) {</div><div class="dl del">-    w.Header().Set("X-Session-Token", t)</div><div class="dl add">+    http.SetCookie(w, &amp;http.Cookie{</div><div class="dl add">+        Name: "session", Value: t,</div><div class="dl add">+        HttpOnly: true, Secure: true,</div><div class="dl add">+        SameSite: http.SameSiteStrictMode,</div><div class="dl add">+    })</div><div class="dl ctx"> }</div></div></div></div></div>
+              <div style="position:relative;margin-top:8px">
+                <span class="bm-h" onclick="bm(this)">&#128278;</span>
+                <div class="callout danger"><div class="ct">&#9888; 3 个安全问题</div>1. <code>localStorage</code> 存 token → 已改 HttpOnly cookie<br>2. 缺 CSRF token 验证<br>3. Token 过期 7d 过长 → 建议 24h + refresh</div>
+              </div>
+              <div class="code"><div class="code-h"><span class="code-l">auth.go</span><span class="code-c" onclick="this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</span></div><pre><span class="kw">func</span> <span class="fn">SetSession</span>(w http.ResponseWriter, t <span class="kw">string</span>) {
+    http.<span class="fn">SetCookie</span>(w, &amp;http.Cookie{
+        Name: <span class="str">"session"</span>, Value: t,
+        HttpOnly: <span class="kw">true</span>,  <span class="cm">// XSS safe</span>
+        Secure:   <span class="kw">true</span>,  <span class="cm">// HTTPS only</span>
+        MaxAge:   <span class="num">86400</span>, <span class="cm">// 24h</span>
+    })
+}</pre></div>
+            </div></div>
+          </div>
+          <div class="chat-input">
+            <button class="ci-btn">&#128206;</button>
+            <textarea rows="1" placeholder="Message... (Enter)"></textarea>
+            <button class="ci-btn">&#127908;</button>
+            <button class="ci-btn send">&#9650;</button>
+          </div>
+        </div>
+        <!-- Context Panel -->
+        <div class="sidebar" id="ctx-panel" style="width:280px;border-right:none;border-left:1px solid var(--border)">
+          <div style="display:flex;border-bottom:1px solid var(--border)">
+            <div style="flex:1;padding:8px 0;text-align:center;font-size:10px;color:var(--blue);border-bottom:2px solid var(--blue);cursor:pointer">&#128278; Saved</div>
+            <div style="flex:1;padding:8px 0;text-align:center;font-size:10px;color:var(--text2);cursor:pointer" onclick="go('graph')">&#128280; Graph</div>
+            <div style="flex:1;padding:8px 0;text-align:center;font-size:10px;color:var(--text2);cursor:pointer">&#129302; AI</div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">This session</div>
+            <div class="gs-item"><div class="gi-title" style="color:var(--red)">&#9888; 3 个安全问题</div><div class="gi-desc">localStorage → HttpOnly, 缺 CSRF, token 过期太长</div><div class="gi-src">&#127760; Dashboard &middot; just now</div></div>
+            <div style="font-size:10px;color:var(--text3);margin:10px 0 6px">Related from other sources</div>
+            <div class="gs-item"><div class="gi-title">WAF SQLi Count 模式</div><div class="gi-desc">Auth JSON body 不再被误拦</div><div class="gi-src">&#128187; CLI &middot; 4d ago</div></div>
+            <div class="gs-item"><div class="gi-title">AWS WAF 最佳实践</div><div class="gi-desc">安全 middleware checklist</div><div class="gi-src">&#128214; Obsidian &middot; vault note</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== KNOWLEDGE (Obsidian) ===== -->
+    <div class="view" id="v-knowledge">
+      <div class="chat-layout">
+        <div class="sidebar">
+          <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px">Vault</span>
+            <input style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 8px;color:var(--text);font-size:10px;font-family:var(--mono);outline:none" value="Keith_Space_2026" readonly>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:4px 0">
+            <div style="cursor:pointer;padding:6px 12px;font-size:12px;color:var(--bright);font-weight:500;display:flex;align-items:center;gap:5px" onclick="this.querySelector('.fa').classList.toggle('ro');this.nextElementSibling.classList.toggle('hid')"><span class="fa ro" style="font-size:9px;color:var(--text4);width:14px;text-align:center;display:inline-block;transition:transform .15s">&#9654;</span>&#128188; Things <span style="font-size:10px;color:var(--text3);margin-left:auto">240</span></div>
+            <div>
+              <div style="cursor:pointer;padding:5px 12px 5px 28px;font-size:11px;color:var(--bright);display:flex;align-items:center;gap:5px" onclick="this.querySelector('.fa').classList.toggle('ro');this.nextElementSibling.classList.toggle('hid')"><span class="fa ro" style="font-size:9px;color:var(--text4);width:12px;text-align:center;display:inline-block;transition:transform .15s">&#9654;</span>&#9729; AWS 客户项目</div>
+              <div>
+                <div style="padding:4px 12px 4px 44px;font-size:11px;color:var(--white);cursor:pointer;background:#1f2937;border-left:2px solid var(--purple)">&#128196; Zeelool CDN 迁移</div>
+                <div style="padding:4px 12px 4px 44px;font-size:11px;color:var(--text);cursor:pointer" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">&#128196; YiHai-预测补货</div>
+                <div style="padding:4px 12px 4px 44px;font-size:11px;color:var(--text);cursor:pointer" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">&#128196; LongQi-CloudFront</div>
+                <div style="padding:4px 12px 4px 44px;font-size:11px;color:var(--text);cursor:pointer" onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">&#128196; Giikin-选品Agent</div>
+              </div>
+              <div style="cursor:pointer;padding:5px 12px 5px 28px;font-size:11px;color:var(--bright);display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--text4);width:12px;text-align:center">&#9654;</span>&#128218; AWS Service <span style="font-size:10px;color:var(--text3);margin-left:auto">12</span></div>
+              <div style="cursor:pointer;padding:5px 12px 5px 28px;font-size:11px;color:var(--bright);display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--text4);width:12px;text-align:center">&#9654;</span>&#127891; ML-DL Learning <span style="font-size:10px;color:var(--text3);margin-left:auto">35</span></div>
+            </div>
+            <div style="cursor:pointer;padding:6px 12px;font-size:12px;color:var(--bright);display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--text4);width:14px;text-align:center">&#9654;</span>&#128197; journals <span style="font-size:10px;color:var(--text3);margin-left:auto">5</span></div>
+          </div>
+        </div>
+        <div class="chat-main" style="border-right:1px solid var(--border)">
+          <div class="chat-hdr"><h2>&#128196; 【Zeelool】2026 CDN 迁移改造</h2><div style="display:flex;gap:4px"><button class="ch-btn">&#128279;</button><button class="ch-btn on">&#129302;</button></div></div>
+          <div class="chat-body" style="font-size:13px;line-height:1.7">
+            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12px;display:grid;grid-template-columns:auto 1fr;gap:3px 14px"><span style="color:var(--text2);font-weight:500">status</span><span>&#128994; 进行中</span><span style="color:var(--text2);font-weight:500">customer</span><span>Zeelool</span><span style="color:var(--text2);font-weight:500">tags</span><span style="color:var(--yellow)">#CDN #CloudFront #Migration</span></div>
+            <h1 style="font-size:20px;color:var(--white);font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border2)">【Zeelool】2026 CDN 迁移改造</h1>
+            <h2 style="font-size:16px;color:var(--white);margin:16px 0 8px">项目背景</h2>
+            <p>Zeelool 当前使用 Cloudflare CDN，需迁移到 <a style="color:var(--purple);border-bottom:1px dashed rgba(163,118,255,.4);text-decoration:none;cursor:pointer">[[CloudFront]]</a> 以统一架构。</p>
+            <div class="callout tip"><div class="ct">&#128161; Key Decision</div>使用 CloudFront Functions 处理 URL 重写，不用 Lambda@Edge。参考 <a style="color:var(--purple);cursor:pointer">[[LongQi-CloudFront-Demo]]</a></div>
+            <h2 style="font-size:16px;color:var(--white);margin:16px 0 8px">迁移方案</h2>
+            <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="background:var(--bg2);color:var(--white);padding:7px 12px;border:1px solid var(--border);text-align:left">阶段</th><th style="background:var(--bg2);color:var(--white);padding:7px 12px;border:1px solid var(--border);text-align:left">内容</th><th style="background:var(--bg2);color:var(--white);padding:7px 12px;border:1px solid var(--border);text-align:left">状态</th></tr></thead><tbody><tr><td style="padding:7px 12px;border:1px solid var(--border)">Phase 1</td><td style="padding:7px 12px;border:1px solid var(--border)">静态资源迁移</td><td style="padding:7px 12px;border:1px solid var(--border);color:var(--green)">&#10003; 完成</td></tr><tr><td style="padding:7px 12px;border:1px solid var(--border)">Phase 2</td><td style="padding:7px 12px;border:1px solid var(--border)">API 加速</td><td style="padding:7px 12px;border:1px solid var(--border);color:var(--yellow)">&#9679; 进行中</td></tr><tr><td style="padding:7px 12px;border:1px solid var(--border)">Phase 3</td><td style="padding:7px 12px;border:1px solid var(--border)">LiteLLM 推理加速</td><td style="padding:7px 12px;border:1px solid var(--border);color:var(--text2)">&#9675; 待开始</td></tr></tbody></table>
+            <div class="callout warn"><div class="ct">&#9888; 注意</div>Cloudflare orange cloud 必须先关闭才能切 CNAME，否则 SSL 冲突</div>
+          </div>
+        </div>
+        <!-- AI Chat about note -->
+        <div class="sidebar" style="width:270px;border-right:none;border-left:1px solid var(--border)">
+          <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--purple);font-weight:600">&#129302; Ask AI about this note</div>
+          <div style="flex:1;overflow-y:auto;padding:10px">
+            <div style="margin-bottom:10px"><div style="background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.18);padding:6px 10px;border-radius:10px 10px 4px 10px;font-size:11px;color:var(--bright);margin-left:20px">Phase 2 需要注意什么？</div></div>
+            <div style="margin-bottom:10px"><div style="font-size:9px;color:var(--purple);font-weight:600;margin-bottom:2px">AI</div><div style="font-size:11px;color:var(--text);line-height:1.5">1. <strong>Cache Policy</strong> — API 不能用 CachingOptimized<br>2. <strong>WAF</strong> — SQLi rule 误判 JSON body，先开 Count 模式<br>3. <strong>Origin</strong> — ALB 需转发 Host header</div></div>
+          </div>
+          <div style="border-top:1px solid var(--border);padding:8px;display:flex;gap:4px"><input style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:11px;outline:none" placeholder="Ask..."><button style="width:26px;height:26px;border-radius:6px;background:#238636;border:1px solid #238636;color:#fff;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center">&#9650;</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PATROLS ===== -->
+    <div class="view" id="v-patrol">
+      <div class="patrol-layout">
+        <div class="patrol-hdr">
+          <h2>&#128373; Patrols</h2>
+          <button class="ph-btn">&#9881; Settings</button>
+          <button class="ph-btn primary" onclick="toast('New patrol created','ok')">+ New Patrol</button>
+        </div>
+        <div class="patrol-cards">
+          <div class="pc">
+            <div class="pc-top"><div class="pc-icon" style="background:var(--green-dim)">&#128269;</div><div class="pc-info"><div class="pc-name">PR Sentinel <span class="pc-badge running">Running</span></div><div class="pc-desc">Automatically review new PRs for security issues, code quality, and best practices</div><div class="pc-schedule">trigger: github:pr_opened &middot; agent: code-reviewer (sonnet)</div><div class="pc-actions"><button class="pc-btn" onclick="toast('Patrol paused','warn')">&#10074;&#10074; Pause</button><button class="pc-btn">&#9881; Edit</button><button class="pc-btn">&#128196; Logs</button></div></div></div>
+            <div class="pc-log"><div class="log-entry"><span class="log-time">14:32</span><span class="log-ok">&#10003;</span> Reviewed PR #148 — 2 suggestions posted</div><div class="log-entry"><span class="log-time">13:15</span><span class="log-ok">&#10003;</span> Reviewed PR #147 — approved, no issues</div><div class="log-entry"><span class="log-time">11:42</span><span class="log-warn">&#9888;</span> Reviewed PR #146 — 1 security issue found, requested changes</div></div>
+          </div>
+          <div class="pc">
+            <div class="pc-top"><div class="pc-icon" style="background:var(--yellow-dim)">&#128176;</div><div class="pc-info"><div class="pc-name">Cost Watchdog <span class="pc-badge running">Running</span></div><div class="pc-desc">Monitor AWS Cost Explorer hourly. Alert if daily spend exceeds budget or anomalous pattern detected.</div><div class="pc-schedule">schedule: @every 1h &middot; agent: general (opus) &middot; budget: $5.00/day</div><div class="pc-actions"><button class="pc-btn">&#10074;&#10074; Pause</button><button class="pc-btn">&#9881; Edit</button></div></div></div>
+            <div class="pc-log"><div class="log-entry"><span class="log-time">14:00</span><span class="log-ok">&#10003;</span> $3.42 / $5.00 — on track (68%)</div><div class="log-entry"><span class="log-time">13:00</span><span class="log-ok">&#10003;</span> $2.85 / $5.00 — normal</div></div>
+          </div>
+          <div class="pc">
+            <div class="pc-top"><div class="pc-icon" style="background:var(--green-dim)">&#9729;&#65039;</div><div class="pc-info"><div class="pc-name">Infra Health <span class="pc-badge running">Running</span></div><div class="pc-desc">Check EKS cluster health, RDS status, ALB target health, and CloudFront error rates.</div><div class="pc-schedule">schedule: @every 30m &middot; agent: general &middot; via: AWS MCP Server</div><div class="pc-actions"><button class="pc-btn">&#10074;&#10074; Pause</button><button class="pc-btn">&#9881; Edit</button></div></div></div>
+            <div class="pc-log"><div class="log-entry"><span class="log-time">14:30</span><span class="log-ok">&#10003;</span> All green — EKS 3/3 nodes, RDS ok, ALB 100% healthy, CF 0.01% error</div></div>
+          </div>
+          <div class="pc">
+            <div class="pc-top"><div class="pc-icon" style="background:#484f5822">&#128274;</div><div class="pc-info"><div class="pc-name">Dependency Auditor <span class="pc-badge paused">Paused</span></div><div class="pc-desc">Daily scan for CVEs in project dependencies. Auto-create PRs for critical fixes.</div><div class="pc-schedule">schedule: 0 9 * * * &middot; agent: general</div><div class="pc-actions"><button class="pc-btn" onclick="toast('Patrol resumed','ok')">&#9654; Resume</button><button class="pc-btn">&#9881; Edit</button></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== KNOWLEDGE GRAPH ===== -->
+    <div class="view" id="v-graph">
+      <div class="graph-layout">
+        <div class="graph-canvas">
+          <svg viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet" id="graph-svg">
+            <!-- Edges -->
+            <line class="g-edge" x1="400" y1="200" x2="280" y2="140"/>
+            <line class="g-edge" x1="400" y1="200" x2="520" y2="140"/>
+            <line class="g-edge" x1="400" y1="200" x2="340" y2="310"/>
+            <line class="g-edge" x1="400" y1="200" x2="500" y2="300"/>
+            <line class="g-edge" x1="280" y1="140" x2="180" y2="80"/>
+            <line class="g-edge" x1="280" y1="140" x2="340" y2="310"/>
+            <line class="g-edge" x1="520" y1="140" x2="620" y2="80"/>
+            <line class="g-edge" x1="520" y1="140" x2="500" y2="300"/>
+            <line class="g-edge" x1="180" y1="80" x2="120" y2="160"/>
+            <line class="g-edge" x1="340" y1="310" x2="240" y2="380"/>
+            <line class="g-edge" x1="500" y1="300" x2="600" y2="360"/>
+            <line class="g-edge" x1="620" y1="80" x2="700" y2="160"/>
+            <line class="g-edge" x1="500" y1="300" x2="340" y2="310"/>
+            <line class="g-edge" x1="120" y1="160" x2="240" y2="380"/>
+            <!-- Nodes -->
+            <g class="g-node" onclick="selectNode('waf')"><circle cx="400" cy="200" r="20" fill="#a371f7" opacity=".8"/><text x="400" y="232" text-anchor="middle" fill="#f0f6fc" font-weight="600">AWS WAF</text></g>
+            <g class="g-node" onclick="selectNode('cf')"><circle cx="280" cy="140" r="16" fill="#58a6ff" opacity=".8"/><text x="280" y="168" text-anchor="middle">CloudFront</text></g>
+            <g class="g-node" onclick="selectNode('zeelool')"><circle cx="520" cy="140" r="16" fill="#3fb950" opacity=".8"/><text x="520" y="168" text-anchor="middle">Zeelool CDN</text></g>
+            <g class="g-node" onclick="selectNode('tf')"><circle cx="340" cy="310" r="14" fill="#d29922" opacity=".8"/><text x="340" y="336" text-anchor="middle">Terraform</text></g>
+            <g class="g-node" onclick="selectNode('giikin')"><circle cx="500" cy="300" r="14" fill="#3fb950" opacity=".8"/><text x="500" y="326" text-anchor="middle">Giikin</text></g>
+            <g class="g-node" onclick="selectNode('auth')"><circle cx="180" cy="80" r="12" fill="#da3633" opacity=".8"/><text x="180" y="104" text-anchor="middle">Auth Middleware</text></g>
+            <g class="g-node"><circle cx="620" cy="80" r="12" fill="#3fb950" opacity=".8"/><text x="620" y="104" text-anchor="middle">LiteLLM</text></g>
+            <g class="g-node"><circle cx="120" cy="160" r="10" fill="#58a6ff" opacity=".6"/><text x="120" y="182" text-anchor="middle" font-size="9">CSRF</text></g>
+            <g class="g-node"><circle cx="240" cy="380" r="10" fill="#d29922" opacity=".6"/><text x="240" y="402" text-anchor="middle" font-size="9">Rate Limit</text></g>
+            <g class="g-node"><circle cx="600" cy="360" r="10" fill="#3fb950" opacity=".6"/><text x="600" y="382" text-anchor="middle" font-size="9">Bedrock</text></g>
+            <g class="g-node"><circle cx="700" cy="160" r="10" fill="#3fb950" opacity=".6"/><text x="700" y="182" text-anchor="middle" font-size="9">S3 Origin</text></g>
+          </svg>
+          <div class="graph-legend">
+            <div class="gl-item"><div class="gl-dot" style="background:var(--purple)"></div> Knowledge Hub</div>
+            <div class="gl-item"><div class="gl-dot" style="background:var(--blue)"></div> AWS Service</div>
+            <div class="gl-item"><div class="gl-dot" style="background:var(--green)"></div> Project/Customer</div>
+            <div class="gl-item"><div class="gl-dot" style="background:var(--yellow)"></div> Infrastructure</div>
+            <div class="gl-item"><div class="gl-dot" style="background:var(--red)"></div> Security Issue</div>
+          </div>
+          <div class="graph-controls"><button title="Zoom In">+</button><button title="Zoom Out">-</button><button title="Reset">&#8634;</button></div>
+        </div>
+        <div class="graph-sidebar">
+          <div class="gs-hdr"><h3>&#128280; Knowledge Graph</h3><p>Click a node to explore connections</p></div>
+          <div class="gs-body" id="graph-detail">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Select a node to see details</div>
+            <div class="gs-item" onclick="selectNode('waf')"><div class="gi-title" style="color:var(--purple)">&#11044; AWS WAF</div><div class="gi-desc">Central hub — 6 sources, 5 connections</div></div>
+            <div class="gs-item" onclick="selectNode('cf')"><div class="gi-title" style="color:var(--blue)">&#11044; CloudFront</div><div class="gi-desc">8 sources, 3 connections</div></div>
+            <div class="gs-item" onclick="selectNode('zeelool')"><div class="gi-title" style="color:var(--green)">&#11044; Zeelool CDN</div><div class="gi-desc">4 sources, 3 connections</div></div>
+            <div class="gs-item" onclick="selectNode('auth')"><div class="gi-title" style="color:var(--red)">&#11044; Auth Middleware</div><div class="gi-desc">Security review — 2 connections</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== WIKI VIEW ===== -->
+    <div class="view" id="v-wiki">
+      <div class="chat-layout">
+        <div class="sidebar">
+          <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:var(--purple);font-weight:600">Compiled Wiki</span>
+            <div style="display:flex;gap:4px">
+              <button style="font-size:9px;padding:3px 8px;border-radius:4px;border:1px solid rgba(163,113,247,.4);background:var(--purple-dim);color:var(--purple);cursor:pointer;font-family:var(--sans)" onclick="toast('Ingesting 2 new sources...','warn');setTimeout(()=>toast('Wiki updated: 2 pages recompiled','ok'),2000)">&#128260; Ingest</button>
+              <button style="font-size:9px;padding:3px 8px;border-radius:4px;border:1px solid rgba(35,134,54,.4);background:var(--green-dim);color:var(--green);cursor:pointer;font-family:var(--sans)" onclick="toast('Lint passed: no contradictions','ok')">&#128270; Lint</button>
+            </div>
+          </div>
+          <div class="sb-list">
+            <div class="sb-group">&#128188; Projects</div>
+            <div class="sb-item active"><div class="si-icon" style="background:var(--purple-dim);color:var(--purple);font-size:11px">W</div><div class="si-body"><div class="si-name">AWS WAF</div><div class="si-meta">6 sources &middot; 1d ago</div></div></div>
+            <div class="sb-item"><div class="si-icon" style="background:var(--purple-dim);color:var(--purple);font-size:11px">Z</div><div class="si-body"><div class="si-name">Zeelool CDN</div><div class="si-meta">4 sources</div></div></div>
+            <div class="sb-item"><div class="si-icon" style="background:var(--purple-dim);color:var(--purple);font-size:11px">N</div><div class="si-body"><div class="si-name">Naozhi Architecture</div><div class="si-meta">12 sources</div></div></div>
+            <div class="sb-group">&#9729; Services</div>
+            <div class="sb-item"><div class="si-icon" style="background:var(--purple-dim);color:var(--purple);font-size:11px">C</div><div class="si-body"><div class="si-name">CloudFront</div><div class="si-meta">8 sources</div></div></div>
+            <div class="sb-item"><div class="si-icon" style="background:var(--purple-dim);color:var(--purple);font-size:11px">E</div><div class="si-body"><div class="si-name">EKS Operations</div><div class="si-meta">5 sources</div></div></div>
+            <div class="sb-group">&#128101; Customers</div>
+            <div class="sb-item"><div class="si-icon" style="background:var(--purple-dim);color:var(--purple);font-size:11px">G</div><div class="si-body"><div class="si-name">Giikin</div><div class="si-meta">3 sources</div></div></div>
+            <div class="sb-item"><div class="si-icon" style="background:var(--purple-dim);color:var(--purple);font-size:11px">Y</div><div class="si-body"><div class="si-name">YiHai</div><div class="si-meta">4 sources</div></div></div>
+          </div>
+        </div>
+        <div class="chat-main" style="border-right:1px solid var(--border)">
+          <div class="chat-hdr"><h2>&#128218; AWS WAF &middot; <span style="color:var(--purple);font-size:12px">Compiled Wiki</span></h2><div style="display:flex;gap:4px"><button class="ch-btn">&#128196;</button><button class="ch-btn">&#9998;</button><button class="ch-btn">&#128260;</button></div></div>
+          <div class="chat-body" style="font-size:13px;line-height:1.7">
+            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:12px;display:grid;grid-template-columns:auto 1fr;gap:3px 14px"><span style="color:var(--text2);font-weight:500">compiled</span><span>2026-04-14 by Claude Opus</span><span style="color:var(--text2);font-weight:500">sources</span><span>6 (2 Dashboard, 2 CLI, 1 Feishu, 1 Obsidian)</span><span style="color:var(--text2);font-weight:500">entities</span><span>WAF, Web ACL, Managed Rules, Rate Limit, SQLi</span></div>
+            <h1 style="font-size:20px;color:var(--white);font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border2)">AWS WAF 知识汇编</h1>
+            <h2 style="font-size:16px;color:var(--white);margin:16px 0 8px">核心发现</h2>
+            <div class="callout danger"><div class="ct">&#9888; 高误拦截风险规则</div><strong>AWSManagedRulesSQLiRuleSet</strong> 对 JSON body 误判。已切 Count 模式。<strong>SizeRestrictions_BODY</strong> 拦截大 payload，Zeelool 和 Giikin 受影响。<div style="font-size:10px;color:var(--text3);margin-top:4px">Sources: Dashboard "WAF Rule 优化", Feishu (4/8), CLI terraform-waf</div></div>
+            <h2 style="font-size:16px;color:var(--white);margin:16px 0 8px">Rate Limiting</h2>
+            <p>100/5min → <strong>200/5min</strong> 后误拦截率 3.2% → 0.4%。API heavy 用 <strong>IP + URI</strong> 组合限流。</p>
+            <h2 style="font-size:16px;color:var(--white);margin:16px 0 8px">Terraform 配置</h2>
+            <div class="code"><div class="code-h"><span class="code-l">waf.tf</span><span class="code-c" onclick="this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</span></div><pre><span class="kw">resource</span> <span class="str">"aws_wafv2_web_acl"</span> <span class="str">"main"</span> {
+  rule {
+    name     = <span class="str">"AWSManagedRulesSQLiRuleSet"</span>
+    priority = <span class="num">20</span>
+    override_action { <span class="cm">// Count mode</span>
+      count {}
+    }
+  }
+}</pre></div>
+            <h2 style="font-size:16px;color:var(--white);margin:16px 0 8px">关联知识</h2>
+            <ul style="margin-left:18px"><li><a style="color:var(--purple);cursor:pointer">[[CloudFront]]</a> — WAF 与 CF Distribution 关联</li><li><a style="color:var(--purple);cursor:pointer">[[Zeelool CDN Migration]]</a> — Phase 3 需 WAF</li><li><a style="color:var(--purple);cursor:pointer">[[Giikin]]</a> — 相同 SizeRestrictions 问题</li></ul>
+          </div>
+        </div>
+        <!-- Sources panel -->
+        <div class="sidebar" style="width:270px;border-right:none;border-left:1px solid var(--border)">
+          <div style="display:flex;border-bottom:1px solid var(--border)">
+            <div style="flex:1;padding:8px 0;text-align:center;font-size:10px;color:var(--blue);border-bottom:2px solid var(--blue);cursor:pointer">&#128196; Sources</div>
+            <div style="flex:1;padding:8px 0;text-align:center;font-size:10px;color:var(--text2);cursor:pointer">&#128270; Lint</div>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">6 sources compiled</div>
+            <div class="gs-item"><div class="gi-title" style="color:var(--blue)">&#127760; WAF Rule 优化</div><div class="gi-desc">code-reviewer — 3 个高误拦截规则</div><div class="gi-src">Dashboard &middot; yesterday</div></div>
+            <div class="gs-item"><div class="gi-title" style="color:var(--green)">&#128187; WAF Terraform 模块</div><div class="gi-desc">override_action → Count</div><div class="gi-src">CLI &middot; 4d ago</div></div>
+            <div class="gs-item"><div class="gi-title" style="color:var(--green)">&#128187; 调试 WAF 日志</div><div class="gi-desc">Athena query 分析 BLOCK</div><div class="gi-src">CLI &middot; 2d ago</div></div>
+            <div class="gs-item"><div class="gi-title" style="color:var(--yellow)">&#128172; Feishu 讨论</div><div class="gi-desc">SizeRestrictions_BODY 误拦截</div><div class="gi-src">Feishu &middot; 1w ago</div></div>
+            <div class="gs-item"><div class="gi-title" style="color:var(--purple)">&#128214; AWS WAF 最佳实践</div><div class="gi-desc">Vault 笔记</div><div class="gi-src">Obsidian &middot; note</div></div>
+            <div class="gs-item"><div class="gi-title" style="color:var(--blue)">&#127760; Rate Limit 调优</div><div class="gi-desc">200/5min → 0.4%</div><div class="gi-src">Dashboard &middot; 3d ago</div></div>
+            <div style="border-top:1px solid var(--border2);margin-top:10px;padding-top:10px"><div style="font-size:10px;color:var(--green);font-weight:600">&#10003; Last Lint: Clean</div><div style="font-size:10px;color:var(--text3)">Next: 2026-04-16</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== APPROVALS ===== -->
+    <div class="view" id="v-approval">
+      <div class="approval-layout">
+        <div class="approval-hdr"><h2>&#128225; Pending Approvals</h2><span style="font-size:12px;color:var(--text2)">2 items waiting</span></div>
+        <div class="approval-cards">
+          <div class="ac urgent" id="appr-1">
+            <div class="ac-top">
+              <div class="ac-hdr"><span class="ac-icon">&#9888;&#65039;</span><span class="ac-title">Terraform Apply: EKS Node Group Scale</span><span class="ac-time">5 min ago</span></div>
+              <div class="ac-body">
+                Patrol <strong>Infra Health</strong> detected node pressure and prepared a scaling change:
+                <div class="ac-detail">
++ aws_eks_node_group.main: desired_size 3 → 5<br>
++ aws_eks_node_group.main: max_size 5 → 8<br>
+<br>
+Estimated cost impact: +$24.80/month<br>
+Reason: CPU utilization &gt; 80% for 15 minutes
+                </div>
+                <div class="ac-from">&#128373; Source: Infra Health Patrol &middot; Agent: general (opus)</div>
+              </div>
+            </div>
+            <div class="ac-btns">
+              <button class="ac-btn reject" onclick="approvalAction('appr-1','reject')">Reject</button>
+              <button class="ac-btn detail">View Full Plan</button>
+              <button class="ac-btn approve" onclick="approvalAction('appr-1','approve')">&#10003; Approve Apply</button>
+            </div>
+          </div>
+          <div class="ac normal" id="appr-2">
+            <div class="ac-top">
+              <div class="ac-hdr"><span class="ac-icon">&#128260;</span><span class="ac-title">Merge PR #142: WAF Rule Count Mode</span><span class="ac-time">12 min ago</span></div>
+              <div class="ac-body">
+                Patrol <strong>PR Sentinel</strong> reviewed and approved this PR. Ready to merge.
+                <div class="ac-detail">
+PR #142: Switch SQLi rule to Count mode<br>
+Author: keith<br>
+Reviews: &#10003; PR Sentinel (auto), &#10003; naozhi-bot<br>
+CI: &#10003; All checks passed<br>
+Files changed: 1 (waf.tf)
+                </div>
+                <div class="ac-from">&#128269; Source: PR Sentinel Patrol &middot; Agent: code-reviewer (sonnet)</div>
+              </div>
+            </div>
+            <div class="ac-btns">
+              <button class="ac-btn reject" onclick="approvalAction('appr-2','reject')">Reject</button>
+              <button class="ac-btn detail">View PR</button>
+              <button class="ac-btn approve" onclick="approvalAction('appr-2','approve')">&#10003; Merge PR</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Notification Panel -->
+<div class="notif-panel" id="notif-panel">
+  <div class="notif-hdr"><h3>Notifications</h3><span class="n-clear" onclick="clearNotifs()">Mark all read</span></div>
+  <div class="notif-list">
+    <div class="notif-item urgent" onclick="go('approval')">
+      <div class="ni-icon">&#9888;&#65039;</div>
+      <div class="ni-body">
+        <div class="ni-title">Terraform Apply Pending</div>
+        <div class="ni-desc">Infra Health patrol wants to scale EKS nodes 3 → 5. Needs your approval.</div>
+        <div class="ni-time">5 min ago</div>
+      </div>
+    </div>
+    <div class="notif-item unread" onclick="go('patrol')">
+      <div class="ni-icon">&#128269;</div>
+      <div class="ni-body">
+        <div class="ni-title">PR #146: Security Issue Found</div>
+        <div class="ni-desc">PR Sentinel found 1 security issue in auth middleware changes. Requested changes.</div>
+        <div class="ni-time">28 min ago</div>
+      </div>
+    </div>
+    <div class="notif-item unread">
+      <div class="ni-icon">&#128218;</div>
+      <div class="ni-body">
+        <div class="ni-title">Wiki Auto-Compiled: CloudFront</div>
+        <div class="ni-desc">2 new sources ingested from CLI sessions. Page updated with Cache Policy findings.</div>
+        <div class="ni-time">45 min ago</div>
+      </div>
+    </div>
+    <div class="notif-item">
+      <div class="ni-icon">&#128172;</div>
+      <div class="ni-body">
+        <div class="ni-title">Feishu: Team Question Answered</div>
+        <div class="ni-desc">Team member asked about WAF rate limit. Naozhi answered from Wiki knowledge.</div>
+        <div class="ni-time">2 hours ago</div>
+      </div>
+    </div>
+    <div class="notif-item">
+      <div class="ni-icon">&#128176;</div>
+      <div class="ni-body">
+        <div class="ni-title">Cost Watchdog: Daily Report</div>
+        <div class="ni-desc">Yesterday's spend: $4.82 (within $5.00 budget). Top: Bedrock $2.10, EC2 $1.40.</div>
+        <div class="ni-time">6 hours ago</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Search Overlay -->
+<div class="search-ov" id="search-ov" onclick="if(event.target===this)toggleSearch()">
+  <div class="search-modal">
+    <div class="sm-hdr"><span style="color:var(--text4);font-size:15px">&#128269;</span><input id="s-input" placeholder="Search everything..." oninput="filterS(this.value)"><span style="font-size:10px;color:var(--text4);background:var(--bg4);padding:2px 6px;border-radius:3px;border:1px solid var(--border);cursor:pointer" onclick="toggleSearch()">ESC</span></div>
+    <div class="sm-body">
+      <div class="sm-g">&#128278; Bookmarks</div>
+      <div class="sm-i sel"><div class="si-ic">&#128278;</div><div class="si-c"><div class="si-t">WAF Rate Limit 调优</div><div class="si-m">200/5min 后误拦截率从 3.2% 降到 0.4%</div><div class="si-x" style="color:var(--blue)">&#127760; Dashboard &middot; 3d ago</div></div></div>
+      <div class="sm-g">&#127760; Sessions</div>
+      <div class="sm-i"><div class="si-ic">&#127760;</div><div class="si-c"><div class="si-t">Auth Middleware 重构</div><div class="si-m">session token localStorage → HttpOnly cookie</div><div class="si-x" style="color:var(--blue)">Dashboard &middot; 2h ago</div></div></div>
+      <div class="sm-g">&#128187; CLI</div>
+      <div class="sm-i"><div class="si-ic">&#128187;</div><div class="si-c"><div class="si-t">WAF Terraform 模块</div><div class="si-m">修改 override_action 为 Count 模式</div><div class="si-x" style="color:var(--green)">Terminal &middot; 4d ago</div></div></div>
+      <div class="sm-g">&#128214; Obsidian</div>
+      <div class="sm-i"><div class="si-ic">&#128214;</div><div class="si-c"><div class="si-t">Zeelool CDN 迁移</div><div class="si-m">CloudFront Functions URL 重写</div><div class="si-x" style="color:var(--purple)">Vault &middot; Things/AWS</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- New Session Modal -->
+<div class="ns-ov" id="ns-ov" onclick="if(event.target===this)closeNS()">
+  <div class="ns-modal">
+    <div class="ns-hdr"><h3>New Session</h3><p>Choose an agent and optionally bind to a project</p></div>
+    <div class="ns-body">
+      <div class="ns-label">Agent</div>
+      <div class="ns-agents">
+        <div class="ns-agent sel" onclick="selA(this)"><div class="na-n">&#129302; General</div><div class="na-d">Default &middot; opus</div></div>
+        <div class="ns-agent" onclick="selA(this)"><div class="na-n">&#128269; Code Reviewer</div><div class="na-d">Security review &middot; sonnet</div></div>
+        <div class="ns-agent" onclick="selA(this)"><div class="na-n">&#128214; Researcher</div><div class="na-d">Deep analysis &middot; opus</div></div>
+        <div class="ns-agent" onclick="selA(this)"><div class="na-n">&#128230; Planner</div><div class="na-d">Project planning &middot; opus</div></div>
+      </div>
+      <div class="ns-label">Project (optional)</div>
+      <div class="ns-projs">
+        <div class="ns-proj" onclick="selP(this)"><div class="np-n">naozhi</div><div class="np-p">~/keith-space/AWS/EC2-Workload/naozhi</div></div>
+        <div class="ns-proj" onclick="selP(this)"><div class="np-n">longqi-cloudfront</div><div class="np-p">~/keith-space/2026-project/longqi-cloudfront</div></div>
+        <div class="ns-proj" onclick="selP(this)"><div class="np-n">terraform-devlake</div><div class="np-p">~/keith-space/AWS/EKS-Workload/terraform-devlake</div></div>
+      </div>
+    </div>
+    <div class="ns-foot"><button class="ns-cancel" onclick="closeNS()">Cancel</button><button class="ns-go" onclick="createS()">Create</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast-el"></div>
+
+<script>
+// Nav — uses data-view attributes for reliable matching
+function go(v){
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  const tab=document.querySelector('.nav-tab[data-view="'+v+'"]');
+  if(tab)tab.classList.add('active');
+  document.querySelectorAll('.view').forEach(el=>{el.classList.remove('active');el.style.display='';});
+  const el=document.getElementById('v-'+v);
+  if(el)el.classList.add('active');
+  // Close notification panel on nav
+  document.getElementById('notif-panel').classList.remove('show');
+}
+
+// Search
+function toggleSearch(){const o=document.getElementById('search-ov');o.classList.toggle('show');if(o.classList.contains('show'))setTimeout(()=>document.getElementById('s-input').focus(),50)}
+function filterS(v){document.querySelectorAll('.sm-i').forEach(i=>{i.style.display=i.textContent.toLowerCase().includes(v.toLowerCase())?'flex':'none'})}
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();toggleSearch()}if(e.key==='Escape'){document.getElementById('search-ov').classList.remove('show');closeNS()}if((e.metaKey||e.ctrlKey)&&e.key==='n'){e.preventDefault();openNS()}})
+
+// New Session
+function openNS(){document.getElementById('ns-ov').classList.add('show')}
+function closeNS(){document.getElementById('ns-ov').classList.remove('show')}
+function selA(el){el.closest('.ns-agents').querySelectorAll('.ns-agent').forEach(a=>a.classList.remove('sel'));el.classList.add('sel')}
+function selP(el){const was=el.classList.contains('sel');el.closest('.ns-projs').querySelectorAll('.ns-proj').forEach(p=>p.classList.remove('sel'));if(!was)el.classList.add('sel')}
+function createS(){closeNS();toast('Session created','ok');const n=document.getElementById('stat-sessions');if(n)n.textContent=parseInt(n.textContent)+1}
+
+// Bookmark
+function bm(el){el.classList.toggle('on');toast(el.classList.contains('on')?'Bookmarked':'Removed','ok')}
+
+// Context panel toggle
+function toggleCtx(){
+  var panel=document.getElementById('ctx-panel');
+  var btn=document.getElementById('ctx-toggle');
+  panel.classList.toggle('open');
+  btn.classList.toggle('on');
+}
+
+// Approval — with empty state after all resolved
+function approvalAction(id,action){
+  const el=document.getElementById(id);if(!el)return;
+  el.style.transition='all .3s';el.style.opacity='0';el.style.transform='translateX(20px)';
+  setTimeout(()=>{
+    el.remove();
+    toast(action==='approve'?'Approved \u2014 executing...':'Rejected','ok');
+    const badge=document.querySelector('.tab-badge');
+    if(badge){const n=parseInt(badge.textContent)-1;if(n<=0)badge.remove();else badge.textContent=n}
+    // Show empty state if no approval cards remain
+    const cards=document.querySelector('.approval-cards');
+    if(cards&&cards.querySelectorAll('.ac').length===0){
+      cards.innerHTML='<div class="approval-empty"><div class="ae-icon">&#10003;</div><div>All caught up!</div><div class="ae-text">No pending approvals. Patrols will notify you when action is needed.</div></div>';
+      const hdrSpan=document.querySelector('.approval-hdr span');
+      if(hdrSpan)hdrSpan.textContent='0 items waiting';
+    }
+  },300);
+}
+
+// Graph
+function selectNode(id){
+  const detail=document.getElementById('graph-detail');
+  const data={waf:{title:'AWS WAF',color:'var(--purple)',desc:'Central knowledge hub connecting security, infrastructure, and customer projects.',conns:['CloudFront','Zeelool CDN','Terraform','Giikin','Auth Middleware'],sources:'6 sources: 2 Dashboard, 2 CLI, 1 Feishu, 1 Obsidian'},
+    cf:{title:'CloudFront',color:'var(--blue)',desc:'AWS CDN service. Connected to multiple customer migration projects.',conns:['AWS WAF','Zeelool CDN','S3 Origin'],sources:'8 sources: 3 Dashboard, 2 CLI, 3 Obsidian'},
+    zeelool:{title:'Zeelool CDN Migration',color:'var(--green)',desc:'Customer project: Cloudflare \u2192 CloudFront migration with LiteLLM acceleration.',conns:['CloudFront','AWS WAF','LiteLLM'],sources:'4 sources: 1 Dashboard, 1 CLI, 2 Obsidian'},
+    auth:{title:'Auth Middleware',color:'var(--red)',desc:'Security issue: localStorage token storage, missing CSRF, long expiry.',conns:['AWS WAF','CSRF'],sources:'2 sources: 1 Dashboard, 1 CLI'},
+    tf:{title:'Terraform',color:'var(--yellow)',desc:'Infrastructure as Code. WAF rules, EKS, and node group management.',conns:['AWS WAF','CloudFront','Rate Limit'],sources:'3 sources: 2 CLI, 1 Obsidian'},
+    giikin:{title:'Giikin',color:'var(--green)',desc:'Customer project: AI-powered product selection agent on Bedrock.',conns:['AWS WAF','Bedrock'],sources:'3 sources: 1 Dashboard, 2 Obsidian'}};
+  const d=data[id];if(!d)return;
+  detail.innerHTML='<div style="font-size:10px;color:var(--text3);margin-bottom:8px">Selected Node</div>'+
+    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">'+
+      '<div style="font-size:15px;color:'+d.color+';font-weight:600;margin-bottom:6px">&#11044; '+d.title+'</div>'+
+      '<div style="font-size:11px;color:var(--text);line-height:1.5">'+d.desc+'</div>'+
+      '<div style="font-size:10px;color:var(--text3);margin-top:6px">'+d.sources+'</div>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Connections ('+d.conns.length+')</div>'+
+    d.conns.map(function(c){return '<div class="gs-item"><div class="gi-title">'+c+'</div></div>'}).join('')+
+    '<div style="margin-top:10px;display:flex;gap:4px">'+
+      '<button style="flex:1;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--blue-dim);color:var(--blue);font-size:10px;cursor:pointer;font-family:var(--sans)">Open Wiki Page</button>'+
+      '<button style="flex:1;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg4);color:var(--text);font-size:10px;cursor:pointer;font-family:var(--sans)">View Sources</button>'+
+    '</div>';
+}
+
+// Notifications
+function toggleNotif(){
+  const p=document.getElementById('notif-panel');p.classList.toggle('show');
+  if(p.classList.contains('show')){
+    setTimeout(()=>document.addEventListener('click',closeNotifOutside),10);
+  }
+}
+function closeNotifOutside(e){
+  const p=document.getElementById('notif-panel');
+  if(!p.contains(e.target)&&!e.target.closest('.top-btn')){
+    p.classList.remove('show');
+    document.removeEventListener('click',closeNotifOutside);
+  }
+}
+function clearNotifs(){
+  document.querySelectorAll('.notif-item.unread,.notif-item.urgent').forEach(i=>{i.classList.remove('unread','urgent');i.style.transition='all .2s';i.style.opacity='.6'});
+  const badge=document.getElementById('notif-badge');if(badge)badge.style.display='none';
+  toast('All notifications marked as read','ok');
+}
+
+// Toast
+function toast(msg,type){const t=document.getElementById('toast-el');t.textContent=msg;t.className='toast show '+(type||'ok');setTimeout(()=>t.classList.remove('show'),2500)}
+
+// Running banner — scoped to chat view, stops when leaving
+let runTimer=0;
+let runInterval=null;
+function startRunBanner(){
+  if(runInterval)return;
+  runTimer=0;
+  const banner=document.getElementById('run-banner');
+  if(banner)banner.classList.add('show');
+  runInterval=setInterval(()=>{
+    runTimer++;
+    const elapsed=document.getElementById('run-elapsed');
+    const text=document.getElementById('run-text');
+    if(elapsed)elapsed.textContent=Math.floor(runTimer/60)+':'+String(runTimer%60).padStart(2,'0');
+    const tools=['Reading middleware/auth.go...','Grep: SetCookie...','Editing auth.go...','Analyzing patterns...'];
+    if(text)text.textContent=tools[Math.floor(runTimer/4)%tools.length];
+  },1000);
+  // Auto-stop after 12s
+  setTimeout(()=>stopRunBanner(),12000);
+}
+function stopRunBanner(){
+  if(runInterval){clearInterval(runInterval);runInterval=null;}
+  const banner=document.getElementById('run-banner');
+  if(banner)banner.classList.remove('show');
+}
+// Start on load since chat is not active initially, defer to first chat view visit
+let runBannerStarted=false;
+const origGo=go;
+go=function(v){
+  origGo(v);
+  if(v==='chat'&&!runBannerStarted){runBannerStarted=true;startRunBanner();}
+  if(v!=='chat')stopRunBanner();
+};
+
+// Folder toggle — wire up all .fa arrows in Knowledge view
+document.querySelectorAll('.fa').forEach(function(arrow){
+  // The onclick is already on the parent div, this just ensures CSS classes exist
+});
+</script>
+<style>.fa{transition:transform .15s}.fa.ro{transform:rotate(90deg)}.hid{display:none!important}</style>
+</body>
+</html>
