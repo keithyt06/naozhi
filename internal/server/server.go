@@ -285,6 +285,9 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		bookmarks := knowledge.NewBookmarkStore(filepath.Join(naozDir, "bookmarks.json"))
 		search := knowledge.NewSearchEngine()
 		s.knowledgeH = NewKnowledgeHandlers(vault, wiki, bookmarks, search)
+		s.knowledgeH.ingest = knowledge.NewIngestEngine(wiki, vault, search)
+		s.knowledgeH.lint = knowledge.NewLintEngine(wiki, 30)
+		s.knowledgeH.cliSync = knowledge.NewCLISyncManager(search)
 	}
 
 	// sendH is wired after registerDashboard creates hub
@@ -360,6 +363,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.nodeCache.StartLoop(ctx)
 	s.discoveryCache.startLoop(ctx)
 	s.startProjectScanLoop(ctx)
+	s.startCLISyncLoop(ctx)
 	slog.Info("server starting", "addr", s.addr)
 
 	srv := &http.Server{
@@ -446,6 +450,33 @@ func (s *Server) startProjectScanLoop(ctx context.Context) {
 					if s.hub != nil {
 						s.hub.BroadcastSessionsUpdate()
 					}
+				}
+			}
+		}
+	}()
+}
+
+// startCLISyncLoop periodically scans CLI history and indexes new prompts
+// into the knowledge search engine.
+func (s *Server) startCLISyncLoop(ctx context.Context) {
+	if s.knowledgeH == nil || s.knowledgeH.cliSync == nil || s.claudeDir == "" {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				n, err := s.knowledgeH.cliSync.ScanHistory(s.claudeDir)
+				if err != nil {
+					slog.Warn("cli history sync", "err", err)
+					continue
+				}
+				if n > 0 {
+					slog.Debug("cli history synced", "entries", n)
 				}
 			}
 		}

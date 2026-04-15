@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -14,6 +15,9 @@ type KnowledgeHandlers struct {
 	wiki      *knowledge.WikiManager
 	bookmarks *knowledge.BookmarkStore
 	search    *knowledge.SearchEngine
+	ingest    *knowledge.IngestEngine
+	lint      *knowledge.LintEngine
+	cliSync   *knowledge.CLISyncManager
 }
 
 // NewKnowledgeHandlers creates a new KnowledgeHandlers instance.
@@ -133,13 +137,49 @@ func (kh *KnowledgeHandlers) handleWikiRead(w http.ResponseWriter, r *http.Reque
 }
 
 func (kh *KnowledgeHandlers) handleWikiIngest(w http.ResponseWriter, r *http.Request) {
-	// Placeholder — will be implemented in Phase 2 Batch B
-	writeJSONStatus(w, map[string]string{"status": "accepted", "message": "ingest queued"}, http.StatusAccepted)
+	if kh.ingest == nil {
+		writeJSONStatus(w, map[string]string{"error": "ingest engine not configured"}, http.StatusServiceUnavailable)
+		return
+	}
+
+	// Run ingest from vault and wiki in a goroutine to avoid blocking.
+	go func() {
+		if err := kh.ingest.IngestFromVault(); err != nil {
+			slog.Warn("ingest from vault", "err", err)
+		}
+		if err := kh.ingest.IngestWikiPages(); err != nil {
+			slog.Warn("ingest wiki pages", "err", err)
+		}
+		if kh.bookmarks != nil {
+			kh.ingest.IndexBookmarks(kh.bookmarks.List())
+		}
+	}()
+
+	writeJSONStatus(w, map[string]string{"status": "accepted", "message": "ingest started"}, http.StatusAccepted)
 }
 
 func (kh *KnowledgeHandlers) handleWikiLint(w http.ResponseWriter, r *http.Request) {
-	// Placeholder — will be implemented in Phase 2 Batch B
-	writeJSONStatus(w, map[string]string{"status": "accepted", "message": "lint queued"}, http.StatusAccepted)
+	if kh.lint == nil {
+		writeJSONStatus(w, map[string]string{"error": "lint engine not configured"}, http.StatusServiceUnavailable)
+		return
+	}
+
+	result := kh.lint.RunLint()
+	writeJSONStatus(w, result, http.StatusOK)
+}
+
+func (kh *KnowledgeHandlers) handleWikiLintResult(w http.ResponseWriter, r *http.Request) {
+	if kh.lint == nil {
+		writeJSONStatus(w, map[string]string{"error": "lint engine not configured"}, http.StatusServiceUnavailable)
+		return
+	}
+
+	last := kh.lint.LastResult()
+	if last == nil {
+		writeJSONStatus(w, map[string]string{"status": "no results", "message": "lint has not been run yet"}, http.StatusOK)
+		return
+	}
+	writeJSONStatus(w, last, http.StatusOK)
 }
 
 // --- Search API ---
@@ -226,6 +266,22 @@ func (kh *KnowledgeHandlers) handleBookmarkDelete(w http.ResponseWriter, r *http
 		return
 	}
 	writeJSONStatus(w, map[string]string{"status": "deleted"}, http.StatusOK)
+}
+
+// --- Search Stats API ---
+
+func (kh *KnowledgeHandlers) handleSearchStats(w http.ResponseWriter, r *http.Request) {
+	if kh.search == nil {
+		writeJSONStatus(w, map[string]interface{}{
+			"total":      0,
+			"by_source":  map[string]int{},
+		}, http.StatusOK)
+		return
+	}
+	writeJSONStatus(w, map[string]interface{}{
+		"total":     kh.search.DocumentCount(),
+		"by_source": kh.search.DocCountBySource(),
+	}, http.StatusOK)
 }
 
 func writeJSONStatus(w http.ResponseWriter, v interface{}, status int) {

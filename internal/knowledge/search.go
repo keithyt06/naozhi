@@ -117,6 +117,17 @@ func (se *SearchEngine) DocumentCount() int {
 	return len(se.docs)
 }
 
+// DocCountBySource returns the count of indexed documents grouped by source.
+func (se *SearchEngine) DocCountBySource() map[string]int {
+	se.mu.RLock()
+	defer se.mu.RUnlock()
+	counts := make(map[string]int)
+	for _, doc := range se.docs {
+		counts[doc.Source]++
+	}
+	return counts
+}
+
 // scoreDocument computes a relevance score for a document against query terms.
 func scoreDocument(doc SearchDocument, terms []string) float64 {
 	score := 0.0
