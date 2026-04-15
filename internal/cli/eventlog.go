@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,8 +27,9 @@ type EventEntry struct {
 	LastTool   string   `json:"last_tool,omitempty"`   // most recent tool in agent task
 	ToolUses   int      `json:"tool_uses,omitempty"`   // tool call count in agent task
 	Tokens     int      `json:"tokens,omitempty"`      // total tokens consumed by agent task
-	DurationMS int      `json:"duration_ms,omitempty"` // elapsed ms for agent task
-	Status     string   `json:"status,omitempty"`      // agent task status (completed, error, etc.)
+	DurationMS int              `json:"duration_ms,omitempty"` // elapsed ms for agent task
+	Status     string           `json:"status,omitempty"`      // agent task status (completed, error, etc.)
+	ToolInput  json.RawMessage  `json:"tool_input,omitempty"`  // raw tool input JSON (Edit tools only, for diff rendering)
 }
 
 // SubagentInfo holds display information about an active sub-agent in the current turn.

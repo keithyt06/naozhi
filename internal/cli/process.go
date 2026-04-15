@@ -590,6 +590,10 @@ func EventEntryFromEvent(ev Event) (EventEntry, bool) {
 				entry.Summary = block.Name
 				entry.Tool = block.Name
 				entry.Detail = formatToolDetail(block)
+				// Pass raw input JSON for Edit/Replace tools so the dashboard can render diffs
+				if (block.Name == "Edit" || block.Name == "Replace") && len(block.Input) > 0 {
+					entry.ToolInput = block.Input
+				}
 				if block.Name == "Agent" {
 					inp := parseAgentInput(block.Input)
 					entry.Type = "agent"
