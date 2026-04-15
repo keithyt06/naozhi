@@ -2,13 +2,59 @@
 
 # Naozhi 脑汁
 
-**把 Claude Code 的完整 agent 能力装进你的聊天窗口**
+**From AI Gateway to CTO Operating System**
 
-在飞书 / Slack / Discord / 微信中直接使用 Claude Code —— 工具调用、代码编辑、MCP servers，一个都不少。
+V2.0 — 不只是 IM 聊天网关，更是你的第二大脑：知识编译、自主巡逻、审批工作流、Obsidian 集成。
 
-[快速开始](#快速开始) · [功能一览](#功能一览) · [Dashboard](#实时-dashboard) · [部署指南](#部署)
+[快速开始](#快速开始) · [V2.0 新功能](#v20-新功能) · [功能一览](#功能一览) · [Dashboard](#实时-dashboard) · [部署指南](#部署)
 
 </div>
+
+---
+
+## V2.0 新功能
+
+### CTO 操控台 (Home Dashboard)
+
+打开 Dashboard 即可一眼看到全局状态：活跃 sessions、Patrol 巡逻状态、待审批项、Wiki 知识页数、今日成本。
+
+### 知识编译 (Knowledge Compilation)
+
+借鉴 [Karpathy LLM-Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 方法论，不是 RAG，是知识编译 —— LLM 把对话/笔记/CLI 历史一次性编译成结构化 Wiki，后续直接搜索。
+
+- **Obsidian Vault 浏览器** — 直接在 Dashboard 中查看和搜索 Obsidian 笔记，支持 wikilinks 导航、14 种 callout 样式、task checkbox (13 种)、图片渲染、折叠式 callout
+- **Wiki 知识编译** — Ingest 从所有来源 (Dashboard/CLI/IM/Obsidian) 提取知识，Lint 检测矛盾和过期信息
+- **统一搜索 (Cmd+K)** — 一个搜索框检索 Dashboard 对话、CLI 终端历史、Obsidian 笔记、Wiki 编译页、Bookmarks
+
+### 自主 Agent (Autonomous Agents)
+
+- **Patrol 巡逻** — 配置自动化 Agent 任务：PR 自动 review、AWS 成本监控、基础设施健康检查、依赖 CVE 扫描
+- **Approval 审批** — Agent 在关键操作 (terraform apply, git push) 前暂停等待人工审批，支持多设备
+- **Notification 通知** — 实时推送巡逻结果、审批请求、系统事件，支持 WebSocket + IM
+
+### 对话体验升级
+
+- **Shiki 代码高亮** — 150+ 语言语法高亮 (WASM, 按需加载)
+- **工具调用卡片** — 折叠式卡片展示 Read/Edit/Bash/Grep 等工具调用
+- **Diff 渲染** — Edit 工具自动渲染 inline diff (绿色新增/红色删除)
+- **长输出折叠** — 超过 10 行自动折叠，渐变遮罩 + 展开按钮
+- **消息 Bookmark** — 一键保存关键结论，跨 session 检索
+
+### 高级功能
+
+- **Knowledge Graph** — SVG 力导向图可视化知识关系网络
+- **Session Replay** — 完整回放问题解决过程，可分享给团队
+- **Decision Journal** — 自动生成 ADR (Architecture Decision Records)
+- **CTO Digital Twin** — 基于知识库的 confidence scoring，代理回答团队问题
+- **Meeting Intelligence** — 会议录音转录 + 摘要提取
+- **Observability Bridge** — CloudWatch/Grafana/Datadog 告警自动根因调查
+
+### 移动端优化
+
+- 底部 Tab Bar (5 tabs) + Safe Area 支持
+- 左滑删除 session、长按置顶
+- 紧凑工具卡片 + 代码块横向滚动
+- 语音按住说话 (WeChat 风格)
 
 ---
 
