@@ -20,6 +20,9 @@ func (h *APIHandler) RegisterAlertRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/webhooks/alert", h.handleAlertWebhook)
 }
 
+// TODO(I7): Add full HTTP handler tests for handleAlertWebhook covering
+// bad body, unknown source, normalizer errors, and successful accept paths.
+
 // POST /api/webhooks/alert -- receive an external alert, normalise it,
 // create a notification, and optionally trigger a patrol with alert context.
 func (h *APIHandler) handleAlertWebhook(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +43,8 @@ func (h *APIHandler) handleAlertWebhook(w http.ResponseWriter, r *http.Request) 
 	// Get normalizer
 	normalizer, err := GetNormalizer(source)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		// I6: Use json.Marshal to safely encode error message, preventing JSON injection.
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -48,7 +52,7 @@ func (h *APIHandler) handleAlertWebhook(w http.ResponseWriter, r *http.Request) 
 	alert, err := normalizer.Normalize(body, r.Header)
 	if err != nil {
 		slog.Warn("alert normalize failed", "source", source, "err", err)
-		http.Error(w, `{"error":"normalize failed: `+err.Error()+`"}`, http.StatusBadRequest)
+		writeJSONError(w, "normalize failed: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 

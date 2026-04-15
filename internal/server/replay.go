@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -115,22 +117,79 @@ type ShareEntry struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// ShareStore manages share tokens with in-memory storage and expiry.
+// ShareStore manages share tokens with in-memory storage, expiry, and JSON file persistence (C2).
 type ShareStore struct {
-	mu     sync.RWMutex
-	shares map[string]*ShareEntry // token -> entry
+	mu       sync.RWMutex
+	shares   map[string]*ShareEntry // token -> entry
+	filePath string                 // path to shares.json for persistence
 }
 
-// NewShareStore creates a new ShareStore.
-func NewShareStore() *ShareStore {
-	return &ShareStore{
-		shares: make(map[string]*ShareEntry),
+// NewShareStore creates a new ShareStore. If filePath is non-empty, existing
+// shares are loaded from disk on init and saved after every mutation.
+func NewShareStore(filePath string) *ShareStore {
+	ss := &ShareStore{
+		shares:   make(map[string]*ShareEntry),
+		filePath: filePath,
+	}
+	ss.loadShares()
+	return ss
+}
+
+// loadShares reads share entries from the JSON file on disk.
+func (ss *ShareStore) loadShares() {
+	if ss.filePath == "" {
+		return
+	}
+	data, err := os.ReadFile(ss.filePath)
+	if err != nil {
+		return // file may not exist yet
+	}
+	var entries []*ShareEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		slog.Warn("load shares.json", "err", err)
+		return
+	}
+	now := time.Now()
+	for _, e := range entries {
+		if now.Before(e.ExpiresAt) {
+			ss.shares[e.Token] = e
+		}
 	}
 }
 
-// GenerateShareToken creates a share token for a session key (32-char hex = 16 random bytes).
+// saveLocked writes the current share entries to disk using atomic write
+// (tmp + rename). Caller must hold ss.mu (read or write).
+func (ss *ShareStore) saveLocked() {
+	if ss.filePath == "" {
+		return
+	}
+	entries := make([]*ShareEntry, 0, len(ss.shares))
+	for _, e := range ss.shares {
+		entries = append(entries, e)
+	}
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		slog.Warn("marshal shares", "err", err)
+		return
+	}
+	dir := filepath.Dir(ss.filePath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		slog.Warn("mkdir for shares", "err", err)
+		return
+	}
+	tmp := ss.filePath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		slog.Warn("write shares tmp", "err", err)
+		return
+	}
+	if err := os.Rename(tmp, ss.filePath); err != nil {
+		slog.Warn("rename shares tmp", "err", err)
+	}
+}
+
+// GenerateShareToken creates a share token for a session key (I3: 64-char hex = 32 random bytes).
 func (ss *ShareStore) GenerateShareToken(sessionKey string) (string, error) {
-	b := make([]byte, 16)
+	b := make([]byte, 32) // I3: 32 bytes → 64 hex chars
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("generate share token: %w", err)
 	}
@@ -139,12 +198,13 @@ func (ss *ShareStore) GenerateShareToken(sessionKey string) (string, error) {
 	entry := &ShareEntry{
 		Token:      token,
 		SessionKey: sessionKey,
-		ExpiresAt:  time.Now().Add(24 * time.Hour),
+		ExpiresAt:  time.Now().Add(7 * 24 * time.Hour), // I4: 7 days
 		CreatedAt:  time.Now(),
 	}
 
 	ss.mu.Lock()
 	ss.shares[token] = entry
+	ss.saveLocked()
 	ss.mu.Unlock()
 
 	return token, nil
@@ -162,6 +222,7 @@ func (ss *ShareStore) Lookup(token string) *ShareEntry {
 	if time.Now().After(entry.ExpiresAt) {
 		ss.mu.Lock()
 		delete(ss.shares, token)
+		ss.saveLocked()
 		ss.mu.Unlock()
 		return nil
 	}
@@ -189,6 +250,7 @@ func (ss *ShareStore) Revoke(token string) bool {
 	defer ss.mu.Unlock()
 	if _, ok := ss.shares[token]; ok {
 		delete(ss.shares, token)
+		ss.saveLocked()
 		return true
 	}
 	return false
@@ -206,6 +268,9 @@ func (ss *ShareStore) Cleanup() int {
 			removed++
 		}
 	}
+	if removed > 0 {
+		ss.saveLocked()
+	}
 	return removed
 }
 
@@ -216,10 +281,11 @@ type ReplayHandlers struct {
 }
 
 // NewReplayHandlers creates ReplayHandlers.
-func NewReplayHandlers(router *session.Router) *ReplayHandlers {
+// sharesPath is the path for persisting share tokens (e.g. ~/.naozhi/shares.json).
+func NewReplayHandlers(router *session.Router, sharesPath string) *ReplayHandlers {
 	return &ReplayHandlers{
 		router:     router,
-		shareStore: NewShareStore(),
+		shareStore: NewShareStore(sharesPath),
 	}
 }
 

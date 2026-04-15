@@ -253,6 +253,17 @@ func writeJSON(w http.ResponseWriter, v any) {
 	}
 }
 
+// writeJSONError writes a JSON error response with proper encoding to prevent
+// JSON injection (I6). The error message is safely escaped via json.Marshal.
+func writeJSONError(w http.ResponseWriter, msg string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	resp := map[string]string{"error": msg}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		slog.Debug("patrol api write json error", "err", err)
+	}
+}
+
 // nextRunTime returns the next scheduled run time for display.
 func nextRunTime(schedule string) *time.Time {
 	if schedule == "" {

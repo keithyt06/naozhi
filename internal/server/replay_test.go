@@ -2,6 +2,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/naozhi/naozhi/internal/cli"
 )
@@ -84,14 +85,14 @@ func TestBuildTimeline_OutOfOrder(t *testing.T) {
 }
 
 func TestShareStore_GenerateAndLookup(t *testing.T) {
-	ss := NewShareStore()
+	ss := NewShareStore("")
 
 	token, err := ss.GenerateShareToken("session:abc")
 	if err != nil {
 		t.Fatalf("GenerateShareToken: %v", err)
 	}
-	if len(token) != 32 {
-		t.Errorf("token length = %d, want 32", len(token))
+	if len(token) != 64 {
+		t.Errorf("token length = %d, want 64", len(token))
 	}
 
 	entry := ss.Lookup(token)
@@ -104,13 +105,13 @@ func TestShareStore_GenerateAndLookup(t *testing.T) {
 }
 
 func TestShareStore_ExpiredToken(t *testing.T) {
-	ss := NewShareStore()
+	ss := NewShareStore("")
 
 	token, _ := ss.GenerateShareToken("session:abc")
 
-	// Manually expire the entry.
+	// Manually expire the entry by setting ExpiresAt to the past.
 	ss.mu.Lock()
-	ss.shares[token].ExpiresAt = ss.shares[token].ExpiresAt.Add(-48 * 60 * 60 * 1e9) // subtract 48h
+	ss.shares[token].ExpiresAt = time.Now().Add(-1 * time.Hour)
 	ss.mu.Unlock()
 
 	entry := ss.Lookup(token)
@@ -120,7 +121,7 @@ func TestShareStore_ExpiredToken(t *testing.T) {
 }
 
 func TestShareStore_Revoke(t *testing.T) {
-	ss := NewShareStore()
+	ss := NewShareStore("")
 
 	token, _ := ss.GenerateShareToken("session:abc")
 	if !ss.Revoke(token) {
@@ -135,7 +136,7 @@ func TestShareStore_Revoke(t *testing.T) {
 }
 
 func TestShareStore_ListForSession(t *testing.T) {
-	ss := NewShareStore()
+	ss := NewShareStore("")
 
 	ss.GenerateShareToken("session:abc")
 	ss.GenerateShareToken("session:abc")
@@ -158,14 +159,14 @@ func TestShareStore_ListForSession(t *testing.T) {
 }
 
 func TestShareStore_Cleanup(t *testing.T) {
-	ss := NewShareStore()
+	ss := NewShareStore("")
 
 	t1, _ := ss.GenerateShareToken("session:abc")
 	ss.GenerateShareToken("session:def")
 
-	// Expire one.
+	// Expire one by setting ExpiresAt to the past.
 	ss.mu.Lock()
-	ss.shares[t1].ExpiresAt = ss.shares[t1].ExpiresAt.Add(-48 * 60 * 60 * 1e9)
+	ss.shares[t1].ExpiresAt = time.Now().Add(-1 * time.Hour)
 	ss.mu.Unlock()
 
 	removed := ss.Cleanup()

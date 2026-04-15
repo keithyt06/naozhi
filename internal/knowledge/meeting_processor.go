@@ -80,6 +80,11 @@ func (mp *MeetingProcessor) ProcessMeeting(ctx context.Context, audioPath string
 		return meeting, fmt.Errorf("update meeting record: %w", err)
 	}
 
+	// I1: Clean up audio file after successful processing — transcript is on disk.
+	if err := os.Remove(audioPath); err != nil {
+		slog.Warn("delete audio file after processing", "path", audioPath, "err", err)
+	}
+
 	slog.Info("meeting processed", "id", meeting.ID, "title", meeting.Title)
 	return meeting, nil
 }

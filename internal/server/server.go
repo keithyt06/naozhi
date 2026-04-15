@@ -310,9 +310,10 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		},
 	}
 	// Knowledge handlers (initialized even if vault not configured — handlers return 503)
+	var wiki *knowledge.WikiManager // shared across knowledge + twin handlers (C3)
 	if naozDir != "" {
 		vault := newVaultFromOpts(opts)
-		wiki := knowledge.NewWikiManager(filepath.Join(naozDir, "wiki"))
+		wiki = knowledge.NewWikiManager(filepath.Join(naozDir, "wiki"))
 		bookmarks := knowledge.NewBookmarkStore(filepath.Join(naozDir, "bookmarks.json"))
 		search, searchErr := knowledge.NewSearchEngine(filepath.Join(naozDir, "search.bleve"))
 		if searchErr != nil {
@@ -334,12 +335,15 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		s.meetingH = NewMeetingHandlers(meetingStore, processor)
 	}
 
-	// Replay handlers
-	s.replayH = NewReplayHandlers(router)
-
-	// Twin handlers (require wiki from knowledge layer)
+	// Replay handlers (C2: persist shares to disk)
+	sharesPath := ""
 	if naozDir != "" {
-		wiki := knowledge.NewWikiManager(filepath.Join(naozDir, "wiki"))
+		sharesPath = filepath.Join(naozDir, "shares.json")
+	}
+	s.replayH = NewReplayHandlers(router, sharesPath)
+
+	// C3: Twin handlers — reuse the wiki manager from knowledge block (no duplicate).
+	if naozDir != "" && wiki != nil {
 		twin := knowledge.NewTwinManager(wiki, naozDir)
 		s.twinH = NewTwinHandlers(twin)
 	}

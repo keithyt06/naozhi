@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/naozhi/naozhi/internal/knowledge"
@@ -80,6 +82,19 @@ func (mh *MeetingHandlers) handleUpload(w http.ResponseWriter, r *http.Request) 
 	}
 	defer file.Close()
 
+	// I2: Validate audio format before reading entire file into memory.
+	allowedExts := map[string]bool{
+		".mp3": true, ".m4a": true, ".wav": true, ".flac": true,
+		".ogg": true, ".opus": true, ".amr": true, ".webm": true,
+	}
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if !allowedExts[ext] {
+		writeJSONStatus(w, map[string]string{
+			"error": "unsupported audio format: " + ext + "; allowed: .mp3, .m4a, .wav, .flac, .ogg, .opus, .amr, .webm",
+		}, http.StatusBadRequest)
+		return
+	}
+
 	data, err := io.ReadAll(file)
 	if err != nil {
 		writeJSONStatus(w, map[string]string{"error": "read file failed"}, http.StatusBadRequest)
@@ -120,9 +135,10 @@ func (mh *MeetingHandlers) handleUpload(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Process asynchronously
+	// C1: Process asynchronously — use context.Background() because r.Context()
+	// will be cancelled when the HTTP handler returns.
 	go func() {
-		if _, err := mh.processor.ProcessMeeting(r.Context(), audioPath, title, participants); err != nil {
+		if _, err := mh.processor.ProcessMeeting(context.Background(), audioPath, title, participants); err != nil {
 			slog.Warn("meeting processing failed", "id", meeting.ID, "err", err)
 		}
 	}()

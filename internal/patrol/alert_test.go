@@ -216,3 +216,20 @@ func TestCloudWatchNormalizeBadJSON(t *testing.T) {
 		t.Fatal("expected error for bad JSON")
 	}
 }
+
+// I5: Bad JSON tests for Grafana and Datadog normalizers.
+func TestGrafanaNormalizeBadJSON(t *testing.T) {
+	n := GrafanaNormalizer{}
+	_, err := n.Normalize([]byte(`not json`), http.Header{})
+	if err == nil {
+		t.Fatal("expected error for bad JSON")
+	}
+}
+
+func TestDatadogNormalizeBadJSON(t *testing.T) {
+	n := DatadogNormalizer{}
+	_, err := n.Normalize([]byte(`not json`), http.Header{})
+	if err == nil {
+		t.Fatal("expected error for bad JSON")
+	}
+}
