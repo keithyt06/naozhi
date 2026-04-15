@@ -564,6 +564,42 @@ func (h *Hub) BroadcastCronResult(jobID, result, errMsg string) {
 	}
 }
 
+// BroadcastNotification sends a notification event to all authenticated WS clients.
+func (h *Hub) BroadcastNotification(n any) {
+	data, err := json.Marshal(map[string]any{
+		"type":         "notification",
+		"notification": n,
+	})
+	if err != nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.authenticated.Load() {
+			c.SendRaw(data)
+		}
+	}
+}
+
+// BroadcastApprovalUpdate sends an approval_update event to all authenticated WS clients.
+func (h *Hub) BroadcastApprovalUpdate(a any) {
+	data, err := json.Marshal(map[string]any{
+		"type":     "approval_update",
+		"approval": a,
+	})
+	if err != nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.authenticated.Load() {
+			c.SendRaw(data)
+		}
+	}
+}
+
 // DroppedMessages returns the total number of messages dropped across all clients.
 func (h *Hub) DroppedMessages() int64 {
 	var total int64

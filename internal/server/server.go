@@ -56,6 +56,8 @@ type Server struct {
 	cronH       *CronHandlers
 	patrolH     *patrol.APIHandler
 	patrolMgr   *patrol.Manager
+	approvalH   *patrol.ApprovalHandlers
+	notifH      *patrol.NotificationHandlers
 	transcribeH *TranscribeHandler
 	nodeAccess  *nodeAccessor
 	discoveryH  *DiscoveryHandlers
@@ -202,6 +204,15 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 	}
 	if opts.PatrolManager != nil {
 		s.patrolH = patrol.NewAPIHandler(opts.PatrolManager)
+	}
+
+	// Approval + Notification stores (always initialized, independent of patrol)
+	if home, err := os.UserHomeDir(); err == nil {
+		naozDir := filepath.Join(home, ".naozhi")
+		approvalStore := patrol.NewApprovalStore(filepath.Join(naozDir, "approvals.json"))
+		notifStore := patrol.NewNotificationStore(filepath.Join(naozDir, "notifications.json"))
+		s.approvalH = &patrol.ApprovalHandlers{Store: approvalStore}
+		s.notifH = &patrol.NotificationHandlers{Store: notifStore}
 	}
 
 	s.nodeAccess = newNodeAccessor(&s.nodesMu, s.nodes, s.knownNodes)

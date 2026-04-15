@@ -11,8 +11,9 @@ type ApprovalHandlers struct {
 	Store *ApprovalStore
 	// Hub is called after approve/reject to broadcast updates via WebSocket.
 	// Nil-safe: callers may leave this unset during testing.
+	// Uses any parameter to avoid circular import with server package.
 	Hub interface {
-		BroadcastApprovalUpdate(a Approval)
+		BroadcastApprovalUpdate(a any)
 	}
 }
 

@@ -105,6 +105,18 @@ func (s *Server) registerDashboard() {
 		}
 	}
 
+	// Approval API
+	if s.approvalH != nil {
+		s.approvalH.Hub = s.hub
+		s.approvalH.RegisterApprovalRoutes(s.mux, auth)
+	}
+
+	// Notification API
+	if s.notifH != nil {
+		s.notifH.Hub = s.hub
+		s.notifH.RegisterNotificationRoutes(s.mux, auth)
+	}
+
 	s.mux.HandleFunc("POST /api/auth/logout", auth(s.auth.handleLogout))
 
 	// Session naming & pinning

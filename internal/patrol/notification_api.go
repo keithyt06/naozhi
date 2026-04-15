@@ -11,8 +11,9 @@ type NotificationHandlers struct {
 	Store *NotificationStore
 	// Hub is called after adding notifications to broadcast via WebSocket.
 	// Nil-safe: callers may leave this unset during testing.
+	// Uses any parameter to avoid circular import with server package.
 	Hub interface {
-		BroadcastNotification(n Notification)
+		BroadcastNotification(n any)
 	}
 }
 
