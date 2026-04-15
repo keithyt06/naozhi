@@ -27,6 +27,7 @@ import (
 	"github.com/naozhi/naozhi/internal/platform/feishu"
 	slackplatform "github.com/naozhi/naozhi/internal/platform/slack"
 	weixinplatform "github.com/naozhi/naozhi/internal/platform/weixin"
+	"github.com/naozhi/naozhi/internal/patrol"
 	"github.com/naozhi/naozhi/internal/project"
 	"github.com/naozhi/naozhi/internal/server"
 	"github.com/naozhi/naozhi/internal/session"
@@ -458,6 +459,19 @@ func main() {
 		slog.Info("reverse node auth configured", "nodes", len(cfg.ReverseNodes))
 	}
 
+	// Patrol Manager
+	naozDir := ""
+	if home, err := os.UserHomeDir(); err == nil {
+		naozDir = filepath.Join(home, ".naozhi")
+	}
+	patrolMgr := patrol.NewManager(patrol.ManagerConfig{
+		Router:    router,
+		Platforms: platforms,
+		Agents:    agents,
+		StorePath: filepath.Join(naozDir, "patrols.json"),
+		LogDir:    filepath.Join(naozDir, "patrols"),
+	}, nil)
+
 	// Server
 	srv := server.New(cfg.Server.Addr, router, platforms, agents, cfg.AgentCommands, scheduler, cfg.CLI.Backend, server.ServerOptions{
 		WorkspaceID:       cfg.Workspace.ID,
@@ -471,6 +485,7 @@ func main() {
 		Nodes:             nodes,
 		ReverseNodeServer: rns,
 		Transcriber:       stt,
+		PatrolManager:     patrolMgr,
 		VaultPath:         config.ExpandHome(cfg.Knowledge.Obsidian.VaultPath),
 		VaultInclude:      cfg.Knowledge.Obsidian.IncludePaths,
 		VaultExclude:      cfg.Knowledge.Obsidian.ExcludePaths,
