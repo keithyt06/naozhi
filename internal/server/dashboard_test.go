@@ -223,7 +223,7 @@ func TestHandleAPISessions_StatsIncludeAgentsAndWorkspace(t *testing.T) {
 		MaxProcs:  5,
 		Workspace: "/test/workspace",
 	})
-	srv := New(":0", router, nil, agents, nil, nil, "claude", ServerOptions{})
+	srv := New(":0", router, nil, agents, nil, nil, "claude", ServerOptions{DataDir: t.TempDir()})
 	srv.registerDashboard()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/sessions", nil)
@@ -281,7 +281,7 @@ func TestHandleAPISend_WorkspaceOverride(t *testing.T) {
 	router := session.NewRouter(session.RouterConfig{
 		Workspace: "/default/workspace",
 	})
-	srv := New(":0", router, nil, nil, nil, nil, "claude", ServerOptions{})
+	srv := New(":0", router, nil, nil, nil, nil, "claude", ServerOptions{DataDir: t.TempDir()})
 	srv.registerDashboard()
 
 	key := "dashboard:direct:test-session:general"
@@ -308,7 +308,7 @@ func TestHandleAPISend_WorkspaceInvalidDir(t *testing.T) {
 	router := session.NewRouter(session.RouterConfig{
 		Workspace: "/default/workspace",
 	})
-	srv := New(":0", router, nil, nil, nil, nil, "claude", ServerOptions{})
+	srv := New(":0", router, nil, nil, nil, nil, "claude", ServerOptions{DataDir: t.TempDir()})
 	srv.registerDashboard()
 
 	key := "dashboard:direct:test-session:general"

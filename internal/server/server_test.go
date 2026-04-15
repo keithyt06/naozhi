@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -62,7 +63,7 @@ func (m *mockPlatform) allReplies() []platform.OutgoingMessage {
 func newTestServer(p *mockPlatform) *Server {
 	router := session.NewRouter(session.RouterConfig{})
 	platforms := map[string]platform.Platform{"test": p}
-	s := New(":0", router, platforms, nil, nil, nil, "claude", ServerOptions{})
+	s := New(":0", router, platforms, nil, nil, nil, "claude", ServerOptions{DataDir: mustTempDir()})
 	s.registerDashboard()
 	return s
 }
@@ -71,7 +72,7 @@ func newTestServerWithScheduler(p *mockPlatform) *Server {
 	router := session.NewRouter(session.RouterConfig{})
 	platforms := map[string]platform.Platform{"test": p}
 	sched := cron.NewScheduler(cron.SchedulerConfig{})
-	s := New(":0", router, platforms, nil, nil, sched, "claude", ServerOptions{})
+	s := New(":0", router, platforms, nil, nil, sched, "claude", ServerOptions{DataDir: mustTempDir()})
 	s.registerDashboard()
 	return s
 }
@@ -79,9 +80,19 @@ func newTestServerWithScheduler(p *mockPlatform) *Server {
 func newTestServerWithToken(p *mockPlatform, token string) *Server {
 	router := session.NewRouter(session.RouterConfig{})
 	platforms := map[string]platform.Platform{"test": p}
-	s := New(":0", router, platforms, nil, nil, nil, "claude", ServerOptions{DashboardToken: token})
+	s := New(":0", router, platforms, nil, nil, nil, "claude", ServerOptions{DashboardToken: token, DataDir: mustTempDir()})
 	s.registerDashboard()
 	return s
+}
+
+// mustTempDir creates a unique temporary directory for test isolation.
+// Each test server gets its own bleve index directory, avoiding bbolt lock contention.
+func mustTempDir() string {
+	dir, err := os.MkdirTemp("", "naozhi-test-*")
+	if err != nil {
+		panic("failed to create temp dir: " + err.Error())
+	}
+	return dir
 }
 
 func newTestDispatcher(srv *Server) *dispatch.Dispatcher {
@@ -251,7 +262,7 @@ func TestBuildMessageHandler_NewResetsNamedAgent(t *testing.T) {
 	platforms := map[string]platform.Platform{"test": p}
 	agentCommands := map[string]string{"review": "code-reviewer"}
 	agents := map[string]session.AgentOpts{"code-reviewer": {}}
-	srv := New(":0", router, platforms, agents, agentCommands, nil, "claude", ServerOptions{})
+	srv := New(":0", router, platforms, agents, agentCommands, nil, "claude", ServerOptions{DataDir: mustTempDir()})
 	handler := newTestDispatcher(srv).BuildHandler()
 
 	handler(context.Background(), platform.IncomingMessage{

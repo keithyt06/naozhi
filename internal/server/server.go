@@ -140,6 +140,7 @@ type ServerOptions struct {
 	VaultPath         string   // Obsidian vault path
 	VaultInclude      []string // include paths within vault
 	VaultExclude      []string // exclude paths within vault
+	DataDir           string   // override ~/.naozhi data directory (for tests)
 }
 
 func New(addr string, router *session.Router, platforms map[string]platform.Platform, agents map[string]session.AgentOpts, agentCommands map[string]string, scheduler *cron.Scheduler, backend string, opts ServerOptions) *Server {
@@ -206,9 +207,16 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		s.patrolH = patrol.NewAPIHandler(opts.PatrolManager)
 	}
 
+	// Resolve data directory: use DataDir override (for tests) or default ~/.naozhi.
+	naozDir := opts.DataDir
+	if naozDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			naozDir = filepath.Join(home, ".naozhi")
+		}
+	}
+
 	// Approval + Notification stores (always initialized, independent of patrol)
-	if home, err := os.UserHomeDir(); err == nil {
-		naozDir := filepath.Join(home, ".naozhi")
+	if naozDir != "" {
 		approvalStore := patrol.NewApprovalStore(filepath.Join(naozDir, "approvals.json"))
 		notifStore := patrol.NewNotificationStore(filepath.Join(naozDir, "notifications.json"))
 		s.approvalH = &patrol.ApprovalHandlers{Store: approvalStore}
@@ -297,8 +305,7 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		},
 	}
 	// Knowledge handlers (initialized even if vault not configured — handlers return 503)
-	if home, err := os.UserHomeDir(); err == nil {
-		naozDir := filepath.Join(home, ".naozhi")
+	if naozDir != "" {
 		vault := newVaultFromOpts(opts)
 		wiki := knowledge.NewWikiManager(filepath.Join(naozDir, "wiki"))
 		bookmarks := knowledge.NewBookmarkStore(filepath.Join(naozDir, "bookmarks.json"))

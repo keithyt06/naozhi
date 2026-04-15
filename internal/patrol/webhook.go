@@ -1,6 +1,9 @@
 package patrol
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -43,6 +46,25 @@ func (h *APIHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, `{"error":"read body failed"}`, http.StatusBadRequest)
 		return
+	}
+
+	// Webhook authentication: verify secret if configured on the patrol.
+	if p.WebhookSecret != "" {
+		// GitHub webhooks: verify X-Hub-Signature-256 HMAC
+		if ghSig := r.Header.Get("X-Hub-Signature-256"); ghSig != "" {
+			if !verifyGitHubSignature(p.WebhookSecret, body, ghSig) {
+				http.Error(w, `{"error":"invalid signature"}`, http.StatusUnauthorized)
+				return
+			}
+		} else {
+			// Generic webhooks: check X-Webhook-Secret header
+			if r.Header.Get("X-Webhook-Secret") != p.WebhookSecret {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+		}
+	} else {
+		slog.Warn("webhook secret not configured, accepting unauthenticated request", "patrol", name)
 	}
 
 	// Detect GitHub webhook via X-GitHub-Event header
@@ -108,6 +130,22 @@ func matchTrigger(pattern, triggerKey string) bool {
 		return strings.HasPrefix(triggerKey, prefix)
 	}
 	return false
+}
+
+// verifyGitHubSignature validates the X-Hub-Signature-256 header using HMAC-SHA256.
+// The header value is expected in the format "sha256=<hex-digest>".
+func verifyGitHubSignature(secret string, body []byte, signature string) bool {
+	const prefix = "sha256="
+	if !strings.HasPrefix(signature, prefix) {
+		return false
+	}
+	sigBytes, err := hex.DecodeString(signature[len(prefix):])
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return hmac.Equal(sigBytes, mac.Sum(nil))
 }
 
 // mapGitHubEvent maps X-GitHub-Event header + payload action to a trigger event string.

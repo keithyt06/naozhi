@@ -48,6 +48,7 @@ type Patrol struct {
 	Budget           float64  `json:"budget,omitempty" yaml:"budget,omitempty"`
 	MCPServers       []string `json:"mcp_servers,omitempty" yaml:"mcp_servers,omitempty"`
 	WorkDir          string   `json:"work_dir,omitempty" yaml:"work_dir,omitempty"`
+	WebhookSecret    string   `json:"webhook_secret,omitempty" yaml:"webhook_secret,omitempty"`
 
 	// Runtime fields (persisted to patrols.json)
 	State       State     `json:"state"`
