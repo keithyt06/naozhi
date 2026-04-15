@@ -16,18 +16,20 @@ type KnowledgeHandlers struct {
 	wiki      *knowledge.WikiManager
 	bookmarks *knowledge.BookmarkStore
 	search    *knowledge.SearchEngine
+	decisions *knowledge.DecisionStore
 	ingest    *knowledge.IngestEngine
 	lint      *knowledge.LintEngine
 	cliSync   *knowledge.CLISyncManager
 }
 
 // NewKnowledgeHandlers creates a new KnowledgeHandlers instance.
-func NewKnowledgeHandlers(vault *knowledge.Vault, wiki *knowledge.WikiManager, bookmarks *knowledge.BookmarkStore, search *knowledge.SearchEngine) *KnowledgeHandlers {
+func NewKnowledgeHandlers(vault *knowledge.Vault, wiki *knowledge.WikiManager, bookmarks *knowledge.BookmarkStore, search *knowledge.SearchEngine, decisions *knowledge.DecisionStore) *KnowledgeHandlers {
 	return &KnowledgeHandlers{
 		vault:     vault,
 		wiki:      wiki,
 		bookmarks: bookmarks,
 		search:    search,
+		decisions: decisions,
 	}
 }
 
@@ -308,6 +310,67 @@ func (kh *KnowledgeHandlers) handleSearchStats(w http.ResponseWriter, r *http.Re
 		"total":     total,
 		"by_source": bySource,
 	}, http.StatusOK)
+}
+
+// --- Decision Journal API ---
+
+func (kh *KnowledgeHandlers) handleDecisionList(w http.ResponseWriter, r *http.Request) {
+	if kh.decisions == nil {
+		writeJSONStatus(w, []struct{}{}, http.StatusOK)
+		return
+	}
+	q := r.URL.Query().Get("q")
+	var decisions []knowledge.Decision
+	if q != "" {
+		decisions = kh.decisions.Search(q)
+	} else {
+		decisions = kh.decisions.List()
+	}
+	if decisions == nil {
+		decisions = []knowledge.Decision{}
+	}
+	writeJSONStatus(w, decisions, http.StatusOK)
+}
+
+func (kh *KnowledgeHandlers) handleDecisionCreate(w http.ResponseWriter, r *http.Request) {
+	if kh.decisions == nil {
+		writeJSONStatus(w, map[string]string{"error": "decisions not configured"}, http.StatusServiceUnavailable)
+		return
+	}
+	var d knowledge.Decision
+	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
+		writeJSONStatus(w, map[string]string{"error": "invalid json"}, http.StatusBadRequest)
+		return
+	}
+	if d.Title == "" {
+		writeJSONStatus(w, map[string]string{"error": "title is required"}, http.StatusBadRequest)
+		return
+	}
+	added, err := kh.decisions.Add(d)
+	if err != nil {
+		writeJSONStatus(w, map[string]string{"error": err.Error()}, http.StatusInternalServerError)
+		return
+	}
+	writeJSONStatus(w, added, http.StatusCreated)
+}
+
+func (kh *KnowledgeHandlers) handleDecisionGet(w http.ResponseWriter, r *http.Request) {
+	if kh.decisions == nil {
+		writeJSONStatus(w, map[string]string{"error": "decisions not configured"}, http.StatusServiceUnavailable)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/decisions/")
+	id = strings.TrimSuffix(id, "/")
+	if id == "" {
+		writeJSONStatus(w, map[string]string{"error": "id required"}, http.StatusBadRequest)
+		return
+	}
+	d, err := kh.decisions.Get(id)
+	if err != nil {
+		writeJSONStatus(w, map[string]string{"error": err.Error()}, http.StatusNotFound)
+		return
+	}
+	writeJSONStatus(w, d, http.StatusOK)
 }
 
 func writeJSONStatus(w http.ResponseWriter, v interface{}, status int) {

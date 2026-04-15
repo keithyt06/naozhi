@@ -51,17 +51,28 @@ func (h *TranscribeHandler) handleTranscribe(w http.ResponseWriter, r *http.Requ
 	}
 
 	mimeType := fh.Header.Get("Content-Type")
+	// Normalize MIME: strip codec params (e.g. "audio/mp4;codecs=mp4a.40.2" → "audio/mp4")
+	if idx := strings.IndexByte(mimeType, ';'); idx >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
 	switch mimeType {
 	case "audio/ogg", "audio/mpeg", "audio/wav", "audio/flac", "audio/mp4",
-		"audio/amr", "audio/webm", "audio/aac", "audio/x-m4a",
-		"video/mp4", "video/webm": // some browsers tag voice memos as video
+		"audio/amr", "audio/webm", "audio/aac", "audio/x-m4a", "audio/m4a",
+		"audio/x-caf", "audio/3gpp", "audio/3gpp2",
+		"video/mp4", "video/webm", "video/3gpp": // iOS Safari / Android
 	default:
+		slog.Debug("transcribe unsupported mime", "mime", mimeType)
 		http.Error(w, "unsupported audio format", http.StatusBadRequest)
 		return
 	}
 	// Magic byte validation: reject files whose actual content doesn't match audio/video.
+	// Go's DetectContentType returns application/ogg for OGG, application/octet-stream
+	// for many audio formats, etc. Be permissive since the MIME whitelist above already
+	// filters the declared type.
 	detected := http.DetectContentType(data)
-	if !strings.HasPrefix(detected, "audio/") && !strings.HasPrefix(detected, "video/") && detected != "application/octet-stream" {
+	if !strings.HasPrefix(detected, "audio/") && !strings.HasPrefix(detected, "video/") &&
+		detected != "application/octet-stream" && detected != "application/ogg" {
+		slog.Debug("transcribe rejected", "detected", detected, "declared", mimeType, "size", len(data))
 		http.Error(w, "file content is not audio", http.StatusBadRequest)
 		return
 	}

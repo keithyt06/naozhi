@@ -94,7 +94,7 @@ func TestBuildTwinPrompt_WithWiki(t *testing.T) {
 	}, "We deploy using ECS with CDK. Blue-green deployment strategy.")
 
 	tm := NewTwinManager(wiki, dir)
-	prompt := tm.BuildTwinPrompt("how do we deploy?", nil)
+	prompt := tm.BuildTwinPrompt("production deployment ECS", nil)
 
 	if !contains(prompt, "[Knowledge Context]") {
 		t.Error("prompt missing [Knowledge Context] section with matching wiki")

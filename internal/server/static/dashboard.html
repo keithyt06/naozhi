@@ -787,6 +787,40 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .wv-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#6e7681;gap:12px;padding:20px}
 .wv-empty-action{padding:8px 20px;border-radius:6px;border:1px solid #1f6feb;background:rgba(31,111,235,.12);color:#58a6ff;cursor:pointer;font-size:13px;font-family:inherit}
 .wv-lint-panel{width:280px;border-left:1px solid #30363d;overflow-y:auto;flex-shrink:0;scrollbar-width:thin;background:#0d1117;display:none}
+.wv-sub-tabs{display:flex;gap:2px}
+.wv-sub-tab{padding:3px 10px;border-radius:4px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;font-family:inherit;transition:all .15s}
+.wv-sub-tab:hover{color:#c9d1d9}
+.wv-sub-tab.active{color:#58a6ff;background:rgba(31,111,235,.12)}
+.dj-card{padding:10px 12px;border-bottom:1px solid #21262d;cursor:pointer;transition:background .1s}
+.dj-card:hover{background:#161b22}
+.dj-card.active{background:rgba(31,111,235,.12);border-left:2px solid #58a6ff}
+.dj-card-title{font-size:13px;color:#e6edf3;font-weight:500}
+.dj-card-meta{font-size:11px;color:#6e7681;margin-top:3px;display:flex;gap:6px;align-items:center}
+.dj-card-tags{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
+.dj-card-tag{display:inline-block;padding:1px 6px;border-radius:3px;background:#21262d;color:#8b949e;font-size:10px}
+.dj-add-btn{width:100%;padding:8px;border:1px dashed #30363d;border-radius:6px;background:transparent;color:#8b949e;cursor:pointer;font-size:12px;font-family:inherit;margin:8px 0;transition:all .15s}
+.dj-add-btn:hover{border-color:#58a6ff;color:#58a6ff}
+.dj-detail-section{margin-bottom:16px}
+.dj-detail-section h4{font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:.3px;margin:0 0 6px 0}
+.dj-detail-section p{margin:0;font-size:14px;color:#c9d1d9;line-height:1.6}
+.graph-container{position:relative;width:100%;height:100%;overflow:hidden;background:#0d1117}
+.graph-svg{width:100%;height:100%}
+.graph-legend{position:absolute;bottom:16px;left:16px;background:rgba(13,17,23,.9);border:1px solid #30363d;border-radius:8px;padding:10px 14px;font-size:11px;color:#8b949e}
+.graph-legend-item{display:flex;align-items:center;gap:6px;margin:3px 0}
+.graph-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.graph-filter-bar{position:absolute;top:12px;left:12px;display:flex;gap:4px;flex-wrap:wrap}
+.graph-filter-pill{padding:4px 10px;border-radius:12px;border:1px solid #30363d;background:#161b22;color:#8b949e;cursor:pointer;font-size:11px;transition:all .15s;font-family:inherit}
+.graph-filter-pill:hover{border-color:#58a6ff;color:#c9d1d9}
+.graph-filter-pill.active{background:rgba(31,111,235,.15);border-color:#58a6ff;color:#58a6ff}
+.graph-detail{position:absolute;top:0;right:-320px;width:300px;height:100%;background:#161b22;border-left:1px solid #30363d;padding:16px;overflow-y:auto;transition:right .25s ease;z-index:10}
+.graph-detail.open{right:0}
+.graph-detail h3{margin:0 0 8px 0;font-size:15px;color:#e6edf3}
+.graph-detail-type{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-bottom:12px}
+.graph-detail-conns{list-style:none;padding:0;margin:8px 0}
+.graph-detail-conns li{padding:4px 0;font-size:12px;color:#8b949e;cursor:pointer}
+.graph-detail-conns li:hover{color:#58a6ff}
+.graph-btn{padding:6px 12px;border-radius:6px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s;margin-top:8px;display:inline-block}
+.graph-btn:hover{border-color:#58a6ff;color:#58a6ff}
 .wv-lint-panel.show{display:block}
 .wv-lint-header{padding:10px 12px;border-bottom:1px solid #21262d;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase}
 .wv-lint-item{padding:8px 12px;border-bottom:1px solid #21262d;font-size:12px}
@@ -5436,6 +5470,7 @@ function switchView(view, el) {
     else if (view === 'patrols') renderPatrolsView();
     else if (view === 'approvals') renderApprovalsView();
     else if (view === 'meetings') renderMeetingView();
+    else if (view === 'graph') renderGraphView();
   }
 }
 
@@ -6207,13 +6242,17 @@ function renderWikiView() {
     '<div class="wv-container" id="wvContainer">' +
       '<div class="wv-list" id="wvList">' +
         '<div class="wv-list-header">' +
-          '<span class="wv-list-title">Wiki Pages</span>' +
+          '<div class="wv-sub-tabs">' +
+            '<button class="wv-sub-tab active" data-subtab="pages" onclick="switchWikiSubTab(\'pages\',this)">Pages</button>' +
+            '<button class="wv-sub-tab" data-subtab="decisions" onclick="switchWikiSubTab(\'decisions\',this)">Decisions</button>' +
+          '</div>' +
           '<div class="wv-list-actions">' +
             '<button class="wv-action-btn" id="wvIngestBtn" onclick="triggerIngest(this)">Ingest</button>' +
             '<button class="wv-action-btn" id="wvLintBtn" onclick="triggerLint(this)">Lint</button>' +
           '</div>' +
         '</div>' +
         '<div id="wvPageList"><div class="kv-loading">Loading...</div></div>' +
+        '<div id="wvDecisionList" style="display:none"><div class="kv-loading">Loading...</div></div>' +
       '</div>' +
       '<div class="wv-content" id="wvContent">' +
         '<div class="wv-empty"><span style="font-size:28px;opacity:.3">&#128214;</span><span>Select a wiki page</span><button class="wv-empty-action" onclick="triggerIngest(document.getElementById(\'wvIngestBtn\'))">Run your first Ingest to compile knowledge</button></div>' +
