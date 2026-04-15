@@ -25,7 +25,7 @@ func (p *ClaudeProtocol) BuildArgs(opts SpawnOptions) []string {
 		"--input-format", "stream-json",
 		"--verbose",
 		"--setting-sources", "", // disable standard settings to avoid hook loops
-		"--dangerously-skip-permissions",
+		"--permission-mode", "auto",
 	}
 	if p.SettingsFile != "" {
 		args = append(args, "--settings", p.SettingsFile)
