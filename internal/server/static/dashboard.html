@@ -798,6 +798,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .wv-lint-item .lint-msg{color:#8b949e;margin-top:2px}
 @media(max-width:768px){.wv-list{display:none}.wv-lint-panel{display:none!important}}
 
+/* ===== Meeting Intelligence (Phase 4C) ===== */
+.mt-container{display:flex;height:100%;overflow:hidden}
+.mt-list{width:300px;border-right:1px solid #30363d;overflow-y:auto;flex-shrink:0;scrollbar-width:thin;background:#0d1117}
+.mt-list-header{padding:10px 12px;font-size:11px;color:#8b949e;border-bottom:1px solid #21262d;display:flex;align-items:center;justify-content:space-between}
+.mt-list-header .mt-list-title{font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.mt-upload-btn{padding:3px 10px;border-radius:4px;border:1px solid #1f6feb;background:rgba(31,111,235,.12);color:#58a6ff;cursor:pointer;font-size:10px;font-family:inherit;transition:all .15s}
+.mt-upload-btn:hover{background:rgba(31,111,235,.2)}
+.mt-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid #21262d;transition:background .1s}
+.mt-item:hover{background:#161b22}
+.mt-item.active{background:rgba(31,111,235,.12);border-left:2px solid #58a6ff}
+.mt-item-title{font-size:13px;color:#e6edf3;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-item-meta{font-size:11px;color:#6e7681;margin-top:2px;display:flex;gap:6px}
+.mt-status{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600}
+.mt-status.completed{background:rgba(35,134,54,.12);color:#3fb950}
+.mt-status.processing{background:rgba(158,106,3,.2);color:#d29922}
+.mt-status.failed{background:rgba(218,54,51,.2);color:#da3633}
+.mt-status.pending{background:#21262d;color:#8b949e}
+.mt-detail{flex:1;overflow-y:auto;padding:24px;max-width:760px}
+.mt-detail-title{font-size:22px;font-weight:600;color:#f0f6fc;margin-bottom:12px}
+.mt-detail-meta{font-size:12px;color:#8b949e;margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap}
+.mt-section{margin-bottom:24px}
+.mt-section h3{font-size:14px;font-weight:600;color:#e6edf3;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #21262d}
+.mt-section ul{padding-left:20px;margin:0}
+.mt-section li{font-size:13px;color:#c9d1d9;line-height:1.8}
+.mt-transcript{font-size:13px;color:#c9d1d9;line-height:1.8;white-space:pre-wrap;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;max-height:400px;overflow-y:auto}
+.mt-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#6e7681;gap:12px;padding:20px;font-size:14px}
+@media(max-width:768px){.mt-list{display:none}}
+
 /* ===== Context Panel (Task 14) ===== */
 .ctx-panel{width:0;border-left:none;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width .25s ease,border-left .25s;background:#0d1117}
 .ctx-panel.open{width:320px;border-left:1px solid #30363d}
@@ -899,6 +927,8 @@ window.shikiReady = (async () => {
       <button class="vb-btn" data-view="wiki" onclick="switchView('wiki',this)">Wiki</button>
       <button class="vb-btn" data-view="patrols" onclick="switchView('patrols',this)">Patrols</button>
       <button class="vb-btn" data-view="approvals" onclick="switchView('approvals',this)" id="vbApprovalsBtn">Approvals</button>
+      <button class="vb-btn" data-view="meetings" onclick="switchView('meetings',this)">Meetings</button>
+      <button class="vb-btn" data-view="graph" onclick="switchView('graph',this)">Graph</button>
     </div>
     <div class="tag-filter" id="tagFilter">
       <span class="tag-pill active" data-filter="all" onclick="filterByTag('all',this)">All</span>
@@ -1603,6 +1633,7 @@ function renderMainShell() {
       '</div>' +
       sidHtml +
       '</div>' +
+      '<button onclick="openReplayViewer(\'' + escJs(activeKey) + '\')" title="Replay session" style="background:none;border:none;color:#8b949e;cursor:pointer;padding:4px;font-size:16px">&#9654;</button>' +
       filesBtn +
     '</div>' +
     '<div class="events" id="events-scroll"></div>' +
@@ -5404,6 +5435,7 @@ function switchView(view, el) {
     else if (view === 'wiki') renderWikiView();
     else if (view === 'patrols') renderPatrolsView();
     else if (view === 'approvals') renderApprovalsView();
+    else if (view === 'meetings') renderMeetingView();
   }
 }
 
@@ -6318,6 +6350,142 @@ async function triggerLint(btn) {
   }
 }
 
+/* ===== Phase 4C: Meeting Intelligence ===== */
+
+let mtMeetings = [];
+let mtCurrentId = '';
+
+function renderMeetingView() {
+  const main = document.getElementById('main');
+  main.innerHTML =
+    '<div class="mt-container" id="mtContainer">' +
+      '<div class="mt-list" id="mtList">' +
+        '<div class="mt-list-header">' +
+          '<span class="mt-list-title">Meetings</span>' +
+          '<label class="mt-upload-btn">Upload<input type="file" accept="audio/*" style="display:none" onchange="handleMeetingUpload(this)"></label>' +
+        '</div>' +
+        '<div id="mtPageList"><div class="kv-loading">Loading...</div></div>' +
+      '</div>' +
+      '<div class="mt-detail" id="mtDetail">' +
+        '<div class="mt-empty"><span style="font-size:28px;opacity:.3">&#127908;</span><span>Select a meeting or upload audio</span></div>' +
+      '</div>' +
+    '</div>';
+  loadMeetingList();
+}
+
+async function loadMeetingList() {
+  var container = document.getElementById('mtPageList');
+  if (!container) return;
+  try {
+    var data = await fetch('/api/meetings', { headers: authHeaders() }).then(function(r) { return r.ok ? r.json() : { meetings: [] }; });
+    mtMeetings = data.meetings || [];
+    if (mtMeetings.length === 0) {
+      container.innerHTML = '<div class="ctx-empty">No meetings yet. Upload an audio file to get started.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < mtMeetings.length; i++) {
+      var m = mtMeetings[i];
+      var active = mtCurrentId === m.id ? ' active' : '';
+      var dateStr = m.date ? new Date(m.date).toLocaleDateString() : '';
+      var pCount = (m.participants || []).length;
+      html += '<div class="mt-item' + active + '" data-id="' + escAttr(m.id) + '" onclick="loadMeetingDetail(\'' + escJs(m.id) + '\')">' +
+        '<div class="mt-item-title">' + esc(m.title || 'Untitled') + '</div>' +
+        '<div class="mt-item-meta">' +
+          '<span>' + esc(dateStr) + '</span>' +
+          (pCount > 0 ? '<span>' + pCount + ' participants</span>' : '') +
+          '<span class="mt-status ' + esc(m.status || '') + '">' + esc(m.status || 'unknown') + '</span>' +
+        '</div>' +
+      '</div>';
+    }
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = '<div class="ctx-empty">' + esc(e.message) + '</div>';
+  }
+}
+
+async function loadMeetingDetail(id) {
+  mtCurrentId = id;
+  document.querySelectorAll('#mtPageList .mt-item').forEach(function(el) { el.classList.toggle('active', el.dataset.id === id); });
+  var detail = document.getElementById('mtDetail');
+  if (!detail) return;
+  detail.innerHTML = '<div class="kv-loading">Loading...</div>';
+  try {
+    var m = await fetch('/api/meetings/' + encodeURIComponent(id), { headers: authHeaders() }).then(function(r) {
+      if (!r.ok) throw new Error('Meeting not found');
+      return r.json();
+    });
+    var html = '<div class="mt-detail-title">' + esc(m.title || 'Untitled') + '</div>';
+    html += '<div class="mt-detail-meta">';
+    if (m.date) html += '<span>Date: ' + esc(new Date(m.date).toLocaleString()) + '</span>';
+    if (m.duration) html += '<span>Duration: ' + esc(m.duration) + '</span>';
+    if (m.participants && m.participants.length > 0) html += '<span>Participants: ' + esc(m.participants.join(', ')) + '</span>';
+    html += '<span class="mt-status ' + esc(m.status || '') + '">' + esc(m.status || '') + '</span>';
+    html += '</div>';
+
+    if (m.summary) {
+      html += '<div class="mt-section"><h3>Summary</h3><p style="font-size:13px;color:#c9d1d9;line-height:1.8">' + esc(m.summary) + '</p></div>';
+    }
+    if (m.decisions && m.decisions.length > 0) {
+      html += '<div class="mt-section"><h3>Decisions</h3><ul>';
+      for (var d = 0; d < m.decisions.length; d++) html += '<li>' + esc(m.decisions[d]) + '</li>';
+      html += '</ul></div>';
+    }
+    if (m.action_items && m.action_items.length > 0) {
+      html += '<div class="mt-section"><h3>Action Items</h3><ul>';
+      for (var a = 0; a < m.action_items.length; a++) {
+        var ai = m.action_items[a];
+        var checked = ai.done ? ' checked' : '';
+        html += '<li><label><input type="checkbox"' + checked + ' disabled> ' + esc(ai.description);
+        if (ai.assignee) html += ' <span style="color:#58a6ff">@' + esc(ai.assignee) + '</span>';
+        if (ai.due_date) html += ' <span style="color:#d29922">(Due: ' + esc(ai.due_date) + ')</span>';
+        html += '</label></li>';
+      }
+      html += '</ul></div>';
+    }
+    if (m.transcript) {
+      html += '<div class="mt-section"><h3>Transcript</h3><div class="mt-transcript">' + esc(m.transcript) + '</div></div>';
+    }
+    detail.innerHTML = html;
+  } catch (e) {
+    detail.innerHTML = '<div class="mt-empty">' + esc(e.message) + '</div>';
+  }
+}
+
+async function handleMeetingUpload(input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  if (file.size > 100 * 1024 * 1024) {
+    showToast('File too large (max 100MB)');
+    input.value = '';
+    return;
+  }
+  var title = prompt('Meeting title:', file.name.replace(/\.[^.]+$/, ''));
+  if (title === null) { input.value = ''; return; }
+  var participants = prompt('Participants (comma-separated):', '');
+  var fd = new FormData();
+  fd.append('file', file);
+  fd.append('title', title || file.name);
+  if (participants) fd.append('participants', participants);
+  try {
+    showToast('Uploading...');
+    var res = await fetch('/api/meetings/upload', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('naozhi_token') || '') },
+      body: fd
+    });
+    if (!res.ok) {
+      var err = await res.json().catch(function() { return {}; });
+      throw new Error(err.error || 'Upload failed');
+    }
+    showToast('Meeting uploaded, processing...');
+    setTimeout(loadMeetingList, 1000);
+  } catch (e) {
+    showToast('Upload error: ' + e.message);
+  }
+  input.value = '';
+}
+
 /* ===== Task 14: Context Panel ===== */
 
 let ctxPanelOpen = false;
@@ -6799,6 +6967,286 @@ function _searchUpdateSelection() {
       items[i].classList.remove('selected');
     }
   }
+}
+
+// ─── Session Replay Viewer ──────────────────────────────────────────────────
+var _replayTimeline = null;
+var _replayTimer = null;
+var _replayIdx = 0;
+var _replaySpeed = 1;
+var _replayPlaying = false;
+
+function openReplayViewer(sessionKey) {
+  if (!sessionKey) return;
+  fetch('/api/sessions/replay?key=' + encodeURIComponent(sessionKey))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      _replayTimeline = data;
+      _replayIdx = 0;
+      _replaySpeed = 1;
+      _replayPlaying = false;
+      showReplayOverlay();
+    })
+    .catch(function() { alert('Failed to load replay data'); });
+}
+
+function showReplayOverlay() {
+  var existing = document.getElementById('replayOverlay');
+  if (existing) existing.remove();
+  var tl = _replayTimeline;
+  if (!tl) return;
+  var totalSec = Math.round((tl.total_duration_ms || 0) / 1000);
+  var totalTime = Math.floor(totalSec/60) + ':' + String(totalSec%60).padStart(2,'0');
+
+  var ov = document.createElement('div');
+  ov.id = 'replayOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;color:#c9d1d9;font-family:monospace';
+  ov.innerHTML =
+    '<div style="padding:12px 20px;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between">' +
+      '<div><b>Session Replay</b> <span style="color:#8b949e;font-size:12px">' + esc(tl.session_key) + '</span></div>' +
+      '<div style="display:flex;gap:8px;align-items:center">' +
+        '<button onclick="shareReplaySession(\'' + escJs(tl.session_key) + '\')" style="background:#238636;border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px">Share</button>' +
+        '<button onclick="closeReplayOverlay()" style="background:none;border:none;color:#8b949e;cursor:pointer;font-size:18px">&#x2715;</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="replayContent" style="flex:1;overflow-y:auto;padding:16px 24px;max-width:900px;margin:0 auto;width:100%"></div>' +
+    '<div style="padding:10px 20px;border-top:1px solid #30363d;display:flex;align-items:center;gap:12px">' +
+      '<button id="replayPlayBtn" onclick="toggleReplayPlay()" style="background:none;border:none;color:#58a6ff;cursor:pointer;font-size:18px">&#9654;</button>' +
+      '<input type="range" id="replayScrub" min="0" max="' + Math.max(tl.events.length-1,0) + '" value="0" style="flex:1;accent-color:#58a6ff" oninput="scrubReplay(this.value)">' +
+      '<span id="replayTime" style="font-size:12px;color:#8b949e;min-width:80px;text-align:right">0:00 / ' + totalTime + '</span>' +
+      '<div style="display:flex;gap:4px">' +
+        '<button onclick="setReplaySpeed(1)" class="rs-btn" data-speed="1" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px">1x</button>' +
+        '<button onclick="setReplaySpeed(2)" class="rs-btn" data-speed="2" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px">2x</button>' +
+        '<button onclick="setReplaySpeed(4)" class="rs-btn" data-speed="4" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px">4x</button>' +
+      '</div>' +
+      '<span style="font-size:11px;color:#6e7681">' + (tl.stats ? tl.stats.event_count + ' events, ' + tl.stats.tool_call_count + ' tools' : '') + '</span>' +
+    '</div>';
+  document.body.appendChild(ov);
+  renderReplayUpTo(0);
+}
+
+function closeReplayOverlay() {
+  stopReplayTimer();
+  var ov = document.getElementById('replayOverlay');
+  if (ov) ov.remove();
+  _replayTimeline = null;
+}
+
+function renderReplayUpTo(idx) {
+  var el = document.getElementById('replayContent');
+  if (!el || !_replayTimeline) return;
+  var events = _replayTimeline.events;
+  var html = '';
+  for (var i = 0; i <= idx && i < events.length; i++) {
+    var ev = events[i];
+    var icon = '', cls = 'text';
+    if (ev.type === 'tool_use') { icon = '\u{1f527}'; cls = 'tool_use'; }
+    else if (ev.type === 'thinking') { icon = '\u{1f4ad}'; cls = 'thinking'; }
+    else if (ev.type === 'result') { icon = '\u2705'; cls = 'result'; }
+    else if (ev.type === 'text') { icon = '\u{1f916}'; cls = 'text'; }
+    else { icon = '\u2022'; cls = 'system'; }
+    var timeSec = Math.round(ev.delta_ms / 1000);
+    var timeStr = Math.floor(timeSec/60) + ':' + String(timeSec%60).padStart(2,'0');
+    var content = ev.content || ev.tool_name || '';
+    if (content.length > 500) content = content.substring(0, 500) + '...';
+    html += '<div style="display:flex;gap:10px;padding:4px 0;opacity:' + (i === idx ? '1' : '.7') + '">' +
+      '<span style="font-size:13px;min-width:22px">' + icon + '</span>' +
+      '<div style="flex:1;font-size:14px;line-height:1.5">' +
+        (ev.tool_name ? '<span style="color:#d2a8ff;font-size:12px;background:#21262d;padding:1px 6px;border-radius:3px">' + esc(ev.tool_name) + '</span> ' : '') +
+        '<span style="color:' + (cls==='thinking'?'#a5d6ff':cls==='result'?'#7ee787':'#c9d1d9') + '">' + esc(content) + '</span>' +
+      '</div>' +
+      '<span style="font-size:11px;color:#484f58;min-width:40px;text-align:right">' + timeStr + '</span>' +
+    '</div>';
+  }
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+  var scrub = document.getElementById('replayScrub');
+  if (scrub) scrub.value = idx;
+  updateReplayTime(idx);
+}
+
+function updateReplayTime(idx) {
+  var el = document.getElementById('replayTime');
+  if (!el || !_replayTimeline) return;
+  var events = _replayTimeline.events;
+  var cur = idx < events.length ? events[idx].delta_ms : _replayTimeline.total_duration_ms;
+  var curSec = Math.round(cur / 1000);
+  var totalSec = Math.round((_replayTimeline.total_duration_ms || 0) / 1000);
+  el.textContent = Math.floor(curSec/60) + ':' + String(curSec%60).padStart(2,'0') + ' / ' + Math.floor(totalSec/60) + ':' + String(totalSec%60).padStart(2,'0');
+}
+
+function toggleReplayPlay() {
+  if (_replayPlaying) { stopReplayTimer(); return; }
+  _replayPlaying = true;
+  var btn = document.getElementById('replayPlayBtn');
+  if (btn) btn.innerHTML = '&#9646;&#9646;';
+  advanceReplay();
+}
+
+function stopReplayTimer() {
+  _replayPlaying = false;
+  if (_replayTimer) { clearTimeout(_replayTimer); _replayTimer = null; }
+  var btn = document.getElementById('replayPlayBtn');
+  if (btn) btn.innerHTML = '&#9654;';
+}
+
+function advanceReplay() {
+  if (!_replayPlaying || !_replayTimeline) return;
+  var events = _replayTimeline.events;
+  if (_replayIdx >= events.length - 1) { stopReplayTimer(); return; }
+  _replayIdx++;
+  renderReplayUpTo(_replayIdx);
+  var delay = 100;
+  if (_replayIdx < events.length - 1) {
+    delay = Math.max(50, (events[_replayIdx + 1].delta_ms - events[_replayIdx].delta_ms) / _replaySpeed);
+    delay = Math.min(delay, 2000); // cap at 2s
+  }
+  _replayTimer = setTimeout(advanceReplay, delay);
+}
+
+function scrubReplay(val) {
+  _replayIdx = parseInt(val, 10);
+  renderReplayUpTo(_replayIdx);
+}
+
+function setReplaySpeed(s) {
+  _replaySpeed = s;
+  document.querySelectorAll('.rs-btn').forEach(function(b) {
+    b.style.borderColor = parseInt(b.dataset.speed) === s ? '#58a6ff' : '#30363d';
+  });
+}
+
+function shareReplaySession(sessionKey) {
+  fetch('/api/sessions/share', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: sessionKey })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.share_url) {
+      navigator.clipboard.writeText(data.share_url).then(function() {
+        alert('Share link copied to clipboard!\n\nExpires: ' + data.expires_at);
+      }).catch(function() {
+        prompt('Share link (copy manually):', data.share_url);
+      });
+    } else {
+      alert('Failed to generate share link');
+    }
+  })
+  .catch(function() { alert('Failed to generate share link'); });
+}
+
+// ─── CTO Digital Twin UI ────────────────────────────────────────────────────
+var _twinConfig = null;
+
+function openTwinPanel() {
+  fetch('/api/twin/config')
+    .then(function(r) { return r.json(); })
+    .then(function(cfg) {
+      _twinConfig = cfg;
+      showTwinOverlay(cfg);
+    })
+    .catch(function() { alert('Failed to load Twin config'); });
+}
+
+function showTwinOverlay(cfg) {
+  var existing = document.getElementById('twinOverlay');
+  if (existing) existing.remove();
+  var ov = document.createElement('div');
+  ov.id = 'twinOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center';
+  ov.onclick = function(e) { if(e.target===ov) closeTwinOverlay(); };
+  ov.innerHTML =
+    '<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;width:520px;max-width:90vw;max-height:80vh;overflow-y:auto;color:#c9d1d9;font-family:monospace">' +
+      '<div style="padding:16px 20px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center">' +
+        '<h3 style="font-size:16px;color:#f0f6fc;margin:0">CTO Digital Twin</h3>' +
+        '<button onclick="closeTwinOverlay()" style="background:none;border:none;color:#8b949e;cursor:pointer;font-size:16px">&#x2715;</button>' +
+      '</div>' +
+      '<div style="padding:16px 20px">' +
+        '<div style="margin-bottom:16px">' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
+            '<input type="checkbox" id="twinEnabled" ' + (cfg.enabled ? 'checked' : '') + ' onchange="updateTwinField(\'enabled\',this.checked)" style="accent-color:#58a6ff">' +
+            '<span>Enable Digital Twin</span>' +
+          '</label>' +
+        '</div>' +
+        '<div style="margin-bottom:12px">' +
+          '<div style="font-size:12px;color:#8b949e;margin-bottom:4px">Name</div>' +
+          '<input id="twinName" value="' + esc(cfg.name || '') + '" style="width:100%;padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px;box-sizing:border-box" onchange="updateTwinField(\'name\',this.value)">' +
+        '</div>' +
+        '<div style="margin-bottom:12px">' +
+          '<div style="font-size:12px;color:#8b949e;margin-bottom:4px">Role</div>' +
+          '<input id="twinRole" value="' + esc(cfg.role || '') + '" style="width:100%;padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px;box-sizing:border-box" onchange="updateTwinField(\'role\',this.value)">' +
+        '</div>' +
+        '<div style="margin-bottom:16px">' +
+          '<div style="font-size:12px;color:#8b949e;margin-bottom:4px">Response Style</div>' +
+          '<select id="twinStyle" style="padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px" onchange="updateTwinField(\'style\',this.value)">' +
+            '<option value="formal"' + (cfg.style === 'formal' ? ' selected' : '') + '>Formal</option>' +
+            '<option value="casual"' + (cfg.style === 'casual' ? ' selected' : '') + '>Casual</option>' +
+          '</select>' +
+        '</div>' +
+        '<div style="border-top:1px solid #21262d;padding-top:16px;margin-bottom:12px">' +
+          '<div style="font-size:14px;color:#f0f6fc;margin-bottom:8px">Test Query</div>' +
+          '<div style="display:flex;gap:8px">' +
+            '<input id="twinTestInput" placeholder="Ask a question to test the Twin..." style="flex:1;padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px" onkeydown="if(event.key===\'Enter\')testTwinQuery()">' +
+            '<button onclick="testTwinQuery()" style="background:#238636;border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:13px">Test</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="twinTestResult" style="display:none;margin-top:12px;padding:12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:13px"></div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+}
+
+function closeTwinOverlay() {
+  var ov = document.getElementById('twinOverlay');
+  if (ov) ov.remove();
+}
+
+function updateTwinField(field, value) {
+  if (!_twinConfig) return;
+  _twinConfig[field] = value;
+  fetch('/api/twin/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(_twinConfig)
+  }).catch(function() {});
+}
+
+function testTwinQuery() {
+  var input = document.getElementById('twinTestInput');
+  var resultEl = document.getElementById('twinTestResult');
+  if (!input || !resultEl) return;
+  var query = input.value.trim();
+  if (!query) return;
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<span style="color:#8b949e">Testing...</span>';
+  fetch('/api/twin/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: query })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var conf = data.confidence || {};
+    var barColor = conf.overall >= 0.8 ? '#3fb950' : (conf.overall >= 0.3 ? '#d29922' : '#da3633');
+    resultEl.innerHTML =
+      '<div style="margin-bottom:8px"><b>Action:</b> <span style="color:#58a6ff">' + esc(data.action || 'N/A') + '</span></div>' +
+      (data.tag ? '<div style="margin-bottom:8px;color:#8b949e">' + esc(data.tag) + '</div>' : '') +
+      '<div style="margin-bottom:8px"><b>Confidence:</b> ' + (conf.overall != null ? conf.overall.toFixed(2) : 'N/A') + '</div>' +
+      '<div style="display:flex;gap:16px;margin-bottom:8px;font-size:12px">' +
+        '<span>Coverage: ' + (conf.coverage != null ? conf.coverage.toFixed(2) : '-') + '</span>' +
+        '<span>Recency: ' + (conf.recency != null ? conf.recency.toFixed(2) : '-') + '</span>' +
+        '<span>Specificity: ' + (conf.specificity != null ? conf.specificity.toFixed(2) : '-') + '</span>' +
+      '</div>' +
+      '<div style="height:6px;background:#21262d;border-radius:3px;overflow:hidden;margin-bottom:8px">' +
+        '<div style="height:100%;width:' + ((conf.overall||0)*100) + '%;background:' + barColor + ';border-radius:3px"></div>' +
+      '</div>' +
+      (data.draft ? '<div style="margin-top:8px;padding:8px;background:#161b22;border-radius:4px;white-space:pre-wrap;font-size:12px;color:#c9d1d9">' + esc(data.draft) + '</div>' : '') +
+      (data.error ? '<div style="color:#da3633;margin-top:8px">' + esc(data.error) + '</div>' : '') +
+      (data.note ? '<div style="color:#d29922;margin-top:4px;font-size:12px">' + esc(data.note) + '</div>' : '');
+  })
+  .catch(function() { resultEl.innerHTML = '<span style="color:#da3633">Request failed</span>'; });
 }
 
 // Keyboard shortcuts: Cmd+K search, Cmd+N new session, ESC close

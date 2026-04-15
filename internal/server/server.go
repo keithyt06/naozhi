@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/naozhi/naozhi/internal/graph"
 	"github.com/naozhi/naozhi/internal/knowledge"
 	"github.com/naozhi/naozhi/internal/cron"
 	"github.com/naozhi/naozhi/internal/dispatch"
@@ -67,6 +68,10 @@ type Server struct {
 	sendH       *SendHandler
 	filesH      *FileHandlers
 	knowledgeH  *KnowledgeHandlers
+	graphH      *graph.Handlers
+	meetingH    *MeetingHandlers
+	replayH     *ReplayHandlers
+	twinH       *TwinHandlers
 
 	// Watchdog kill counters — incremented atomically, exposed via /health and /api/sessions.
 	watchdogNoOutputKills atomic.Int64
@@ -313,10 +318,30 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		if searchErr != nil {
 			slog.Warn("search index init failed, knowledge search disabled", "err", searchErr)
 		}
-		s.knowledgeH = NewKnowledgeHandlers(vault, wiki, bookmarks, search)
+		decisions := knowledge.NewDecisionStore(filepath.Join(naozDir, "decisions.json"))
+		s.knowledgeH = NewKnowledgeHandlers(vault, wiki, bookmarks, search, decisions)
 		s.knowledgeH.ingest = knowledge.NewIngestEngine(wiki, vault, search)
 		s.knowledgeH.lint = knowledge.NewLintEngine(wiki, 30)
 		s.knowledgeH.cliSync = knowledge.NewCLISyncManager(search)
+		s.graphH = graph.NewHandlers(wiki.Dir())
+	}
+
+	// Meeting handlers (initialized when naozDir is available)
+	if naozDir != "" {
+		meetingStore := knowledge.NewMeetingStore(filepath.Join(naozDir, "meetings.json"))
+		audioDir := filepath.Join(naozDir, "meetings")
+		processor := knowledge.NewMeetingProcessor(meetingStore, opts.Transcriber, audioDir)
+		s.meetingH = NewMeetingHandlers(meetingStore, processor)
+	}
+
+	// Replay handlers
+	s.replayH = NewReplayHandlers(router)
+
+	// Twin handlers (require wiki from knowledge layer)
+	if naozDir != "" {
+		wiki := knowledge.NewWikiManager(filepath.Join(naozDir, "wiki"))
+		twin := knowledge.NewTwinManager(wiki, naozDir)
+		s.twinH = NewTwinHandlers(twin)
 	}
 
 	// sendH is wired after registerDashboard creates hub

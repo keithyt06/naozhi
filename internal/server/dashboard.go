@@ -100,6 +100,7 @@ func (s *Server) registerDashboard() {
 	if s.patrolH != nil {
 		s.patrolH.RegisterRoutes(s.mux, auth)
 		s.patrolH.RegisterWebhookRoutes(s.mux) // webhooks are unauthenticated
+		s.patrolH.RegisterAlertRoutes(s.mux)    // alert webhooks are unauthenticated
 		if s.patrolMgr != nil {
 			s.patrolMgr.SetHub(s.hub)
 		}
@@ -138,6 +139,38 @@ func (s *Server) registerDashboard() {
 		s.mux.HandleFunc("GET /api/bookmarks", auth(s.knowledgeH.handleBookmarkList))
 		s.mux.HandleFunc("POST /api/bookmarks", auth(s.knowledgeH.handleBookmarkCreate))
 		s.mux.HandleFunc("DELETE /api/bookmarks/", auth(s.knowledgeH.handleBookmarkDelete))
+		s.mux.HandleFunc("GET /api/decisions", auth(s.knowledgeH.handleDecisionList))
+		s.mux.HandleFunc("POST /api/decisions", auth(s.knowledgeH.handleDecisionCreate))
+		s.mux.HandleFunc("GET /api/decisions/", auth(s.knowledgeH.handleDecisionGet))
+	}
+
+	// Graph API (Knowledge Graph)
+	if s.graphH != nil {
+		s.mux.HandleFunc("GET /api/graph", auth(s.graphH.HandleGraph))
+		s.mux.HandleFunc("GET /api/graph/nodes", auth(s.graphH.HandleNodes))
+		s.mux.HandleFunc("GET /api/graph/nodes/", auth(s.graphH.HandleNodeDetail))
+	}
+
+	// Meeting API
+	if s.meetingH != nil {
+		s.mux.HandleFunc("GET /api/meetings", auth(s.meetingH.handleList))
+		s.mux.HandleFunc("POST /api/meetings/upload", auth(s.meetingH.handleUpload))
+		s.mux.HandleFunc("GET /api/meetings/", auth(s.meetingH.handleGet))
+	}
+
+	// Replay API (Session Replay & Sharing)
+	if s.replayH != nil {
+		s.mux.HandleFunc("GET /api/sessions/replay", auth(s.replayH.handleReplay))
+		s.mux.HandleFunc("POST /api/sessions/share", auth(s.replayH.handleShare))
+	}
+
+	// Twin API (CTO Digital Twin)
+	if s.twinH != nil {
+		s.mux.HandleFunc("GET /api/twin/config", auth(s.twinH.handleTwinConfigGet))
+		s.mux.HandleFunc("PUT /api/twin/config", auth(s.twinH.handleTwinConfigPut))
+		s.mux.HandleFunc("POST /api/twin/test", auth(s.twinH.handleTwinTest))
+		s.mux.HandleFunc("GET /api/twin/queue", auth(s.twinH.handleTwinQueue))
+		s.mux.HandleFunc("POST /api/twin/queue/dismiss", auth(s.twinH.handleTwinDismiss))
 	}
 
 	// File Hub API
@@ -149,6 +182,9 @@ func (s *Server) registerDashboard() {
 	s.mux.HandleFunc("DELETE /api/files/delete", auth(s.filesH.handleDelete))
 
 	// Unauthenticated routes (login, static assets, WebSocket with own auth)
+	if s.replayH != nil {
+		s.mux.HandleFunc("GET /api/shared/", s.replayH.handleSharedReplay) // public, no auth
+	}
 	s.mux.HandleFunc("POST /api/auth/login", s.auth.handleLogin)
 	s.mux.HandleFunc("GET /dashboard", s.handleDashboard)
 	s.mux.HandleFunc("GET /manifest.json", s.handleManifest)
