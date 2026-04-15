@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+func newTestSearch(t *testing.T) *SearchEngine {
+	t.Helper()
+	se, err := NewSearchEngine(filepath.Join(t.TempDir(), "test.bleve"))
+	if err != nil {
+		t.Fatalf("NewSearchEngine: %v", err)
+	}
+	t.Cleanup(func() { se.Close() })
+	return se
+}
+
 func TestIngestFromVault(t *testing.T) {
 	// Create a temporary vault with some .md files.
 	vaultDir := t.TempDir()
@@ -16,7 +26,7 @@ func TestIngestFromVault(t *testing.T) {
 	os.WriteFile(filepath.Join(vaultDir, "sub", "note3.md"), []byte("# Sub Note\n\nNested content."), 0644)
 
 	vault := NewVault(VaultConfig{VaultPath: vaultDir})
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	wiki := NewWikiManager(filepath.Join(t.TempDir(), "wiki"))
 	engine := NewIngestEngine(wiki, vault, search)
 
@@ -24,18 +34,27 @@ func TestIngestFromVault(t *testing.T) {
 		t.Fatalf("IngestFromVault: %v", err)
 	}
 
-	count := search.DocumentCount()
+	count, cErr := search.DocumentCount()
+	if cErr != nil {
+		t.Fatalf("DocumentCount: %v", cErr)
+	}
 	if count != 3 {
 		t.Errorf("expected 3 indexed docs, got %d", count)
 	}
 
 	// Verify vault docs are searchable.
-	results := search.Search("WAF", "vault", 10)
+	results, sErr := search.Search("WAF", "vault", 10)
+	if sErr != nil {
+		t.Fatalf("Search WAF: %v", sErr)
+	}
 	if len(results) != 1 {
 		t.Errorf("search 'WAF' in vault: expected 1 result, got %d", len(results))
 	}
 
-	results = search.Search("CloudFront", "vault", 10)
+	results, sErr = search.Search("CloudFront", "vault", 10)
+	if sErr != nil {
+		t.Fatalf("Search CloudFront: %v", sErr)
+	}
 	if len(results) != 1 {
 		t.Errorf("search 'CloudFront' in vault: expected 1 result, got %d", len(results))
 	}
@@ -43,7 +62,7 @@ func TestIngestFromVault(t *testing.T) {
 
 func TestIngestFromVaultNotConfigured(t *testing.T) {
 	vault := NewVault(VaultConfig{}) // no path
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	wiki := NewWikiManager(filepath.Join(t.TempDir(), "wiki"))
 	engine := NewIngestEngine(wiki, vault, search)
 
@@ -63,7 +82,7 @@ func TestIngestFromHistory(t *testing.T) {
 	os.WriteFile(filepath.Join(histDir, "session-abc.jsonl"), []byte(jsonl), 0644)
 
 	vault := NewVault(VaultConfig{})
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	wiki := NewWikiManager(filepath.Join(t.TempDir(), "wiki"))
 	engine := NewIngestEngine(wiki, vault, search)
 
@@ -71,19 +90,25 @@ func TestIngestFromHistory(t *testing.T) {
 		t.Fatalf("IngestFromHistory: %v", err)
 	}
 
-	count := search.DocumentCount()
+	count, cErr := search.DocumentCount()
+	if cErr != nil {
+		t.Fatalf("DocumentCount: %v", cErr)
+	}
 	if count != 2 {
 		t.Errorf("expected 2 indexed docs (user prompts only), got %d", count)
 	}
 
-	results := search.Search("WAF", "cli", 10)
+	results, sErr := search.Search("WAF", "cli", 10)
+	if sErr != nil {
+		t.Fatalf("Search WAF: %v", sErr)
+	}
 	if len(results) != 1 {
 		t.Errorf("search 'WAF' in cli: expected 1 result, got %d", len(results))
 	}
 }
 
 func TestIngestFromHistoryMissingDir(t *testing.T) {
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	wiki := NewWikiManager(filepath.Join(t.TempDir(), "wiki"))
 	engine := NewIngestEngine(wiki, NewVault(VaultConfig{}), search)
 
@@ -108,25 +133,32 @@ func TestIngestWikiPages(t *testing.T) {
 		t.Fatalf("WritePage: %v", err)
 	}
 
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	engine := NewIngestEngine(wiki, NewVault(VaultConfig{}), search)
 
 	if err := engine.IngestWikiPages(); err != nil {
 		t.Fatalf("IngestWikiPages: %v", err)
 	}
 
-	if search.DocumentCount() != 1 {
-		t.Errorf("expected 1 indexed wiki doc, got %d", search.DocumentCount())
+	count, cErr := search.DocumentCount()
+	if cErr != nil {
+		t.Fatalf("DocumentCount: %v", cErr)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 indexed wiki doc, got %d", count)
 	}
 
-	results := search.Search("rate limiting", "wiki", 10)
+	results, sErr := search.Search("rate limiting", "wiki", 10)
+	if sErr != nil {
+		t.Fatalf("Search: %v", sErr)
+	}
 	if len(results) != 1 {
 		t.Errorf("search 'rate limiting' in wiki: expected 1, got %d", len(results))
 	}
 }
 
 func TestIndexBookmarks(t *testing.T) {
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	wiki := NewWikiManager(filepath.Join(t.TempDir(), "wiki"))
 	engine := NewIngestEngine(wiki, NewVault(VaultConfig{}), search)
 
@@ -137,11 +169,18 @@ func TestIndexBookmarks(t *testing.T) {
 
 	engine.IndexBookmarks(bookmarks)
 
-	if search.DocumentCount() != 2 {
-		t.Errorf("expected 2 indexed bookmark docs, got %d", search.DocumentCount())
+	count, cErr := search.DocumentCount()
+	if cErr != nil {
+		t.Fatalf("DocumentCount: %v", cErr)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 indexed bookmark docs, got %d", count)
 	}
 
-	results := search.Search("WAF", "bookmarks", 10)
+	results, sErr := search.Search("WAF", "bookmarks", 10)
+	if sErr != nil {
+		t.Fatalf("Search: %v", sErr)
+	}
 	if len(results) != 1 {
 		t.Errorf("search 'WAF' in bookmarks: expected 1, got %d", len(results))
 	}

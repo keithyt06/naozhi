@@ -65,7 +65,10 @@ func (ie *IngestEngine) IngestFromVault() error {
 			Timestamp: info.ModTime(),
 			Meta:      relPath,
 		}
-		ie.search.IndexDocument(doc)
+		if idxErr := ie.search.IndexDocument(doc); idxErr != nil {
+			slog.Debug("ingest: index vault file", "path", relPath, "err", idxErr)
+			return nil
+		}
 		count++
 		return nil
 	})
@@ -126,7 +129,10 @@ func (ie *IngestEngine) IngestFromHistory(historyPath string) error {
 				Timestamp: info.ModTime(),
 				Meta:      sessionID,
 			}
-			ie.search.IndexDocument(doc)
+			if idxErr := ie.search.IndexDocument(doc); idxErr != nil {
+				slog.Debug("ingest: index cli prompt", "session", sessionID, "err", idxErr)
+				continue
+			}
 			count++
 		}
 	}
@@ -175,7 +181,10 @@ func (ie *IngestEngine) IngestWikiPages() error {
 			Timestamp: compiledAt,
 			Meta:      page.Name,
 		}
-		ie.search.IndexDocument(doc)
+		if idxErr := ie.search.IndexDocument(doc); idxErr != nil {
+			slog.Debug("ingest: index wiki page", "name", page.Name, "err", idxErr)
+			continue
+		}
 		count++
 	}
 
@@ -190,6 +199,7 @@ func (ie *IngestEngine) IndexBookmarks(bookmarks []Bookmark) {
 		return
 	}
 
+	count := 0
 	for _, bm := range bookmarks {
 		doc := SearchDocument{
 			ID:        "bookmarks:" + bm.ID,
@@ -200,9 +210,13 @@ func (ie *IngestEngine) IndexBookmarks(bookmarks []Bookmark) {
 			Timestamp: bm.CreatedAt,
 			Meta:      bm.SessionKey,
 		}
-		ie.search.IndexDocument(doc)
+		if idxErr := ie.search.IndexDocument(doc); idxErr != nil {
+			slog.Debug("ingest: index bookmark", "id", bm.ID, "err", idxErr)
+			continue
+		}
+		count++
 	}
-	slog.Debug("ingest: indexed bookmarks", "count", len(bookmarks))
+	slog.Debug("ingest: indexed bookmarks", "count", count)
 }
 
 // parseHistoryPrompts reads a JSONL file and extracts all user prompt texts.

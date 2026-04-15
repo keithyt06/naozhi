@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/naozhi/naozhi/internal/knowledge"
@@ -191,20 +192,35 @@ func (kh *KnowledgeHandlers) handleSearch(w http.ResponseWriter, r *http.Request
 		source = "all"
 	}
 	if query == "" {
-		writeJSONStatus(w, map[string]interface{}{"results": []struct{}{}}, http.StatusOK)
+		writeJSONStatus(w, map[string]string{"error": "q parameter is required"}, http.StatusBadRequest)
 		return
 	}
 	if kh.search == nil {
-		writeJSONStatus(w, map[string]interface{}{"results": []struct{}{}}, http.StatusOK)
+		writeJSONStatus(w, map[string]string{"error": "search not available"}, http.StatusServiceUnavailable)
 		return
 	}
-	results := kh.search.Search(query, source, 20)
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if n, err := strconv.Atoi(limitStr); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	results, err := kh.search.Search(query, source, limit)
+	if err != nil {
+		slog.Warn("search query failed", "q", query, "err", err)
+		writeJSONStatus(w, map[string]string{"error": "search failed"}, http.StatusInternalServerError)
+		return
+	}
 	if results == nil {
 		results = []knowledge.SearchResult{}
 	}
 	writeJSONStatus(w, map[string]interface{}{
+		"query":   query,
 		"results": results,
-		"count":   len(results),
+		"total":   len(results),
 	}, http.StatusOK)
 }
 
@@ -273,14 +289,24 @@ func (kh *KnowledgeHandlers) handleBookmarkDelete(w http.ResponseWriter, r *http
 func (kh *KnowledgeHandlers) handleSearchStats(w http.ResponseWriter, r *http.Request) {
 	if kh.search == nil {
 		writeJSONStatus(w, map[string]interface{}{
-			"total":      0,
-			"by_source":  map[string]int{},
+			"total":     0,
+			"by_source": map[string]int{},
 		}, http.StatusOK)
 		return
 	}
+	total, err := kh.search.DocumentCount()
+	if err != nil {
+		writeJSONStatus(w, map[string]string{"error": "count failed"}, http.StatusInternalServerError)
+		return
+	}
+	bySource, err := kh.search.DocCountBySource()
+	if err != nil {
+		writeJSONStatus(w, map[string]string{"error": "facet count failed"}, http.StatusInternalServerError)
+		return
+	}
 	writeJSONStatus(w, map[string]interface{}{
-		"total":     kh.search.DocumentCount(),
-		"by_source": kh.search.DocCountBySource(),
+		"total":     total,
+		"by_source": bySource,
 	}, http.StatusOK)
 }
 

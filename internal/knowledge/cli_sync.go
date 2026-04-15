@@ -106,7 +106,10 @@ func (csm *CLISyncManager) ScanHistory(claudeDir string) (int, error) {
 					Timestamp: entry.Timestamp,
 					Meta:      entry.SessionID,
 				}
-				csm.search.IndexDocument(doc)
+				if idxErr := csm.search.IndexDocument(doc); idxErr != nil {
+					slog.Debug("cli_sync: index entry", "session", entry.SessionID, "err", idxErr)
+					continue
+				}
 				totalIndexed++
 			}
 		}

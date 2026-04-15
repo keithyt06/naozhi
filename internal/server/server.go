@@ -283,7 +283,10 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		vault := newVaultFromOpts(opts)
 		wiki := knowledge.NewWikiManager(filepath.Join(naozDir, "wiki"))
 		bookmarks := knowledge.NewBookmarkStore(filepath.Join(naozDir, "bookmarks.json"))
-		search := knowledge.NewSearchEngine()
+		search, searchErr := knowledge.NewSearchEngine(filepath.Join(naozDir, "search.bleve"))
+		if searchErr != nil {
+			slog.Warn("search index init failed, knowledge search disabled", "err", searchErr)
+		}
 		s.knowledgeH = NewKnowledgeHandlers(vault, wiki, bookmarks, search)
 		s.knowledgeH.ingest = knowledge.NewIngestEngine(wiki, vault, search)
 		s.knowledgeH.lint = knowledge.NewLintEngine(wiki, 30)
@@ -389,6 +392,13 @@ func (s *Server) Start(ctx context.Context) error {
 				if err := rp.Stop(); err != nil {
 					slog.Error("stop platform", "name", p.Name(), "err", err)
 				}
+			}
+		}
+
+		// Close bleve search index (flush pending writes to disk)
+		if s.knowledgeH != nil && s.knowledgeH.search != nil {
+			if err := s.knowledgeH.search.Close(); err != nil {
+				slog.Error("close search index", "err", err)
 			}
 		}
 

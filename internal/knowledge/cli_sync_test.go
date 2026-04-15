@@ -18,7 +18,7 @@ func TestCLISyncScanHistory(t *testing.T) {
 `
 	os.WriteFile(filepath.Join(projDir, "session-123.jsonl"), []byte(jsonl), 0644)
 
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	csm := NewCLISyncManager(search)
 
 	n, err := csm.ScanHistory(claudeDir)
@@ -30,16 +30,26 @@ func TestCLISyncScanHistory(t *testing.T) {
 	}
 
 	// Verify indexed documents.
-	if search.DocumentCount() != 2 {
-		t.Errorf("expected 2 docs in search, got %d", search.DocumentCount())
+	count, cErr := search.DocumentCount()
+	if cErr != nil {
+		t.Fatalf("DocumentCount: %v", cErr)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 docs in search, got %d", count)
 	}
 
-	results := search.Search("CloudFront", "cli", 10)
+	results, sErr := search.Search("CloudFront", "cli", 10)
+	if sErr != nil {
+		t.Fatalf("Search CloudFront: %v", sErr)
+	}
 	if len(results) != 1 {
 		t.Errorf("search 'CloudFront': expected 1, got %d", len(results))
 	}
 
-	results = search.Search("cache invalidation", "cli", 10)
+	results, sErr = search.Search("cache invalidation", "cli", 10)
+	if sErr != nil {
+		t.Fatalf("Search cache invalidation: %v", sErr)
+	}
 	if len(results) != 1 {
 		t.Errorf("search 'cache invalidation': expected 1, got %d", len(results))
 	}
@@ -54,7 +64,7 @@ func TestCLISyncIncremental(t *testing.T) {
 `
 	os.WriteFile(filepath.Join(projDir, "sess-a.jsonl"), []byte(jsonl1), 0644)
 
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	csm := NewCLISyncManager(search)
 
 	// First scan.
@@ -77,7 +87,7 @@ func TestCLISyncIncremental(t *testing.T) {
 }
 
 func TestCLISyncMissingDir(t *testing.T) {
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 	csm := NewCLISyncManager(search)
 
 	n, err := csm.ScanHistory("/tmp/nonexistent-claude-dir-99999")
@@ -143,14 +153,23 @@ func TestParseHistoryLine(t *testing.T) {
 }
 
 func TestDocCountBySource(t *testing.T) {
-	search := NewSearchEngine()
+	search := newTestSearch(t)
 
-	search.IndexDocument(SearchDocument{ID: "a", Source: "vault", Title: "A", Text: "content"})
-	search.IndexDocument(SearchDocument{ID: "b", Source: "vault", Title: "B", Text: "content"})
-	search.IndexDocument(SearchDocument{ID: "c", Source: "cli", Title: "C", Text: "content"})
-	search.IndexDocument(SearchDocument{ID: "d", Source: "wiki", Title: "D", Text: "content"})
+	for _, doc := range []SearchDocument{
+		{ID: "a", Source: "vault", Title: "A", Text: "content"},
+		{ID: "b", Source: "vault", Title: "B", Text: "content"},
+		{ID: "c", Source: "cli", Title: "C", Text: "content"},
+		{ID: "d", Source: "wiki", Title: "D", Text: "content"},
+	} {
+		if err := search.IndexDocument(doc); err != nil {
+			t.Fatalf("IndexDocument(%s): %v", doc.ID, err)
+		}
+	}
 
-	counts := search.DocCountBySource()
+	counts, err := search.DocCountBySource()
+	if err != nil {
+		t.Fatalf("DocCountBySource: %v", err)
+	}
 	if counts["vault"] != 2 {
 		t.Errorf("vault count = %d, want 2", counts["vault"])
 	}
