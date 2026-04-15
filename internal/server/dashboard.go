@@ -228,6 +228,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	// Gzip compress the response if the client supports it.
 	// The embedded dashboard HTML is ~370KB; gzip reduces it to ~100KB.
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Del("Content-Length")
 		w.Header().Set("Content-Encoding", "gzip")
 		gz := gzip.NewWriter(w)
 		defer gz.Close()

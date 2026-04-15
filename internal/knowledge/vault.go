@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -160,7 +161,7 @@ func processImageEmbeds(src []byte) []byte {
 		parts := imageEmbedRe.FindSubmatch(match)
 		filename := string(parts[1])
 		// Pass the filename to the raw handler; it will resolve asset paths
-		return []byte(fmt.Sprintf(`<img class="obs-img" src="/api/vault/raw?path=%s" alt="%s">`, filename, filename))
+		return []byte(fmt.Sprintf(`<img class="obs-img" src="/api/vault/raw?path=%s" alt="%s">`, url.QueryEscape(filename), filename))
 	})
 }
 
@@ -249,7 +250,7 @@ func processCallouts(src []byte) []byte {
 			foldAttr := ""
 			if folded {
 				foldClass = " folded"
-				foldAttr = ` onclick="this.classList.toggle('folded')"`
+				foldAttr = ` data-foldable="true"`
 			}
 			result = append(result, []byte(fmt.Sprintf(`<div class="callout %s%s"%s><div class="callout-title">%s</div><div class="callout-content">`, calloutType, foldClass, foldAttr, title)))
 			inCallout = true
