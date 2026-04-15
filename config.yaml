@@ -57,6 +57,12 @@ transcribe:
   region: "ap-northeast-1"
   language: "zh-CN,en-US"
 
+knowledge:
+  obsidian:
+    vault_path: "~/keith-space/Obsidian/vaults/Keith_Space_2026"
+    include_paths: ["Things/", "page/", "journals/", "background/"]
+    exclude_paths: [".obsidian/", "assets/", ".trash/", ".claude/", ".makemd/", ".space/"]
+
 projects:
   root: "/home/ec2-user/workspace"
   planner_defaults:

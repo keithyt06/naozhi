@@ -28,6 +28,7 @@ type Config struct {
 	Cron          CronConfig                  `yaml:"cron"`
 	Log           LogConfig                   `yaml:"log"`
 	Projects      ProjectsConfig              `yaml:"projects"`
+	Knowledge     KnowledgeConfig             `yaml:"knowledge"`
 
 	// Cached parsed durations (populated once in Load, avoids repeated ParseDuration)
 	cachedTTL             time.Duration `yaml:"-"`
@@ -40,6 +41,16 @@ type Config struct {
 type WorkspaceConfig struct {
 	ID   string `yaml:"id"`   // unique identifier (default: hostname)
 	Name string `yaml:"name"` // display name (default: id)
+}
+
+type KnowledgeConfig struct {
+	Obsidian ObsidianConfig `yaml:"obsidian"`
+}
+
+type ObsidianConfig struct {
+	VaultPath    string   `yaml:"vault_path"`
+	IncludePaths []string `yaml:"include_paths"`
+	ExcludePaths []string `yaml:"exclude_paths"`
 }
 
 type ProjectsConfig struct {

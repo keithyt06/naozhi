@@ -471,6 +471,9 @@ func main() {
 		Nodes:             nodes,
 		ReverseNodeServer: rns,
 		Transcriber:       stt,
+		VaultPath:         config.ExpandHome(cfg.Knowledge.Obsidian.VaultPath),
+		VaultInclude:      cfg.Knowledge.Obsidian.IncludePaths,
+		VaultExclude:      cfg.Knowledge.Obsidian.ExcludePaths,
 	})
 
 	// Start upstream connector (this node connects to a primary)
