@@ -101,6 +101,21 @@ func (s *Server) registerDashboard() {
 	s.mux.HandleFunc("PATCH /api/sessions/rename", auth(s.hub.handleRename))
 	s.mux.HandleFunc("PATCH /api/sessions/pin", auth(s.hub.handlePin))
 
+	// Knowledge API
+	if s.knowledgeH != nil {
+		s.mux.HandleFunc("GET /api/vault/tree", auth(s.knowledgeH.handleVaultTree))
+		s.mux.HandleFunc("GET /api/vault/read", auth(s.knowledgeH.handleVaultRead))
+		s.mux.HandleFunc("GET /api/vault/raw", auth(s.knowledgeH.handleVaultRaw))
+		s.mux.HandleFunc("GET /api/wiki", auth(s.knowledgeH.handleWikiList))
+		s.mux.HandleFunc("GET /api/wiki/", auth(s.knowledgeH.handleWikiRead))
+		s.mux.HandleFunc("POST /api/wiki/ingest", auth(s.knowledgeH.handleWikiIngest))
+		s.mux.HandleFunc("POST /api/wiki/lint", auth(s.knowledgeH.handleWikiLint))
+		s.mux.HandleFunc("GET /api/search", auth(s.knowledgeH.handleSearch))
+		s.mux.HandleFunc("GET /api/bookmarks", auth(s.knowledgeH.handleBookmarkList))
+		s.mux.HandleFunc("POST /api/bookmarks", auth(s.knowledgeH.handleBookmarkCreate))
+		s.mux.HandleFunc("DELETE /api/bookmarks/", auth(s.knowledgeH.handleBookmarkDelete))
+	}
+
 	// File Hub API
 	s.mux.HandleFunc("GET /api/files/list", auth(s.filesH.handleList))
 	s.mux.HandleFunc("GET /api/files/stat", auth(s.filesH.handleStat))

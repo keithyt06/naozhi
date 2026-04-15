@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/naozhi/naozhi/internal/knowledge"
 	"github.com/naozhi/naozhi/internal/cron"
 	"github.com/naozhi/naozhi/internal/dispatch"
 	"github.com/naozhi/naozhi/internal/node"
@@ -60,6 +61,7 @@ type Server struct {
 	healthH     *HealthHandler
 	sendH       *SendHandler
 	filesH      *FileHandlers
+	knowledgeH  *KnowledgeHandlers
 
 	// Watchdog kill counters — incremented atomically, exposed via /health and /api/sessions.
 	watchdogNoOutputKills atomic.Int64
@@ -103,6 +105,17 @@ func generateCookieSecret() []byte {
 	return b
 }
 
+func newVaultFromOpts(opts ServerOptions) *knowledge.Vault {
+	if opts.VaultPath == "" {
+		return knowledge.NewVault(knowledge.VaultConfig{})
+	}
+	return knowledge.NewVault(knowledge.VaultConfig{
+		VaultPath:    opts.VaultPath,
+		IncludePaths: opts.VaultInclude,
+		ExcludePaths: opts.VaultExclude,
+	})
+}
+
 // New creates a new Server.
 // ServerOptions holds optional configuration for a Server.
 // All fields have zero-value defaults (empty string, nil, zero duration = disabled/unset).
@@ -118,6 +131,9 @@ type ServerOptions struct {
 	Nodes             map[string]node.Conn
 	ReverseNodeServer *node.ReverseServer
 	Transcriber       transcribe.Service
+	VaultPath         string   // Obsidian vault path
+	VaultInclude      []string // include paths within vault
+	VaultExclude      []string // exclude paths within vault
 }
 
 func New(addr string, router *session.Router, platforms map[string]platform.Platform, agents map[string]session.AgentOpts, agentCommands map[string]string, scheduler *cron.Scheduler, backend string, opts ServerOptions) *Server {
@@ -261,6 +277,16 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 			return s.hub.DroppedMessages()
 		},
 	}
+	// Knowledge handlers (initialized even if vault not configured — handlers return 503)
+	if home, err := os.UserHomeDir(); err == nil {
+		naozDir := filepath.Join(home, ".naozhi")
+		vault := newVaultFromOpts(opts)
+		wiki := knowledge.NewWikiManager(filepath.Join(naozDir, "wiki"))
+		bookmarks := knowledge.NewBookmarkStore(filepath.Join(naozDir, "bookmarks.json"))
+		search := knowledge.NewSearchEngine()
+		s.knowledgeH = NewKnowledgeHandlers(vault, wiki, bookmarks, search)
+	}
+
 	// sendH is wired after registerDashboard creates hub
 
 	if opts.ReverseNodeServer != nil {
