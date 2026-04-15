@@ -20,7 +20,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .resizer{width:4px;cursor:col-resize;background:#30363d;flex-shrink:0;transition:background .15s}
 .resizer:hover,.resizer.dragging{background:#58a6ff}
 .sidebar-header{padding:16px;border-bottom:1px solid #30363d}
-.sidebar-header .header-row{display:flex;align-items:center;justify-content:space-between}
+.sidebar-header .header-row{display:flex;align-items:center;justify-content:space-between;position:relative}
 .sidebar-header h1{font-size:19px;color:#f0f6fc;font-weight:600}
 .session-list{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d transparent}
 
@@ -234,6 +234,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .md-code-wrap:hover .md-copy-btn{opacity:1}
 .md-copy-btn:hover{background:#30363d;color:#c9d1d9}
 .md-copy-btn.copied{color:#3fb950;border-color:#3fb950}
+/* Shiki code block container */
+.code-block{background:#161b22;border:1px solid #30363d;border-radius:8px;margin:8px 0;overflow:hidden}
+.code-block .code-hdr{display:flex;align-items:center;justify-content:space-between;padding:5px 12px;background:#1c2128;border-bottom:1px solid #30363d;font-size:11px}
+.code-block .code-lang{color:#8b949e;font-weight:600;font-family:'SF Mono',monospace}
+.code-block .code-actions{display:flex;gap:4px}
+.code-block .code-btn{background:#21262d;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:10px;padding:2px 8px;cursor:pointer;transition:all .15s;font-family:inherit}
+.code-block .code-btn:hover{color:#c9d1d9;border-color:#484f58}
+.code-block .code-btn.copied{color:#3fb950;border-color:#3fb950}
+.code-block .shiki{padding:10px 12px;margin:0;overflow-x:auto;font-size:13px;line-height:1.6;background:transparent!important}
+.code-block .shiki code{font-family:'SF Mono',SFMono-Regular,Consolas,monospace}
+.code-block .code-area{overflow-x:auto}
 .md-code{background:#30363d;color:#e6edf3;padding:1px 5px;border-radius:4px;font-size:13px;font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace}
 .md-h1,.md-h2,.md-h3,.md-h4{display:block;color:#f0f6fc;margin:8px 0 4px}
 .md-h1{font-size:16px}.md-h2{font-size:15px}.md-h3{font-size:14px}
@@ -243,6 +254,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .md-ol li{margin:2px 0;line-height:1.6}
 .md-link{color:#58a6ff;text-decoration:none}
 .md-link:hover{text-decoration:underline}
+/* Diff rendering (Task 3) */
+.diff-block{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:12px;line-height:1.7;border-radius:6px;overflow:hidden;margin:4px 0}
+.diff-block .diff-hdr{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#1c2128;border-bottom:1px solid #30363d;font-size:11px}
+.diff-block .diff-file{color:#e6edf3;font-weight:500}
+.diff-block .diff-stat{margin-left:auto;font-size:11px}
+.diff-block .diff-stat .add{color:#3fb950}
+.diff-block .diff-stat .del{color:#da3633}
+.diff-line{padding:0 12px;white-space:pre-wrap;word-break:break-word}
+.diff-line.add{background:rgba(63,185,80,.08);color:#aff5b4}
+.diff-line.del{background:rgba(218,54,51,.08);color:#ffa198}
+.diff-line.ctx{color:#8b949e}
+/* Long output collapse (Task 4) */
+.collapse-wrap{position:relative;max-height:200px;overflow:hidden;transition:max-height .4s ease}
+.collapse-wrap.expanded{max-height:none}
+.collapse-grad{position:absolute;bottom:0;left:0;right:0;height:60px;background:linear-gradient(transparent,#0d1117);display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;pointer-events:none;transition:opacity .3s}
+.collapse-wrap.expanded .collapse-grad{opacity:0}
+.collapse-grad .collapse-btn{pointer-events:auto;background:#21262d;border:1px solid #30363d;color:#58a6ff;font-size:11px;padding:4px 14px;border-radius:14px;cursor:pointer;font-family:inherit}
+.collapse-grad .collapse-btn:hover{background:#30363d}
+/* Tool call cards (Task 2) */
+.tool-card{background:#161b22;border:1px solid #30363d;border-radius:8px;margin:6px 0;overflow:hidden;transition:border-color .15s}
+.tool-card:hover{border-color:#484f58}
+.tool-card .tool-hdr{display:flex;align-items:center;gap:6px;padding:7px 12px;background:#1c2128;border-bottom:1px solid #30363d;cursor:pointer;transition:background .12s;font-size:12px}
+.tool-card .tool-hdr:hover{background:#21262d}
+.tool-card .t-icon{font-size:14px}
+.tool-card .t-name{color:#58a6ff;font-weight:600}
+.tool-card .t-detail{color:#8b949e;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool-card .t-status{color:#3fb950;font-size:11px}
+.tool-card .t-expand{color:#484f58;font-size:10px;transition:transform .2s}
+.tool-card .t-expand.open{transform:rotate(180deg)}
+.tool-card .tool-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.tool-card .tool-body.open{max-height:400px;overflow-y:auto}
+.tool-card .tool-body-inner{padding:10px 12px;font-size:12px;font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;color:#8b949e;white-space:pre-wrap;word-break:break-word}
 .md-table-wrap{overflow-x:auto;max-width:100%;margin:8px 0}
 .md-table{width:100%;border-collapse:collapse;font-size:14px}
 .md-table th,.md-table td{border:1px solid #30363d;padding:5px 10px;text-align:left}
@@ -296,6 +339,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 
 /* ===== Mobile (≤768px) ===== */
 .btn-mobile-back{display:none}
+.mobile-tabs{display:none}
+.session-card .swipe-bg{position:absolute;right:0;top:0;bottom:0;width:80px;background:#da3633;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;opacity:0;transition:opacity .15s;pointer-events:none;border-radius:0 4px 4px 0}
 @media(max-width:768px){
   /* Container: block so each panel stacks */
   .container{display:block;height:100%;overflow:hidden}
@@ -350,6 +395,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
   .modal-overlay{align-items:flex-end}
   .modal{width:100%;border-radius:16px 16px 0 0;padding-bottom:max(20px,env(safe-area-inset-bottom));animation:sheet-in .25s ease}
   .modal::before{content:'';display:block;width:36px;height:4px;background:#484f58;border-radius:2px;margin:0 auto 16px}
+  /* Task 10: Bottom tab bar */
+  .mobile-tabs{display:flex;position:fixed;bottom:0;left:0;right:0;background:#161b22;border-top:1px solid #30363d;padding-bottom:env(safe-area-inset-bottom);z-index:15}
+  .m-tab{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 0 4px;cursor:pointer;min-height:50px;justify-content:center;-webkit-tap-highlight-color:transparent}
+  .m-tab .mt-icon{font-size:20px;line-height:1}
+  .m-tab .mt-label{font-size:10px;color:#6e7681;margin-top:2px}
+  .m-tab.active .mt-label{color:#58a6ff}
+  /* Adjust sidebar bottom for tab bar */
+  .sidebar-status{padding-bottom:max(60px,calc(50px + env(safe-area-inset-bottom)))}
+  .session-list{padding-bottom:60px}
+  /* Adjust main content for tab bar */
+  .input-area{padding-bottom:max(calc(12px + 54px + env(safe-area-inset-bottom)),66px)}
+  /* Task 11: Swipe delete reveal */
+  .session-card .swipe-bg{z-index:0}
+  .session-card{overflow:hidden}
+  /* Task 12: Compact tool cards on mobile */
+  .tool-card .tool-hdr{font-size:11px;padding:5px 8px;gap:4px}
+  .tool-card .t-detail{font-size:10px}
+  /* Task 12: Code blocks touch scroll */
+  .md-pre{-webkit-overflow-scrolling:touch}
+  .md-code-wrap{-webkit-overflow-scrolling:touch}
+  /* Task 12: Input area touch targets */
+  .input-row #msg-input{min-height:42px}
+  .btn-send{min-width:44px;min-height:44px}
+  .btn-icon{min-width:44px;min-height:44px}
+  /* Task 12: Bookmark tap visibility (copy btn shown on tap, not hover) */
+  .event.text .md-copy-btn{opacity:0;transition:opacity .2s}
 }
 @keyframes sheet-in{from{transform:translateY(100%)}to{transform:translateY(0)}}
 
@@ -424,8 +495,118 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
   .fh-btn.primary{flex:1;justify-content:center}
   .fh-toolbar{padding-bottom:max(10px,env(safe-area-inset-bottom))}
 }
+/* Cmd+K Search Overlay */
+.search-overlay{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.6);display:none;align-items:flex-start;justify-content:center;padding-top:min(80px,15vh);backdrop-filter:blur(3px)}
+.search-overlay.show{display:flex}
+.search-modal{background:#161b22;border:1px solid #30363d;border-radius:12px;width:min(600px,90vw);max-height:min(500px,70vh);overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.5);animation:searchIn .15s ease}
+@keyframes searchIn{from{opacity:0;transform:scale(.97) translateY(-8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.sm-header{padding:12px 16px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:10px}
+.sm-header input{flex:1;background:none;border:none;color:#f0f6fc;font-size:16px;outline:none;font-family:inherit}
+.sm-header input::placeholder{color:#484f58}
+.sm-esc{color:#484f58;font-size:10px;background:#21262d;padding:2px 6px;border-radius:3px;border:1px solid #30363d;cursor:pointer}
+.sm-body{max-height:min(420px,60vh);overflow-y:auto;scrollbar-width:thin}
+.sm-group{padding:8px 16px 4px;font-size:10px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.3px;background:rgba(13,17,23,.6);position:sticky;top:0;backdrop-filter:blur(8px)}
+.sm-item{padding:10px 16px;display:flex;gap:10px;cursor:pointer;transition:background .08s;border-bottom:1px solid #21262d}
+.sm-item:hover,.sm-item.selected{background:#1c2128}
+.sm-item .si-icon{font-size:14px;flex-shrink:0;width:24px;text-align:center}
+.sm-item .si-body{flex:1;min-width:0}
+.sm-item .si-title{font-size:13px;color:#e6edf3;font-weight:500}
+.sm-item .si-match{font-size:12px;color:#8b949e;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-item .si-match mark{background:none;color:#58a6ff;font-weight:600}
+.sm-item .si-meta{font-size:10px;color:#6e7681;margin-top:2px}
+.sm-empty{padding:32px 16px;text-align:center;color:#484f58;font-size:13px}
+.sm-hint{padding:16px;text-align:center;color:#484f58;font-size:12px}
+/* New Session Modal */
+.ns-overlay{position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.ns-overlay.show{display:flex}
+.ns-modal{background:#161b22;border:1px solid #30363d;border-radius:12px;width:min(480px,90vw);overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.5);animation:nsIn .15s ease}
+@keyframes nsIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.ns-hdr{padding:16px 20px 10px}
+.ns-hdr h3{font-size:16px;color:#f0f6fc;font-weight:600;margin:0}
+.ns-hdr p{font-size:12px;color:#8b949e;margin-top:4px}
+.ns-body{padding:12px 20px}
+.ns-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.3px;font-weight:600;margin-bottom:6px;display:block}
+.ns-agents{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.ns-agent{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .12s}
+.ns-agent:hover{border-color:#484f58}
+.ns-agent.selected{border-color:#58a6ff;background:#1f6feb22}
+.ns-agent .na-name{font-size:13px;color:#e6edf3;font-weight:500;display:flex;align-items:center;gap:5px}
+.ns-agent .na-desc{font-size:10px;color:#8b949e;margin-top:3px}
+.ns-projects{max-height:140px;overflow-y:auto;margin-bottom:14px}
+.ns-proj{padding:8px 12px;border:1px solid #30363d;border-radius:6px;margin-bottom:4px;cursor:pointer;transition:all .12s}
+.ns-proj:hover{border-color:#484f58}
+.ns-proj.selected{border-color:#3fb950;background:#23863622}
+.ns-proj .np-name{font-size:12px;color:#e6edf3;font-weight:500}
+.ns-proj .np-path{font-size:10px;color:#6e7681;font-family:monospace;margin-top:2px}
+.ns-foot{padding:12px 20px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #30363d}
+.ns-foot button{padding:7px 18px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit;border:1px solid #30363d;transition:all .12s}
+.ns-cancel{background:#21262d;color:#c9d1d9}
+.ns-cancel:hover{background:#30363d}
+.ns-create{background:#238636;border-color:#238636!important;color:#fff}
+.ns-create:hover{background:#2ea043}
+@media(max-width:768px){.ns-overlay{align-items:flex-end}.ns-modal{width:100%;border-radius:16px 16px 0 0;animation:nsSheetIn .25s ease}.ns-modal::before{content:'';display:block;width:36px;height:4px;background:#484f58;border-radius:2px;margin:8px auto}}
+@keyframes nsSheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
+/* Notification Center */
+.notif-btn{position:relative}
+.notif-btn .notif-badge{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;border-radius:8px;background:#da3633;color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0 3px;pointer-events:none}
+.notif-panel{position:absolute;top:100%;right:0;z-index:200;width:min(360px,calc(100vw - 32px));max-height:420px;background:#161b22;border:1px solid #30363d;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none;overflow:hidden;animation:pop-in .15s ease;margin-top:4px}
+.notif-panel.show{display:block}
+.notif-panel .np-hdr{padding:10px 14px;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between}
+.notif-panel .np-hdr h4{font-size:13px;color:#f0f6fc;font-weight:600;margin:0}
+.notif-panel .np-clear{font-size:10px;color:#58a6ff;cursor:pointer}
+.notif-panel .np-clear:hover{text-decoration:underline}
+.notif-panel .np-list{max-height:360px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d transparent}
+.notif-item{padding:10px 14px;border-bottom:1px solid #21262d;display:flex;gap:8px;cursor:pointer;transition:background .1s}
+.notif-item:hover{background:#1c2128}
+.notif-item.unread{background:rgba(31,111,235,.04);border-left:3px solid #58a6ff}
+.notif-item.urgent{border-left:3px solid #da3633;background:rgba(218,54,51,.04)}
+.notif-item .ni-icon{font-size:14px;flex-shrink:0;margin-top:2px}
+.notif-item .ni-body{flex:1;min-width:0}
+.notif-item .ni-title{font-size:12px;color:#e6edf3;font-weight:500}
+.notif-item .ni-desc{font-size:11px;color:#8b949e;margin-top:2px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.notif-item .ni-time{font-size:10px;color:#6e7681;margin-top:3px}
+.notif-empty{padding:24px;text-align:center;color:#6e7681;font-size:13px}
+/* Tag filter bar */
+.tag-filter{display:flex;gap:4px;padding:6px 12px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid #21262d;flex-shrink:0}
+.tag-filter::-webkit-scrollbar{display:none}
+.tag-pill{padding:3px 10px;border-radius:12px;font-size:11px;border:1px solid #30363d;color:#8b949e;cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none}
+.tag-pill:hover{color:#c9d1d9}
+.tag-pill.active{background:#1f6feb22;border-color:#1f6feb;color:#58a6ff}
+/* Time group: earlier sessions dimmed */
+.time-group-earlier .session-card{opacity:.65}
+.time-group-earlier .session-card:hover{opacity:.85}
+.time-group-earlier .session-card.active{opacity:1}
 </style>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
+<script type="module">
+import { createHighlighterCore } from 'https://esm.sh/shiki@3.2.1/core';
+import { createOnigurumaEngine } from 'https://esm.sh/shiki@3.2.1/engine/oniguruma';
+window.shikiReady = (async () => {
+  const highlighter = await createHighlighterCore({
+    themes: [import('https://esm.sh/shiki@3.2.1/themes/github-dark.mjs')],
+    langs: [
+      import('https://esm.sh/shiki@3.2.1/langs/go.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/python.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/javascript.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/typescript.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/yaml.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/json.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/bash.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/hcl.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/rust.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/sql.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/html.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/css.mjs'),
+      import('https://esm.sh/shiki@3.2.1/langs/markdown.mjs'),
+    ],
+    engine: createOnigurumaEngine(import('https://esm.sh/shiki@3.2.1/wasm'))
+  });
+  window.shikiHighlighter = highlighter;
+  // Re-highlight any code blocks that rendered before Shiki loaded
+  document.querySelectorAll('.md-pre[data-lang]').forEach(el => highlightBlock(el));
+  return highlighter;
+})();
+</script>
 </head>
 <body>
 <div class="container">
@@ -434,12 +615,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
       <div class="header-row">
         <h1>Dashboard</h1>
         <div class="hdr-btns">
+          <button class="hdr-btn" onclick="openSearch()" title="Search (Cmd+K)"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
           <button class="hdr-btn" id="btn-history" onclick="toggleHistory()" title="History"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg><span class="hdr-badge" id="history-badge" style="display:none"></span></button>
-          <button class="hdr-btn" onclick="createNewSession()" title="New Session"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <button class="hdr-btn" onclick="openNewSessionModal()" title="New Session (Cmd+N)"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
           <button class="hdr-btn" id="btn-files" onclick="openFileHub()" title="Files"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
           <button class="hdr-btn" id="btn-cron" onclick="openCronPanel()" title="Cron Jobs"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5"/><path d="M5 3L2 6"/><path d="M22 6l-3-3"/><path d="M6.38 18.7L4 21"/><path d="M17.64 18.67L20 21"/></svg><span class="hdr-badge" id="cron-badge" style="display:none"></span></button>
+          <button class="hdr-btn notif-btn" id="notifBtn" onclick="toggleNotifications()" title="Notifications"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" id="notifBadge" style="display:none">0</span></button>
+        </div>
+        <div class="notif-panel" id="notifPanel">
+          <div class="np-hdr"><h4>Notifications</h4><span class="np-clear" onclick="clearAllNotifs()">Mark all read</span></div>
+          <div class="np-list" id="notifList"></div>
         </div>
       </div>
+    </div>
+    <div class="tag-filter" id="tagFilter">
+      <span class="tag-pill active" data-filter="all" onclick="filterByTag('all',this)">All</span>
+      <span class="tag-pill" data-filter="review" onclick="filterByTag('review',this)">🔍 Review</span>
+      <span class="tag-pill" data-filter="project" onclick="filterByTag('project',this)">📦 Projects</span>
+      <span class="tag-pill" data-filter="cli" onclick="filterByTag('cli',this)">💻 CLI</span>
+      <span class="tag-pill" data-filter="research" onclick="filterByTag('research',this)">📖 Research</span>
     </div>
     <div class="session-list" id="session-list">
       <div class="no-sessions">loading...</div>
@@ -484,6 +678,8 @@ let lastHistoryJSON = '';
 let sessionPollTimer = null;
 let discoveredPollTimer = null;
 let discoveredItems = []; // discovered sessions, merged into sidebar
+let notifications = []; // [{id, title, desc, time, read, urgency, sessionKey, sessionNode}]
+let notifIdCounter = 0;
 let previewTimer = null;
 let previewEventCount = 0;
 let pendingDiscovered = null; // {pid, sessionId, cwd, procStartTime, node} when previewing a discovered session
@@ -496,6 +692,99 @@ const sessionWorkspaces = {};
 const sessionNodes = {};
 const sessionDrafts = {}; // key -> draft text, preserved across session switches
 let historySessionsData = []; // from API history_sessions (all filesystem sessions)
+let activeTagFilter = 'all'; // tag filter state
+
+// --- Time grouping helpers ---
+function isToday(session) {
+  const d = new Date(session.last_active || session.created_at || Date.now());
+  const now = new Date();
+  return d.toDateString() === now.toDateString();
+}
+function isYesterday(session) {
+  const d = new Date(session.last_active || session.created_at || Date.now());
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  return d.toDateString() === y.toDateString();
+}
+
+// --- Tag filtering ---
+function filterByTag(tag, el) {
+  activeTagFilter = tag;
+  document.querySelectorAll('#tagFilter .tag-pill').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderSessionList();
+}
+
+function matchesTagFilter(session) {
+  if (activeTagFilter === 'all') return true;
+  const key = (session.key || '').toLowerCase();
+  const prompt = (session.last_prompt || session.summary || '').toLowerCase();
+  const agent = (session.agent || '').toLowerCase();
+  switch (activeTagFilter) {
+    case 'review':
+      return key.includes('review') || agent.includes('review') || prompt.includes('review');
+    case 'project':
+      return !!(session.project);
+    case 'cli':
+      return session.source === 'terminal';
+    case 'research':
+      return key.includes('research') || agent.includes('research') || prompt.includes('research');
+    default:
+      return true;
+  }
+}
+
+// --- Render session list with time grouping (called by renderSidebar and filterByTag) ---
+function renderSessionList() {
+  const list = document.getElementById('session-list');
+  if (!list) return;
+  const scrollTop = list.scrollTop;
+
+  // Apply tag filter
+  const filtered = allSessionsCache.filter(s => matchesTagFilter(s));
+
+  // Time grouping definitions
+  const groups = [
+    { key: 'pinned', label: '\uD83D\uDCCC Pinned', test: s => s.pinned },
+    { key: 'today', label: 'Today', test: s => isToday(s) && !s.pinned && s.source !== 'terminal' },
+    { key: 'discovered', label: '\uD83D\uDCBB Discovered', test: s => s.source === 'terminal' && !s.pinned },
+    { key: 'yesterday', label: 'Yesterday', test: s => isYesterday(s) && !s.pinned && s.source !== 'terminal' },
+    { key: 'earlier', label: 'Earlier', test: s => true }
+  ];
+
+  // Sort: running > ready > new > suspended, then by last_active desc
+  const order = {running: 0, ready: 1, new: 2, suspended: 3};
+  filtered.sort((a, b) => {
+    const d = (order[a.state] ?? 9) - (order[b.state] ?? 9);
+    return d !== 0 ? d : (b.last_active || 0) - (a.last_active || 0);
+  });
+
+  // Distribute sessions into groups (each session goes to the first matching group)
+  const buckets = {};
+  groups.forEach(g => { buckets[g.key] = []; });
+  const placed = new Set();
+  groups.forEach(g => {
+    filtered.forEach(s => {
+      if (!placed.has(s.key) && g.test(s)) {
+        buckets[g.key].push(s);
+        placed.add(s.key);
+      }
+    });
+  });
+
+  let html = '';
+  groups.forEach(g => {
+    if (buckets[g.key].length === 0) return;
+    html += '<div class="section-header">' + g.label + '</div>';
+    const isEarlier = g.key === 'earlier';
+    if (isEarlier) html += '<div class="time-group-earlier">';
+    buckets[g.key].forEach(s => { html += sessionCardHtml(s); });
+    if (isEarlier) html += '</div>';
+  });
+
+  if (!html) html = '<div class="no-sessions">no sessions</div>';
+  list.innerHTML = html;
+  list.scrollTop = scrollTop;
+}
 
 function getToken() { return ''; }
 function setToken(t) { /* token stored in HttpOnly cookie only */ }
@@ -607,9 +896,6 @@ function renderSidebar(data) {
   if (st.default_workspace) defaultWorkspace = st.default_workspace;
   if (st.projects) projectsData = st.projects;
 
-  const list = document.getElementById('session-list');
-  const scrollTop = list.scrollTop;
-
   // Merge discovered into sessions — tag them as source=terminal
   const allItems = (data.sessions || []).map(s => {
     if (!s.source) s.source = 'managed';
@@ -634,55 +920,8 @@ function renderSidebar(data) {
   // Suspended sessions stay in the workspace (with distinct styling).
   allSessionsCache = allItems;
 
-  // Sort: pinned first, then running > ready > new > suspended, then by last_active desc
-  const order = {running: 0, ready: 1, new: 2, suspended: 3};
-  allItems.sort((a, b) => {
-    if (a.pinned && !b.pinned) return -1;
-    if (!a.pinned && b.pinned) return 1;
-    const d = (order[a.state] ?? 9) - (order[b.state] ?? 9);
-    return d !== 0 ? d : (b.last_active || 0) - (a.last_active || 0);
-  });
-  // Helper: render cards with a dashed separator between pinned and non-pinned
-  function renderCards(items) {
-    return items.map((s, i) => {
-      const sep = (i > 0 && items[i - 1].pinned && !s.pinned) ? '<hr class="sc-pin-sep">' : '';
-      return sep + sessionCardHtml(s);
-    }).join('');
-  }
-
-  // Always group by project when any session has a project
-  const projects = new Set(allItems.map(s => s.project).filter(Boolean));
-
-  let html;
-  if (projects.size > 0) {
-    // Group by project, sort groups by most recent session
-    const groups = {};
-    const ungrouped = [];
-    allItems.forEach(s => {
-      const p = s.project || '';
-      if (p) {
-        if (!groups[p]) groups[p] = [];
-        groups[p].push(s);
-      } else {
-        ungrouped.push(s);
-      }
-    });
-    const sortedProjects = Object.keys(groups).sort((a, b) => {
-      return (groups[b][0].last_active || 0) - (groups[a][0].last_active || 0);
-    });
-    html = '';
-    sortedProjects.forEach(p => {
-      html += '<div class="section-header">' + esc(p) + '</div>';
-      html += renderCards(groups[p]);
-    });
-    html += renderCards(ungrouped);
-  } else {
-    html = renderCards(allItems);
-  }
-
-  if (!html) html = '<div class="no-sessions">no sessions</div>';
-  list.innerHTML = html;
-  list.scrollTop = scrollTop;
+  // Delegate list rendering to renderSessionList() which handles time grouping + tag filtering
+  renderSessionList();
 
   // Update history badge (filesystem history sessions, deduplicated against workspace)
   const hBadge = document.getElementById('history-badge');
@@ -1170,7 +1409,7 @@ function appendEvents(events) {
   if (empty) empty.remove();
   const wasBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
   events.forEach(e => {
-    if (e.type === 'tool_use' || e.type === 'result' || e.type === 'agent' || e.type === 'task_start' || e.type === 'task_progress' || e.type === 'task_done') return;
+    if (isHiddenEvent(e)) return;
     // Deduplicate: skip events at or before the last rendered time
     if (e.time && e.time <= lastRenderedEventTime) return;
     const h = eventHtml(e); if (h) el.insertAdjacentHTML('beforeend', h);
@@ -1181,8 +1420,92 @@ function appendEvents(events) {
   runKatex();
 }
 
+/* Check if a tool_use event is an Edit/Replace that should render as diff */
+function isEditToolEvent(e) {
+  return e.type === 'tool_use' && (e.tool === 'Edit' || e.tool === 'Replace');
+}
+
+/* Check if an event should be hidden from the event list */
+function isHiddenEvent(e) {
+  if (e.type === 'tool_use') return false; // Task 2: all tool_use events render as cards
+  return e.type === 'result' || e.type === 'agent' || e.type === 'task_start' || e.type === 'task_progress' || e.type === 'task_done';
+}
+
+/* Task 2: Tool icon mapping by tool name */
+var toolIconMap = {Read:'\uD83D\uDCC4',Edit:'\u270F\uFE0F',Replace:'\u270F\uFE0F',Bash:'\uD83D\uDCBB',Grep:'\uD83D\uDD0D',Glob:'\uD83D\uDCC2',Agent:'\uD83E\uDD16',Write:'\uD83D\uDCDD',NotebookEdit:'\uD83D\uDCD3',Skill:'\u2728',ToolSearch:'\uD83D\uDD0E',WebFetch:'\uD83C\uDF10'};
+
+/* Task 2: Extract a short parameter summary for the tool card header */
+function toolParamSummary(e) {
+  var detail = e.detail || '';
+  // detail is formatted by Go backend as "ToolName path/pattern/command..."
+  // Strip the tool name prefix to get just the parameter summary
+  var toolName = e.tool || e.summary || '';
+  if (detail.indexOf(toolName + ' ') === 0) {
+    return detail.substring(toolName.length + 1).substring(0, 60);
+  }
+  if (detail.indexOf(toolName + ':') === 0) {
+    return detail.substring(toolName.length + 1).trim().substring(0, 60);
+  }
+  return detail.substring(0, 60);
+}
+
+/* Task 2: Build the body content for a tool card */
+function toolCardBody(e) {
+  // Edit/Replace: render diff inside card body
+  if (isEditToolEvent(e) && e.tool_input) {
+    try {
+      var inp = (typeof e.tool_input === 'string') ? JSON.parse(e.tool_input) : e.tool_input;
+      var diffHtml = renderDiff(inp.old_string || '', inp.new_string || '', inp.file_path || '');
+      if (diffHtml) return diffHtml;
+    } catch (_) {}
+  }
+  // Default: show full detail text
+  return '<div class="tool-body-inner">' + esc(e.detail || e.summary || '') + '</div>';
+}
+
+/* Task 2: Render a tool_use event as a collapsible card */
+function toolCardHtml(e) {
+  var toolName = e.tool || e.summary || 'Tool';
+  var icon = toolIconMap[toolName] || '\uD83D\uDD27';
+  var summary = esc(toolParamSummary(e));
+  var status = '\u2713';
+  // Edit/Replace: show +N -M in status
+  if (isEditToolEvent(e) && e.tool_input) {
+    try {
+      var inp2 = (typeof e.tool_input === 'string') ? JSON.parse(e.tool_input) : e.tool_input;
+      var added = (inp2.new_string || '').split('\n').length;
+      var removed = (inp2.old_string || '').split('\n').length;
+      status = '\u2713 +' + added + ' -' + removed;
+    } catch (_) {}
+  }
+  var body = toolCardBody(e);
+  return '<div class="event tool_use"><span class="event-icon" style="display:none"></span><div class="event-content">' +
+    '<div class="tool-card">' +
+      '<div class="tool-hdr" onclick="toggleToolCard(this)">' +
+        '<span class="t-icon">' + icon + '</span>' +
+        '<span class="t-name">' + esc(toolName) + '</span>' +
+        '<span class="t-detail">' + summary + '</span>' +
+        '<span class="t-status">' + status + '</span>' +
+        '<span class="t-expand">\u25BC</span>' +
+      '</div>' +
+      '<div class="tool-body">' + body + '</div>' +
+    '</div>' +
+  '</div></div>';
+}
+
+/* Task 2: Toggle tool card expand/collapse */
+function toggleToolCard(hdr) {
+  var body = hdr.nextElementSibling;
+  var arrow = hdr.querySelector('.t-expand');
+  body.classList.toggle('open');
+  if (arrow) arrow.classList.toggle('open');
+}
+
 function eventHtml(e) {
-  if (e.type === 'tool_use' || e.type === 'result' || e.type === 'thinking' || e.type === 'agent' || e.type === 'task_start' || e.type === 'task_progress' || e.type === 'task_done') return '';
+  if (e.type === 'thinking') return '';
+  if (isHiddenEvent(e)) return '';
+  // Task 2: Render all tool_use events as collapsible cards
+  if (e.type === 'tool_use') return toolCardHtml(e);
   // Filter out Claude Code system XML injected as user messages
   const raw = e.detail || e.summary || '';
   if (e.type === 'user' && /^<(task-notification|system-reminder|local-command|command-name|available-deferred-tools)[\s>]/.test(raw)) return '';
@@ -1213,6 +1536,18 @@ function eventHtml(e) {
     imgHtml = '<div class="event-images">' + e.images.map(src =>
       '<img src="' + escAttr(src) + '" loading="lazy" onclick="openLightbox(this.src)">'
     ).join('') + '</div>';
+  }
+
+  // Task 4: Long output collapse for AI text events
+  if (e.type === 'text' && content) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = content;
+    var lineEls = tmp.querySelectorAll('br, p, li, .md-pre, tr');
+    var textLines = (tmp.textContent || '').split('\n').length;
+    if (lineEls.length > 10 || textLines > 15) {
+      content = '<div class="collapse-wrap">' + content +
+        '<div class="collapse-grad"><button class="collapse-btn" onclick="toggleCollapse(this)">\u25BC Show more</button></div></div>';
+    }
   }
 
   return '<div class="event ' + esc(e.type||'') + '">' +
@@ -2241,6 +2576,173 @@ function doCreateSession() {
 }
 
 
+// --- New Session Modal (Cmd+N) ---
+
+var _nsAgentIcons = {
+  general: '💬', 'code-reviewer': '🔍', reviewer: '🔍', review: '🔍',
+  researcher: '📖', research: '📖', planner: '📋', plan: '📋',
+  coder: '💻', code: '💻', writer: '✏️', default: '🤖'
+};
+var _nsAgentDescs = {
+  general: 'General-purpose assistant',
+  'code-reviewer': 'Code review & analysis',
+  reviewer: 'Code review & analysis',
+  review: 'Code review & analysis',
+  researcher: 'Research & exploration',
+  research: 'Research & exploration',
+  planner: 'Planning & architecture',
+  plan: 'Planning & architecture',
+  coder: 'Code generation',
+  code: 'Code generation',
+  writer: 'Writing & documentation'
+};
+
+function openNewSessionModal() {
+  var ov = document.getElementById('nsOverlay');
+  if (!ov) return;
+
+  // Populate agents
+  var agentsEl = document.getElementById('nsAgents');
+  agentsEl.innerHTML = '';
+  var agents = availableAgents && availableAgents.length > 0 ? availableAgents : ['general'];
+  agents.forEach(function(a, i) {
+    var icon = _nsAgentIcons[a] || _nsAgentIcons['default'];
+    var desc = _nsAgentDescs[a] || 'Agent: ' + a;
+    var div = document.createElement('div');
+    div.className = 'ns-agent' + (i === 0 ? ' selected' : '');
+    div.setAttribute('data-agent', a);
+    div.innerHTML = '<div class="na-name">' + icon + ' ' + esc(a) + '</div><div class="na-desc">' + esc(desc) + '</div>';
+    div.addEventListener('click', function() { selectNSAgent(this); });
+    agentsEl.appendChild(div);
+  });
+
+  // Populate projects
+  var projContainer = document.getElementById('nsProjects');
+  var projLabel = document.getElementById('nsProjLabel');
+  projContainer.innerHTML = '';
+  if (projectsData && projectsData.length > 0) {
+    projLabel.style.display = '';
+    projContainer.style.display = '';
+    projectsData.forEach(function(p) {
+      var div = document.createElement('div');
+      div.className = 'ns-proj';
+      div.setAttribute('data-path', p.path);
+      div.setAttribute('data-name', p.name);
+      if (p.node) div.setAttribute('data-node', p.node);
+      div.innerHTML = '<div class="np-name">' + esc(p.name) + '</div><div class="np-path">' + esc(shortPath(p.path)) + '</div>';
+      div.addEventListener('click', function() { selectNSProject(this); });
+      projContainer.appendChild(div);
+    });
+  } else {
+    projLabel.style.display = 'none';
+    projContainer.style.display = 'none';
+  }
+
+  // Reset workspace input
+  var wsInput = document.getElementById('nsWorkdir');
+  wsInput.value = defaultWorkspace || '';
+  wsInput.placeholder = defaultWorkspace || '/home/user/project';
+
+  ov.classList.add('show');
+}
+
+function closeNewSessionModal() {
+  var ov = document.getElementById('nsOverlay');
+  if (ov) ov.classList.remove('show');
+}
+
+function selectNSAgent(el) {
+  var container = document.getElementById('nsAgents');
+  container.querySelectorAll('.ns-agent').forEach(function(a) { a.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function selectNSProject(el) {
+  // Toggle: click again to deselect
+  if (el.classList.contains('selected')) {
+    el.classList.remove('selected');
+    return;
+  }
+  var container = document.getElementById('nsProjects');
+  container.querySelectorAll('.ns-proj').forEach(function(p) { p.classList.remove('selected'); });
+  el.classList.add('selected');
+  // Auto-fill workspace from project path
+  var wsInput = document.getElementById('nsWorkdir');
+  if (wsInput && el.getAttribute('data-path')) {
+    wsInput.value = el.getAttribute('data-path');
+  }
+}
+
+function confirmNewSession() {
+  // Get selected agent
+  var agentEl = document.querySelector('#nsAgents .ns-agent.selected');
+  var agent = agentEl ? agentEl.getAttribute('data-agent') : 'general';
+
+  // Get selected project (if any)
+  var projEl = document.querySelector('#nsProjects .ns-proj.selected');
+  var projPath = projEl ? projEl.getAttribute('data-path') : '';
+  var projName = projEl ? projEl.getAttribute('data-name') : '';
+  var projNode = projEl ? (projEl.getAttribute('data-node') || 'local') : 'local';
+
+  // Get workspace
+  var wsInput = document.getElementById('nsWorkdir');
+  var workspace = wsInput ? wsInput.value.trim() : '';
+
+  closeNewSessionModal();
+
+  // If a project is selected, use doCreateInProject flow
+  if (projPath && projName) {
+    // Inject agent into the key by using doCreateInProject then letting the session key reflect the agent
+    sessionCounter++;
+    var now = new Date();
+    var ts = now.toISOString().slice(0,10) + '-' +
+      now.toTimeString().slice(0,8).replace(/:/g, '') + '-' + sessionCounter;
+    var key = 'dashboard:direct:' + ts + ':' + projName;
+
+    sessionWorkspaces[key] = projPath;
+    if (projNode && projNode !== 'local') sessionNodes[key] = projNode;
+
+    stopPreviewPolling();
+    wsm.unsubscribe();
+    selectedKey = key;
+    selectedNode = projNode;
+    lastEventTime = 0;
+    mobileEnterChat();
+    document.querySelectorAll('.session-card').forEach(function(el) { el.classList.remove('active'); });
+    renderMainShell();
+    lastVersion = 0;
+    debouncedFetchSessions();
+    showNewSessionNameDialog(key, projNode);
+    setTimeout(function() { var input = document.getElementById('msg-input'); if (input) input.focus(); }, 100);
+    return;
+  }
+
+  // No project: create with workspace and agent
+  var folderName = workspace ? (workspace.replace(/\/+$/, '').split('/').pop() || 'session') : (agent !== 'general' ? agent : 'session');
+
+  sessionCounter++;
+  var now = new Date();
+  var ts = now.toISOString().slice(0,10) + '-' +
+    now.toTimeString().slice(0,8).replace(/:/g, '') + '-' + sessionCounter;
+  var key = 'dashboard:direct:' + ts + ':' + folderName;
+
+  if (workspace) sessionWorkspaces[key] = workspace;
+
+  stopPreviewPolling();
+  wsm.unsubscribe();
+  selectedKey = key;
+  selectedNode = 'local';
+  lastEventTime = 0;
+  mobileEnterChat();
+  document.querySelectorAll('.session-card').forEach(function(el) { el.classList.remove('active'); });
+  renderMainShell();
+  lastVersion = 0;
+  debouncedFetchSessions();
+  showNewSessionNameDialog(key, 'local');
+  setTimeout(function() { var input = document.getElementById('msg-input'); if (input) input.focus(); }, 100);
+}
+
+
 // --- New Session Naming Dialog ---
 
 // Pending names for sessions that haven't been registered in the router yet.
@@ -2404,6 +2906,32 @@ function copyCodeBlock(btn) {
   }
 }
 
+function highlightBlock(preEl) {
+  if (!window.shikiHighlighter) return;
+  const lang = preEl.getAttribute('data-lang') || 'text';
+  const code = preEl.textContent;
+  try {
+    const html = window.shikiHighlighter.codeToHtml(code, { lang, theme: 'github-dark' });
+    const wrapper = preEl.closest('.code-block');
+    if (wrapper) {
+      const codeArea = wrapper.querySelector('.code-area');
+      if (codeArea) codeArea.innerHTML = html;
+    }
+  } catch(e) { /* fallback: keep plain text */ }
+}
+
+function copyCode(btn) {
+  const block = btn.closest('.code-block');
+  const code = block.querySelector('pre')?.textContent || block.getAttribute('data-code') || '';
+  const done = () => { btn.textContent = '\u2713 Copied'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000); };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(done).catch(() => { fallbackCopy(code); done(); });
+  } else {
+    fallbackCopy(code);
+    done();
+  }
+}
+
 function shortPath(p) {
   const home = '/home/';
   const i = p.indexOf(home);
@@ -2443,6 +2971,25 @@ function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 function escJs(s) {
   if (!s) return '';
   return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/\n/g,'\\n').replace(/\r/g,'\\r');
+}
+
+/* Diff rendering for Edit tool (Task 3) */
+function renderDiff(oldStr, newStr, filePath) {
+  if (!oldStr && !newStr) return '';
+  var oldLines = oldStr ? oldStr.split('\n') : [];
+  var newLines = newStr ? newStr.split('\n') : [];
+  var added = 0, removed = 0, html = '';
+  oldLines.forEach(function(l) { removed++; html += '<div class="diff-line del">- ' + esc(l) + '</div>'; });
+  newLines.forEach(function(l) { added++; html += '<div class="diff-line add">+ ' + esc(l) + '</div>'; });
+  var hdr = '<div class="diff-hdr"><span class="diff-file">' + esc(filePath || '') + '</span><span class="diff-stat"><span class="add">+' + added + '</span> <span class="del">-' + removed + '</span></span></div>';
+  return '<div class="diff-block">' + hdr + html + '</div>';
+}
+
+/* Long output collapse toggle (Task 4) */
+function toggleCollapse(btn) {
+  var wrap = btn.closest('.collapse-wrap');
+  wrap.classList.toggle('expanded');
+  btn.textContent = wrap.classList.contains('expanded') ? '\u25B2 Show less' : '\u25BC Show more';
 }
 
 let mermaidLoading = false;
@@ -2547,7 +3094,18 @@ function renderMd(s) {
         return '<div class="mermaid-wrap"><pre id="' + id + '" class="mermaid-pending"></pre></div>';
       }
       const langAttr = lang ? ' data-lang="' + escAttr(lang) + '"' : '';
-      return '<div class="md-code-wrap"><pre class="md-pre"><code' + langAttr + '>' + esc(code) + '</code></pre><button class="md-copy-btn" onclick="copyCodeBlock(this)">copy</button></div>';
+      const langLabel = lang || 'text';
+      // Try Shiki highlighting if available
+      let codeAreaHtml;
+      if (window.shikiHighlighter && lang) {
+        try {
+          codeAreaHtml = window.shikiHighlighter.codeToHtml(code, { lang: lang, theme: 'github-dark' });
+        } catch(e) { codeAreaHtml = null; }
+      }
+      if (!codeAreaHtml) {
+        codeAreaHtml = '<pre class="md-pre"' + langAttr + '><code' + langAttr + '>' + esc(code) + '</code></pre>';
+      }
+      return '<div class="code-block" data-code="' + escAttr(code) + '"><div class="code-hdr"><span class="code-lang">' + esc(langLabel) + '</span><div class="code-actions"><button class="code-btn" onclick="copyCode(this)">Copy</button></div></div><div class="code-area">' + codeAreaHtml + '</div></div>';
     }
     if (part.startsWith('$$') && part.endsWith('$$')) {
       return '<div class="md-math-display">' + renderKatex(part.slice(2, -2).trim(), true) + '</div>';
@@ -2655,7 +3213,7 @@ function renderTable(lines) {
 }
 
 function processEventsForDisplay(events) {
-  return events.filter(e => e.type !== 'tool_use' && e.type !== 'result' && e.type !== 'agent' && e.type !== 'task_start' && e.type !== 'task_progress' && e.type !== 'task_done');
+  return events.filter(e => !isHiddenEvent(e));
 }
 
 function sid(key, node) { return key + '\t' + (node || 'local'); }
@@ -2795,6 +3353,10 @@ const wsm = {
         break;
       case 'cron_result':
         fetchCronJobs();
+        { const cronName = msg.job_name || msg.name || 'Cron job';
+          const cronStatus = msg.success === false ? 'failed' : 'completed';
+          const cronUrgency = msg.success === false ? 'urgent' : 'info';
+          addNotification('Cron ' + cronStatus + ': ' + cronName, msg.error || msg.summary || '', cronUrgency, '_none', 'local'); }
         break;
       case 'pong':
         break;
@@ -2967,7 +3529,7 @@ const wsm = {
       applyEventToTurnState(ev);
       refreshBanner();
     }
-    if (ev.type === 'tool_use' || ev.type === 'result' || ev.type === 'agent' || ev.type === 'task_start' || ev.type === 'task_progress' || ev.type === 'task_done') return;
+    if (isHiddenEvent(ev)) return;
     const html = eventHtml(ev);
     if (!html) return;
     const el = document.getElementById('events-scroll');
@@ -3030,6 +3592,7 @@ const wsm = {
       if (opt) opt.remove();
     } else if (msg.status === 'error') {
       showToast('send error: ' + (msg.error || 'unknown'), 'error');
+      addNotification('Send failed', msg.error || 'Unknown error sending message', 'urgent', selectedKey, selectedNode);
       // Remove optimistic message on send failure
       const opt = document.querySelector('.optimistic-msg');
       if (opt) opt.remove();
@@ -3072,6 +3635,12 @@ const wsm = {
     }
     // Session became suspended: re-render sidebar to update visual state
     if (msg.state === 'suspended') { lastVersion = 0; debouncedFetchSessions(); }
+    // Notification: session died or errored
+    if (msg.state === 'suspended' && msg.reason) {
+      const sData = sessionsData[sKey];
+      const sName = (sData && sData.name) || msg.key;
+      addNotification('Session stopped: ' + sName, msg.reason, 'urgent', msg.key, msgNode);
+    }
   },
 
   setState(s) {
@@ -3133,13 +3702,23 @@ function stopPreviewPolling() {
 
 /* ===== Discovery & Takeover ===== */
 
+let _knownDiscoveredPids = new Set();
 async function scanDiscovered() {
   try {
     const headers = {};
     const t = getToken();
     if (t) headers['Authorization'] = 'Bearer ' + t;
     const r = await fetch('/api/discovered', { headers });
-    discoveredItems = (await r.json()) || [];
+    const items = (await r.json()) || [];
+    // Detect newly discovered sessions
+    for (const d of items) {
+      if (!_knownDiscoveredPids.has(d.pid)) {
+        const cwdShort = (d.cwd || '').split('/').pop() || d.cwd || 'unknown';
+        addNotification('Session discovered', 'External CLI session in ' + cwdShort + ' (PID ' + d.pid + ')', 'info', '_discovered:' + d.pid, d.node || 'local');
+      }
+    }
+    _knownDiscoveredPids = new Set(items.map(d => d.pid));
+    discoveredItems = items;
     // Trigger sidebar re-render to merge discovered into project groups
     lastVersion = 0;
     debouncedFetchSessions();
@@ -3225,7 +3804,7 @@ async function previewDiscovered(sessionId, cwd, pid, procStartTime, node) {
         if (empty) empty.remove();
         const wasBottom = el2.scrollTop + el2.clientHeight >= el2.scrollHeight - 30;
         fresh.forEach(e => {
-          if (e.type === 'tool_use' || e.type === 'result' || e.type === 'agent' || e.type === 'task_start' || e.type === 'task_progress' || e.type === 'task_done') return;
+          if (isHiddenEvent(e)) return;
           const h = eventHtml(e); if (h) el2.insertAdjacentHTML('beforeend', h);
         });
         if (wasBottom) el2.scrollTop = el2.scrollHeight;
@@ -3301,6 +3880,7 @@ function mobileBack() {
   document.body.classList.remove('mobile-chat-view');
   document.body.classList.add('mobile-list-view');
   if (document.activeElement) document.activeElement.blur();
+  syncMobileTab('sessions');
 }
 
 // Handle Android back button and iOS swipe-back gesture
@@ -3321,11 +3901,42 @@ function initSwipeDelete() {
   const list = document.getElementById('session-list');
   if (!list) return;
   let card = null, startX = 0, startY = 0, tracking = false;
+  let longPressTimer = null, longPressed = false;
+
+  // Ensure swipe-bg element exists on a card
+  function ensureSwipeBg(c) {
+    if (!c.querySelector('.swipe-bg')) {
+      const bg = document.createElement('div');
+      bg.className = 'swipe-bg';
+      bg.textContent = 'Delete';
+      c.appendChild(bg);
+    }
+  }
+
+  function clearLongPress() {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  }
+
   list.addEventListener('touchstart', e => {
-    if (e.touches.length !== 1) { card = null; return; }
+    if (e.touches.length !== 1) { card = null; clearLongPress(); return; }
     const c = e.target.closest('.session-card[data-key]');
     if (!c) return;
-    card = c; startX = e.touches[0].clientX; startY = e.touches[0].clientY; tracking = false;
+    card = c; startX = e.touches[0].clientX; startY = e.touches[0].clientY; tracking = false; longPressed = false;
+    // Long-press: 500ms to toggle pin
+    clearLongPress();
+    longPressTimer = setTimeout(() => {
+      if (!card || tracking) return;
+      longPressed = true;
+      const key = card.dataset.key;
+      const node = card.dataset.node || 'local';
+      // Find session data to check current pin state
+      const sData = allSessionsCache.find(s => s.key === key && (s.node || 'local') === node);
+      const isPinned = sData ? !!sData.pinned : false;
+      togglePin(key, node, !isPinned);
+      if (navigator.vibrate) navigator.vibrate(10);
+      showToast(isPinned ? 'Unpinned' : 'Pinned', 'success');
+      card = null;
+    }, 500);
   }, {passive:true});
   list.addEventListener('touchmove', e => {
     if (!card) return;
@@ -3333,20 +3944,30 @@ function initSwipeDelete() {
     const dy = e.touches[0].clientY - startY;
     if (!tracking) {
       if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      clearLongPress();
       if (Math.abs(dy) >= Math.abs(dx)) { card = null; return; }
       tracking = true;
     }
     if (dx >= 0) return;
+    ensureSwipeBg(card);
     card.classList.add('swiping');
     card.style.transform = 'translateX(' + dx + 'px)';
-    card.style.background = 'rgba(218,54,51,' + Math.min(0.35, -dx / card.offsetWidth * 0.6) + ')';
+    // Show red bg with swipe-bg reveal at 80px threshold
+    const absDx = -dx;
+    card.style.background = 'rgba(218,54,51,' + Math.min(0.35, absDx / card.offsetWidth * 0.6) + ')';
+    const swipeBg = card.querySelector('.swipe-bg');
+    if (swipeBg) swipeBg.style.opacity = absDx >= 80 ? '1' : String(Math.min(1, absDx / 80));
   }, {passive:true});
   list.addEventListener('touchend', e => {
+    clearLongPress();
+    if (longPressed) { longPressed = false; card = null; tracking = false; return; }
     if (!card || !tracking) { card = null; tracking = false; return; }
     const dx = e.changedTouches[0].clientX - startX;
     const c = card; card = null; tracking = false;
     c.classList.remove('swiping');
-    if (dx < -c.offsetWidth * 0.4) {
+    const swipeBg = c.querySelector('.swipe-bg');
+    if (dx < -80) {
+      // Swipe past threshold: delete
       c.style.transition = 'transform .2s ease, opacity .2s ease';
       c.style.transform = 'translateX(-100%)';
       c.style.opacity = '0';
@@ -3355,6 +3976,7 @@ function initSwipeDelete() {
       c.style.transition = 'transform .2s ease, background .2s ease';
       c.style.transform = '';
       c.style.background = '';
+      if (swipeBg) swipeBg.style.opacity = '0';
       setTimeout(() => { c.style.transition = ''; }, 200);
     }
   }, {passive:true});
@@ -3404,6 +4026,64 @@ function initSwipeBack() {
       setTimeout(() => { main.style.transition = ''; }, 200);
     }
   }, {passive:true});
+}
+
+/* ===== Task 10: Mobile Tab Bar ===== */
+
+function switchMobileTab(tab, el) {
+  if (!isMobile()) return;
+  // Update active tab styling
+  document.querySelectorAll('#mobileTabs .m-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  if (tab === 'sessions') {
+    // Show session list view
+    mobileBack();
+  } else if (tab === 'cron') {
+    openCronPanel();
+  } else if (tab === 'files') {
+    openFileHub();
+  } else if (tab === 'discovered') {
+    // Show sidebar in list view to display discovered sessions
+    document.body.classList.remove('mobile-chat-view');
+    document.body.classList.add('mobile-list-view');
+    // Trigger a discovered scan refresh
+    scanDiscovered();
+  }
+}
+
+// Sync the active tab when navigating back to list view
+function syncMobileTab(tab) {
+  const tabs = document.getElementById('mobileTabs');
+  if (!tabs) return;
+  tabs.querySelectorAll('.m-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+}
+
+/* ===== Task 12: Mobile Copy Button Tap ===== */
+
+function initMobileCopyBtnTap() {
+  // On mobile, show copy/bookmark buttons on tap (since hover doesn't work)
+  document.addEventListener('click', e => {
+    if (!isMobile()) return;
+    const eventEl = e.target.closest('.event.text');
+    if (!eventEl) return;
+    // Find all copy buttons in this event
+    const btns = eventEl.querySelectorAll('.md-copy-btn');
+    if (btns.length === 0) return;
+    // Toggle visibility for 3 seconds
+    btns.forEach(btn => {
+      btn.style.opacity = '1';
+    });
+    // Clear any previous timer on this element
+    if (eventEl._copyBtnTimer) clearTimeout(eventEl._copyBtnTimer);
+    eventEl._copyBtnTimer = setTimeout(() => {
+      btns.forEach(btn => {
+        btn.style.opacity = '';
+      });
+    }, 3000);
+  }, {passive: true});
 }
 
 /* ===== Cron Tab ===== */
@@ -3755,6 +4435,121 @@ async function cronDelete(id) {
   });
 })();
 
+/* ===== Notification Center ===== */
+
+function addNotification(title, desc, urgency, sessionKey, sessionNode) {
+  urgency = urgency || 'info'; // 'info', 'warning', 'urgent'
+  const n = {
+    id: ++notifIdCounter,
+    title: title,
+    desc: desc || '',
+    time: Date.now(),
+    read: false,
+    urgency: urgency,
+    sessionKey: sessionKey || null,
+    sessionNode: sessionNode || 'local'
+  };
+  notifications.unshift(n);
+  // Cap at 50 notifications
+  if (notifications.length > 50) notifications.length = 50;
+  updateNotifBadge();
+  renderNotifications();
+}
+
+function updateNotifBadge() {
+  const badge = document.getElementById('notifBadge');
+  if (!badge) return;
+  const unread = notifications.filter(n => !n.read).length;
+  if (unread > 0) {
+    badge.textContent = unread > 99 ? '99+' : unread;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function toggleNotifications() {
+  const panel = document.getElementById('notifPanel');
+  if (!panel) return;
+  panel.classList.toggle('show');
+}
+
+function closeNotifPanel() {
+  const panel = document.getElementById('notifPanel');
+  if (panel) panel.classList.remove('show');
+}
+
+function clearAllNotifs() {
+  notifications.forEach(n => n.read = true);
+  updateNotifBadge();
+  renderNotifications();
+}
+
+function notifTimeAgo(ts) {
+  const diff = Date.now() - ts;
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return min + 'm ago';
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return hr + 'h ago';
+  const d = Math.floor(hr / 24);
+  return d + 'd ago';
+}
+
+function notifIcon(urgency) {
+  if (urgency === 'urgent') return '\u26a0\ufe0f';
+  if (urgency === 'warning') return '\u26a1';
+  return '\ud83d\udd14';
+}
+
+function renderNotifications() {
+  const list = document.getElementById('notifList');
+  if (!list) return;
+  if (notifications.length === 0) {
+    list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+    return;
+  }
+  let html = '';
+  for (const n of notifications) {
+    const cls = n.read ? '' : (n.urgency === 'urgent' ? ' urgent' : ' unread');
+    html += '<div class="notif-item' + cls + '" data-notif-id="' + n.id + '" onclick="onNotifClick(' + n.id + ')">';
+    html += '<span class="ni-icon">' + notifIcon(n.urgency) + '</span>';
+    html += '<div class="ni-body">';
+    html += '<div class="ni-title">' + esc(n.title) + '</div>';
+    if (n.desc) html += '<div class="ni-desc">' + esc(n.desc) + '</div>';
+    html += '<div class="ni-time">' + notifTimeAgo(n.time) + '</div>';
+    html += '</div></div>';
+  }
+  list.innerHTML = html;
+}
+
+function onNotifClick(id) {
+  const n = notifications.find(x => x.id === id);
+  if (!n) return;
+  n.read = true;
+  updateNotifBadge();
+  renderNotifications();
+  closeNotifPanel();
+  // Navigate to the session if available
+  if (n.sessionKey && n.sessionKey !== '_none') {
+    const card = document.querySelector('.session-card[data-key="' + n.sessionKey + '"]');
+    if (card) card.click();
+  }
+}
+
+// Close notification panel when clicking outside
+document.addEventListener('click', function(e) {
+  const panel = document.getElementById('notifPanel');
+  const btn = document.getElementById('notifBtn');
+  if (panel && panel.classList.contains('show') && !panel.contains(e.target) && !btn.contains(e.target)) {
+    closeNotifPanel();
+  }
+});
+
+// Render empty state on load
+renderNotifications();
+
 /* ===== Initialization ===== */
 
 fetchSessions();
@@ -3766,6 +4561,7 @@ wsm.connect();
 initMobile();
 initSwipeDelete();
 initSwipeBack();
+initMobileCopyBtnTap();
 (function(){
   const ov=document.createElement('div');ov.className='lightbox-overlay';
   ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','Image preview');
@@ -4259,6 +5055,359 @@ function fhLsNavigate(path) {
     sendMessage();
   }
 }
+
+/* ── Cmd+K Global Search ── */
+let _searchSelectedIdx = -1;
+let _searchResults = []; // [{key, node, type}]
+let _searchInputBound = false;
+
+function openSearch() {
+  var ov = document.getElementById('searchOverlay');
+  if (!ov) return;
+  ov.classList.add('show');
+  var inp = document.getElementById('searchInput');
+  if (inp) {
+    inp.value = '';
+    inp.focus();
+    if (!_searchInputBound) {
+      _searchInputBound = true;
+      var _searchDebounce = null;
+      inp.addEventListener('input', function() {
+        clearTimeout(_searchDebounce);
+        _searchDebounce = setTimeout(function() {
+          _performSearch(inp.value.trim());
+        }, 100);
+      });
+    }
+  }
+  _searchSelectedIdx = -1;
+  _searchResults = [];
+  var sr = document.getElementById('searchResults');
+  if (sr) sr.innerHTML = '<div class="sm-hint">Type to search across sessions and messages</div>';
+}
+
+function closeSearch() {
+  var ov = document.getElementById('searchOverlay');
+  if (ov) ov.classList.remove('show');
+  _searchSelectedIdx = -1;
+  _searchResults = [];
+}
+
+function _searchHighlight(text, query) {
+  if (!text || !query) return esc(text || '');
+  var escaped = esc(text);
+  var qEsc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  try {
+    return escaped.replace(new RegExp('(' + qEsc + ')', 'gi'), '<mark>$1</mark>');
+  } catch(e) {
+    return escaped;
+  }
+}
+
+function _searchContextSnippet(text, query, maxLen) {
+  maxLen = maxLen || 80;
+  if (!text || !query) return '';
+  var idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text.substring(0, maxLen);
+  var start = Math.max(0, idx - 30);
+  var end = Math.min(text.length, idx + query.length + 50);
+  var snippet = (start > 0 ? '...' : '') + text.substring(start, end) + (end < text.length ? '...' : '');
+  return snippet;
+}
+
+function _performSearch(query) {
+  var results = document.getElementById('searchResults');
+  if (!results) return;
+  if (!query || query.length < 1) {
+    results.innerHTML = '<div class="sm-hint">Type to search across sessions and messages</div>';
+    _searchResults = [];
+    _searchSelectedIdx = -1;
+    return;
+  }
+
+  var q = query.toLowerCase();
+  var sessionMatches = [];
+  var messageMatches = [];
+
+  // Search sessions from allSessionsCache
+  for (var i = 0; i < allSessionsCache.length; i++) {
+    var s = allSessionsCache[i];
+    var name = s.name || '';
+    var prompt = s.last_prompt || s.summary || '';
+    var key = s.key || '';
+    var sNode = s.node || 'local';
+
+    var nameMatch = name.toLowerCase().indexOf(q) !== -1;
+    var promptMatch = prompt.toLowerCase().indexOf(q) !== -1;
+    var keyMatch = key.toLowerCase().indexOf(q) !== -1;
+
+    if (nameMatch || promptMatch || keyMatch) {
+      sessionMatches.push({
+        key: key,
+        node: sNode,
+        name: name || prompt || key,
+        matchField: nameMatch ? 'name' : (promptMatch ? 'prompt' : 'key'),
+        matchText: nameMatch ? name : (promptMatch ? prompt : key),
+        state: s.state || '',
+        lastActive: s.last_active || 0
+      });
+    }
+    if (sessionMatches.length >= 10) break;
+  }
+
+  // Search message content from sessionsData (loaded events)
+  var sKeys = Object.keys(sessionsData);
+  for (var si = 0; si < sKeys.length && messageMatches.length < 15; si++) {
+    var sd = sessionsData[sKeys[si]];
+    if (!sd || !sd.key) continue;
+    // sessionsData stores session objects; events are rendered from WS history
+    // Check session-level fields that might contain message content
+    var fields = [sd.last_prompt, sd.summary, sd.name];
+    // Also check if there's any cached detail/content
+    for (var fi = 0; fi < fields.length; fi++) {
+      var f = fields[fi];
+      if (!f) continue;
+      if (f.toLowerCase().indexOf(q) !== -1) {
+        // Avoid duplicate if already in session matches
+        var isDupe = false;
+        for (var di = 0; di < sessionMatches.length; di++) {
+          if (sessionMatches[di].key === sd.key) { isDupe = true; break; }
+        }
+        if (!isDupe) {
+          messageMatches.push({
+            key: sd.key,
+            node: sd.node || 'local',
+            sessionName: sd.name || sd.last_prompt || sd.key,
+            matchText: f,
+            type: fi === 0 ? 'prompt' : (fi === 1 ? 'summary' : 'name')
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  // Also search historySessionsData for broader coverage
+  for (var hi = 0; hi < historySessionsData.length && messageMatches.length < 15; hi++) {
+    var h = historySessionsData[hi];
+    var hPrompt = h.last_prompt || h.summary || '';
+    if (hPrompt.toLowerCase().indexOf(q) !== -1) {
+      // Check not already in session matches
+      var hDupe = false;
+      for (var hdi = 0; hdi < sessionMatches.length; hdi++) {
+        if (sessionMatches[hdi].key === h.session_id) { hDupe = true; break; }
+      }
+      for (var hdi2 = 0; hdi2 < messageMatches.length; hdi2++) {
+        if (messageMatches[hdi2].key === h.session_id) { hDupe = true; break; }
+      }
+      if (!hDupe) {
+        messageMatches.push({
+          key: h.session_id || '',
+          node: 'local',
+          sessionName: hPrompt.substring(0, 60),
+          matchText: hPrompt,
+          type: 'history',
+          isHistory: true,
+          workspace: h.workspace || ''
+        });
+      }
+    }
+  }
+
+  // Build results HTML
+  _searchResults = [];
+  var html = '';
+
+  if (sessionMatches.length === 0 && messageMatches.length === 0) {
+    results.innerHTML = '<div class="sm-empty">No results for "' + esc(query) + '"</div>';
+    _searchSelectedIdx = -1;
+    return;
+  }
+
+  if (sessionMatches.length > 0) {
+    html += '<div class="sm-group">Sessions</div>';
+    for (var ri = 0; ri < sessionMatches.length; ri++) {
+      var r = sessionMatches[ri];
+      var idx = _searchResults.length;
+      _searchResults.push({ key: r.key, node: r.node, type: 'session' });
+      var stateIcon = r.state === 'running' ? '\u{1f7e2}' : (r.state === 'ready' ? '\u{1f535}' : '\u26aa');
+      var snippet = _searchContextSnippet(r.matchText, query);
+      html += '<div class="sm-item" data-idx="' + idx + '" onclick="_searchSelect(' + idx + ')" onmouseenter="_searchHover(' + idx + ')">' +
+        '<div class="si-icon">' + stateIcon + '</div>' +
+        '<div class="si-body">' +
+          '<div class="si-title">' + _searchHighlight(r.name.substring(0, 80), query) + '</div>' +
+          (r.matchField !== 'name' && snippet ? '<div class="si-match">' + _searchHighlight(snippet, query) + '</div>' : '') +
+          '<div class="si-meta">' + esc(r.state) + (r.lastActive ? ' \u00b7 ' + timeAgo(r.lastActive) : '') + '</div>' +
+        '</div></div>';
+    }
+  }
+
+  if (messageMatches.length > 0) {
+    html += '<div class="sm-group">Messages</div>';
+    for (var mi = 0; mi < messageMatches.length; mi++) {
+      var m = messageMatches[mi];
+      var midx = _searchResults.length;
+      _searchResults.push({ key: m.key, node: m.node, type: m.isHistory ? 'history' : 'message' });
+      var mSnippet = _searchContextSnippet(m.matchText, query);
+      html += '<div class="sm-item" data-idx="' + midx + '" onclick="_searchSelect(' + midx + ')" onmouseenter="_searchHover(' + midx + ')">' +
+        '<div class="si-icon">\u{1f4ac}</div>' +
+        '<div class="si-body">' +
+          '<div class="si-title">' + esc(m.sessionName.substring(0, 60)) + '</div>' +
+          '<div class="si-match">' + _searchHighlight(mSnippet, query) + '</div>' +
+          '<div class="si-meta">' + esc(m.type) + '</div>' +
+        '</div></div>';
+    }
+  }
+
+  results.innerHTML = html;
+  _searchSelectedIdx = -1;
+}
+
+function _searchSelect(idx) {
+  if (idx < 0 || idx >= _searchResults.length) return;
+  var r = _searchResults[idx];
+  closeSearch();
+  if (r.type === 'history') {
+    // History session — resume via session_id
+    if (typeof resumeRecentSession === 'function') {
+      resumeRecentSession(r.key);
+    }
+  } else {
+    selectSession(r.key, r.node);
+  }
+}
+
+function _searchHover(idx) {
+  if (idx === _searchSelectedIdx) return;
+  _searchSelectedIdx = idx;
+  _searchUpdateSelection();
+}
+
+function _searchUpdateSelection() {
+  var items = document.querySelectorAll('#searchResults .sm-item');
+  for (var i = 0; i < items.length; i++) {
+    if (parseInt(items[i].dataset.idx) === _searchSelectedIdx) {
+      items[i].classList.add('selected');
+      items[i].scrollIntoView({ block: 'nearest' });
+    } else {
+      items[i].classList.remove('selected');
+    }
+  }
+}
+
+// Keyboard shortcuts: Cmd+K search, Cmd+N new session, ESC close
+document.addEventListener('keydown', function(e) {
+  // Cmd+N or Ctrl+N to open new session modal
+  if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+    e.preventDefault();
+    var nsOv = document.getElementById('nsOverlay');
+    if (nsOv && nsOv.classList.contains('show')) {
+      closeNewSessionModal();
+    } else {
+      openNewSessionModal();
+    }
+    return;
+  }
+
+  // ESC to close new session modal (before search ESC handler)
+  if (e.key === 'Escape') {
+    var nsOv = document.getElementById('nsOverlay');
+    if (nsOv && nsOv.classList.contains('show')) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeNewSessionModal();
+      return;
+    }
+  }
+
+  // Cmd+K or Ctrl+K to open search
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    var ov = document.getElementById('searchOverlay');
+    if (ov && ov.classList.contains('show')) {
+      closeSearch();
+    } else {
+      openSearch();
+    }
+    return;
+  }
+
+  // Only handle keys when search overlay is open
+  var ov = document.getElementById('searchOverlay');
+  if (!ov || !ov.classList.contains('show')) return;
+
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSearch();
+    return;
+  }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (_searchResults.length > 0) {
+      _searchSelectedIdx = (_searchSelectedIdx + 1) % _searchResults.length;
+      _searchUpdateSelection();
+    }
+    return;
+  }
+
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (_searchResults.length > 0) {
+      _searchSelectedIdx = _searchSelectedIdx <= 0 ? _searchResults.length - 1 : _searchSelectedIdx - 1;
+      _searchUpdateSelection();
+    }
+    return;
+  }
+
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_searchSelectedIdx >= 0) {
+      _searchSelect(_searchSelectedIdx);
+    }
+    return;
+  }
+});
 </script>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="sm-header">
+      <span style="color:#484f58;font-size:16px">&#128269;</span>
+      <input type="text" id="searchInput" placeholder="Search sessions & messages..." autocomplete="off">
+      <span class="sm-esc" onclick="closeSearch()">ESC</span>
+    </div>
+    <div class="sm-body" id="searchResults">
+      <div class="sm-hint">Type to search across sessions and messages</div>
+    </div>
+  </div>
+</div>
+<!-- New Session Modal -->
+<div class="ns-overlay" id="nsOverlay" onclick="if(event.target===this)closeNewSessionModal()">
+  <div class="ns-modal">
+    <div class="ns-hdr">
+      <h3>New Session</h3>
+      <p>Choose an agent and optionally bind a project</p>
+    </div>
+    <div class="ns-body">
+      <span class="ns-label">Agent</span>
+      <div class="ns-agents" id="nsAgents"></div>
+      <span class="ns-label" id="nsProjLabel">Project (optional)</span>
+      <div class="ns-projects" id="nsProjects"></div>
+      <span class="ns-label">Working Directory</span>
+      <input id="nsWorkdir" type="text" style="width:100%;padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:13px;font-family:monospace;outline:none;box-sizing:border-box" onkeydown="if(event.key==='Enter')confirmNewSession()" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'">
+    </div>
+    <div class="ns-foot">
+      <button class="ns-cancel" onclick="closeNewSessionModal()">Cancel</button>
+      <button class="ns-create" onclick="confirmNewSession()">Create</button>
+    </div>
+  </div>
+</div>
+<div class="mobile-tabs" id="mobileTabs">
+  <div class="m-tab active" data-tab="sessions" onclick="switchMobileTab('sessions',this)"><span class="mt-icon">💬</span><span class="mt-label">Chat</span></div>
+  <div class="m-tab" data-tab="cron" onclick="switchMobileTab('cron',this)"><span class="mt-icon">⏰</span><span class="mt-label">Cron</span></div>
+  <div class="m-tab" data-tab="files" onclick="switchMobileTab('files',this)"><span class="mt-icon">📁</span><span class="mt-label">Files</span></div>
+  <div class="m-tab" data-tab="discovered" onclick="switchMobileTab('discovered',this)"><span class="mt-icon">🔍</span><span class="mt-label">More</span></div>
+</div>
 </body>
 </html>
