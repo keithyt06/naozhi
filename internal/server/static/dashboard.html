@@ -1039,6 +1039,13 @@ window.shikiReady = (async () => {
   </div>
 </div>
 <script>
+window.onerror = function(msg, url, line, col, err) {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#da3633;color:#fff;padding:8px 16px;font-size:12px;font-family:monospace';
+  d.textContent = 'JS ERROR: ' + msg + ' (line ' + line + ')';
+  document.body.appendChild(d);
+  console.error('NAOZHI ERROR:', msg, 'line:', line, 'col:', col, err);
+};
 let selectedKey = null;
 let eventTimer = null;
 let lastEventTime = 0;
@@ -5474,13 +5481,13 @@ function fhLsNavigate(path) {
 
 /* ===== View Switching (Tasks 11-13) ===== */
 
-let currentView = 'chat'; // 'chat', 'knowledge', 'wiki', 'patrols', 'approvals'
-let patrolsCache = [];
-let patrolsStatsCache = {};
-let approvalsCache = [];
-let approvalsStatsCache = {};
-let approvalsFilter = 'pending';
-let patrolRefreshTimer = null;
+var currentView = 'chat'; // 'chat', 'knowledge', 'wiki', 'patrols', 'approvals'
+var patrolsCache = [];
+var patrolsStatsCache = {};
+var approvalsCache = [];
+var approvalsStatsCache = {};
+var approvalsFilter = 'pending';
+var patrolRefreshTimer = null;
 
 function switchView(view, el) {
   if (currentView === view) return;
@@ -6216,7 +6223,7 @@ function renderHomeApprovalWidgetContent(container) {
 
 /* ===== Task 11: Knowledge View ===== */
 
-let kvCurrentPath = '';
+var kvCurrentPath = '';
 
 function renderKnowledgeView() {
   const main = document.getElementById('main');
@@ -6436,8 +6443,8 @@ async function kvAiAsk() {
 
 /* ===== Task 12: Wiki View ===== */
 
-let wvCurrentPage = '';
-let wvPages = [];
+var wvCurrentPage = '';
+var wvPages = [];
 
 function renderWikiView() {
   const main = document.getElementById('main');
@@ -6648,8 +6655,8 @@ async function triggerLint(btn) {
 
 /* ===== Phase 4C: Meeting Intelligence ===== */
 
-let mtMeetings = [];
-let mtCurrentId = '';
+var mtMeetings = [];
+var mtCurrentId = '';
 
 function renderMeetingView() {
   const main = document.getElementById('main');
