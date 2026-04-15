@@ -48,7 +48,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .badge.ready{background:#1f6feb;color:#fff}
 .badge.suspended{background:#9e6a03;color:#fff}
 .badge.new{background:#1f6feb;color:#fff;border:1px dashed #58a6ff}
-.death-tag{font-size:11px;color:#8b949e;background:#21262d;padding:1px 4px;border-radius:4px}
+/* .death-tag removed: unused */
 
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .main-header{padding:8px 20px;border-bottom:1px solid #30363d;flex-shrink:0;display:flex;align-items:center;gap:8px}
@@ -118,7 +118,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .btn-stop:hover{background:#b62324}
 .btn-mic{font-size:16px;position:relative}
 .btn-mic.recording{background:#da3633;border-color:#da3633;color:#fff;animation:pulse 1.5s ease-in-out infinite}
-.rec-badge{position:absolute;top:-6px;right:-6px;background:#da3633;color:#fff;font-size:10px;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:monospace;pointer-events:none}
+/* .rec-badge removed: unused */
 .btn-mic.transcribing{opacity:.5;pointer-events:none}
 
 /* Voice input mode (WeChat-style hold-to-talk) */
@@ -202,12 +202,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .toast.warning{background:#9e6a03}
 .toast.success{background:#238636}
 
-.node-badge{display:inline-block;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.3px;color:#fff;vertical-align:middle;margin-right:4px}
-.node-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin:0 1px 0 6px;vertical-align:middle}
-.node-dot:first-child{margin-left:0}
-.node-dot.ok{background:#3fb950}
-.node-dot.error{background:#da3633}
-.node-info{color:#8b949e;font-size:13px}
+/* .node-badge, .node-dot, .node-info removed: unused */
 
 .history-popover{position:absolute;top:100%;left:0;z-index:100;min-width:280px;max-width:360px;max-height:320px;overflow-y:auto;background:#161b22;border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);padding:0;animation:pop-in .15s ease}
 @keyframes pop-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
@@ -223,8 +218,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .hp-day-header{padding:6px 12px 4px;font-size:10px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:.3px;background:#0d1117;border-bottom:1px solid #21262d;position:sticky;top:0}
 .history-popover-empty{padding:16px;text-align:center;color:#6e7681;font-size:12px}
 
-.workspace-path{font-size:12px;color:#6e7681;margin-top:4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'SF Mono',SFMono-Regular,Consolas,monospace}
-.workspace-path:hover{color:#8b949e;text-decoration:underline}
+/* .workspace-path removed: unused */
 
 /* Markdown rendering */
 .md-pre{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:8px 0;overflow-x:auto;font-size:13px;line-height:1.6;max-width:100%}
@@ -298,7 +292,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .md-math-display .katex-display{margin:0.5em 0}
 .katex{font-size:1.1em}
 .katex-html{overflow-wrap:break-word}
-.ts-subagent{display:inline-block;background:#1f2937;color:#a5d6ff;padding:0 5px;border-radius:4px;font-size:11px;font-weight:600;margin-left:2px}
+/* .ts-subagent removed: unused */
 
 
 
@@ -332,7 +326,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .session-card .sc-pin-hover{opacity:0;transition:opacity .15s}
 .session-card:hover .sc-pin-hover{opacity:.5}
 .session-card .sc-pin-hover:hover{opacity:1}
-.sc-pin-sep{border:none;border-top:1px dashed #30363d;margin:0}
+/* .sc-pin-sep removed: unused */
 /* History bottom sheet (mobile) */
 .history-sheet{position:fixed;bottom:0;left:0;right:0;z-index:200;background:#161b22;border-top:1px solid #30363d;border-radius:16px 16px 0 0;max-height:60vh;overflow-y:auto;animation:sheet-in .25s ease;padding-bottom:max(8px,env(safe-area-inset-bottom))}
 .sheet-handle{width:36px;height:4px;background:#484f58;border-radius:2px;margin:8px auto}
@@ -723,7 +717,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 /* ===== Knowledge View (Task 11) ===== */
 .kv-container{display:flex;height:100%;overflow:hidden}
 .kv-tree{width:260px;border-right:1px solid #30363d;overflow-y:auto;flex-shrink:0;scrollbar-width:thin;scrollbar-color:#30363d transparent;background:#0d1117}
-.kv-tree-header{padding:10px 12px;font-size:11px;color:#8b949e;border-bottom:1px solid #21262d;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.kv-tree-header{padding:10px 12px;font-size:11px;color:#8b949e;border-bottom:1px solid #21262d;font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:flex;flex-direction:column;gap:6px}
+.kv-search{width:100%;background:#161b22;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;padding:5px 8px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box;text-transform:none;letter-spacing:normal;font-weight:400}
+.kv-search:focus{border-color:#58a6ff}
+.kv-search::placeholder{color:#484f58}
+.kv-tree .kv-file .kv-highlight,.kv-tree .kv-dir .kv-highlight{background:#d29922;color:#0d1117;border-radius:2px;padding:0 1px}
 .kv-tree ul{list-style:none;padding:0;margin:0}
 .kv-tree li{font-size:13px}
 .kv-tree .kv-dir{padding:5px 8px;color:#8b949e;cursor:pointer;display:flex;align-items:center;gap:4px;transition:background .1s;user-select:none}
@@ -753,12 +751,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .kv-rendered a[data-wiki]{color:#a376ff;text-decoration:none;cursor:pointer}
 .kv-rendered a[data-wiki]:hover{text-decoration:underline}
 .kv-rendered a[data-wiki].broken{color:#da3633;text-decoration:line-through}
+.kv-rendered .obs-img{max-width:100%;height:auto;border-radius:6px;margin:8px 0;border:1px solid #30363d}
 .kv-rendered .callout{border-left:3px solid #484f58;border-radius:4px;padding:10px 14px;margin:8px 0;background:#161b22}
-.kv-rendered .callout-tip{border-left-color:#3fb950}
-.kv-rendered .callout-note,.kv-rendered .callout-info{border-left-color:#58a6ff}
-.kv-rendered .callout-warning{border-left-color:#d29922}
-.kv-rendered .callout-danger,.kv-rendered .callout-error{border-left-color:#da3633}
+.kv-rendered .callout.note{border-left-color:#58a6ff;background:rgba(88,166,255,.06)}
+.kv-rendered .callout.tip{border-left-color:#3fb950;background:rgba(63,185,80,.06)}
+.kv-rendered .callout.warning{border-left-color:#d29922;background:rgba(210,153,34,.06)}
+.kv-rendered .callout.danger,.kv-rendered .callout.error{border-left-color:#da3633;background:rgba(218,54,51,.06)}
+.kv-rendered .callout.info{border-left-color:#58a6ff;background:rgba(88,166,255,.06)}
+.kv-rendered .callout.quote{border-left-color:#8b949e;background:rgba(139,148,158,.06)}
+.kv-rendered .callout.summary,.kv-rendered .callout.abstract{border-left-color:#a371f7;background:rgba(163,113,247,.06)}
+.kv-rendered .callout.success{border-left-color:#3fb950;background:rgba(63,185,80,.06)}
+.kv-rendered .callout.question{border-left-color:#d29922;background:rgba(210,153,34,.06)}
+.kv-rendered .callout.bug{border-left-color:#da3633;background:rgba(218,54,51,.06)}
+.kv-rendered .callout.example{border-left-color:#a371f7;background:rgba(163,113,247,.06)}
+.kv-rendered .callout.todo{border-left-color:#58a6ff;background:rgba(88,166,255,.06)}
+.kv-rendered .callout.failure{border-left-color:#da3633;background:rgba(218,54,51,.06)}
 .kv-rendered .callout-title{font-weight:600;margin-bottom:4px;font-size:14px}
+.callout.note .callout-title::before{content:'\1F4DD '}
+.callout.tip .callout-title::before{content:'\1F4A1 '}
+.callout.warning .callout-title::before{content:'\26A0\FE0F '}
+.callout.danger .callout-title::before{content:'\1F525 '}
+.callout.info .callout-title::before{content:'\2139\FE0F '}
+.callout.quote .callout-title::before{content:'\1F4AC '}
+.callout.summary .callout-title::before{content:'\1F4CB '}
+.callout.success .callout-title::before{content:'\2705 '}
+.callout.question .callout-title::before{content:'\2753 '}
+.callout.bug .callout-title::before{content:'\1F41B '}
+.callout.example .callout-title::before{content:'\1F4D6 '}
+.callout.abstract .callout-title::before{content:'\1F4C4 '}
+.callout.todo .callout-title::before{content:'\270F\FE0F '}
+.callout.failure .callout-title::before{content:'\274C '}
+.callout.error .callout-title::before{content:'\1F525 '}
 .kv-frontmatter{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:12px 16px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:16px;font-size:13px}
 .kv-fm-key{color:#8b949e;text-align:right}
 .kv-fm-val{color:#e6edf3;word-break:break-word}
@@ -2921,7 +2944,7 @@ function toggleCustomWorkspace() {
   if (form.style.display === 'none') {
     form.style.display = '';
     toggle.style.display = 'none';
-    setTimeout(() => document.getElementById('new-workspace').focus(), 50);
+    setTimeout(() => document.getElementById('new-workspace').focus(), 100);
   }
 }
 
@@ -3325,7 +3348,7 @@ function highlightBlock(preEl) {
 function copyCode(btn) {
   const block = btn.closest('.code-block');
   const code = block.querySelector('pre')?.textContent || block.getAttribute('data-code') || '';
-  const done = () => { btn.textContent = '\u2713 Copied'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000); };
+  const done = () => { btn.textContent = '\u2713 Copied'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500); };
   if (navigator.clipboard) {
     navigator.clipboard.writeText(code).then(done).catch(() => { fallbackCopy(code); done(); });
   } else {
@@ -7011,10 +7034,10 @@ function navigateSearchResult(source, pathOrKey) {
   closeSearch();
   if (source === 'vault') {
     switchView('knowledge', document.querySelector('[data-view=knowledge]'));
-    setTimeout(function() { loadVaultFile(pathOrKey); }, 200);
+    setTimeout(function() { loadVaultFile(pathOrKey); }, 150);
   } else if (source === 'wiki') {
     switchView('wiki', document.querySelector('[data-view=wiki]'));
-    setTimeout(function() { loadWikiPage(pathOrKey); }, 200);
+    setTimeout(function() { loadWikiPage(pathOrKey); }, 150);
   } else if (pathOrKey) {
     switchView('chat', document.querySelector('[data-view=chat]'));
     selectSession(pathOrKey, 'local');

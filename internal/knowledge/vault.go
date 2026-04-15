@@ -95,7 +95,24 @@ func (v *Vault) Render(src []byte) (string, map[string]interface{}, error) {
 		_ = d.Decode(&fm)
 	}
 
-	return buf.String(), fm, nil
+	return sanitizeHTML(buf.String()), fm, nil
+}
+
+// sanitizeHTML strips dangerous HTML constructs (script tags, on* event handlers,
+// javascript: URIs) from rendered vault content to prevent XSS. This is a lightweight
+// alternative to a full HTML sanitizer library -- it allows the safe Obsidian HTML
+// (div, span, class, data-*, a, img, table, code, pre) while blocking injection vectors.
+var (
+	reScript    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	reOnHandler = regexp.MustCompile(`(?i)\bon\w+\s*=`)
+	reJSURI     = regexp.MustCompile(`(?i)javascript:`)
+)
+
+func sanitizeHTML(html string) string {
+	html = reScript.ReplaceAllString(html, "")
+	html = reOnHandler.ReplaceAllString(html, "data-blocked-")
+	html = reJSURI.ReplaceAllString(html, "blocked:")
+	return html
 }
 
 // Configured returns true if the vault has a configured path.

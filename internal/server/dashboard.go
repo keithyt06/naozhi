@@ -1,6 +1,7 @@
 package server
 
 import (
+	"compress/gzip"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -223,6 +224,18 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "same-origin")
+
+	// Gzip compress the response if the client supports it.
+	// The embedded dashboard HTML is ~370KB; gzip reduces it to ~100KB.
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		if _, err := gz.Write(data); err != nil {
+			slog.Debug("dashboard gzip write", "err", err)
+		}
+		return
+	}
 	if _, err := w.Write(data); err != nil {
 		slog.Debug("dashboard write", "err", err)
 	}
