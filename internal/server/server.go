@@ -17,6 +17,7 @@ import (
 	"github.com/naozhi/naozhi/internal/cron"
 	"github.com/naozhi/naozhi/internal/dispatch"
 	"github.com/naozhi/naozhi/internal/node"
+	"github.com/naozhi/naozhi/internal/patrol"
 	"github.com/naozhi/naozhi/internal/platform"
 	"github.com/naozhi/naozhi/internal/project"
 	"github.com/naozhi/naozhi/internal/session"
@@ -53,6 +54,8 @@ type Server struct {
 	// Extracted handler groups
 	auth        *AuthHandlers
 	cronH       *CronHandlers
+	patrolH     *patrol.APIHandler
+	patrolMgr   *patrol.Manager
 	transcribeH *TranscribeHandler
 	nodeAccess  *nodeAccessor
 	discoveryH  *DiscoveryHandlers
@@ -131,6 +134,7 @@ type ServerOptions struct {
 	Nodes             map[string]node.Conn
 	ReverseNodeServer *node.ReverseServer
 	Transcriber       transcribe.Service
+	PatrolManager     *patrol.Manager
 	VaultPath         string   // Obsidian vault path
 	VaultInclude      []string // include paths within vault
 	VaultExclude      []string // exclude paths within vault
@@ -193,7 +197,11 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		transcribeH: &TranscribeHandler{
 			transcriber: opts.Transcriber,
 		},
-		filesH: &FileHandlers{},
+		filesH:    &FileHandlers{},
+		patrolMgr: opts.PatrolManager,
+	}
+	if opts.PatrolManager != nil {
+		s.patrolH = patrol.NewAPIHandler(opts.PatrolManager)
 	}
 
 	s.nodeAccess = newNodeAccessor(&s.nodesMu, s.nodes, s.knownNodes)

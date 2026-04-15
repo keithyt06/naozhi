@@ -95,6 +95,16 @@ func (s *Server) registerDashboard() {
 	s.mux.HandleFunc("POST /api/cron/pause", auth(s.cronH.handlePause))
 	s.mux.HandleFunc("POST /api/cron/resume", auth(s.cronH.handleResume))
 	s.mux.HandleFunc("GET /api/cron/preview", auth(s.cronH.handlePreview))
+
+	// Patrol API
+	if s.patrolH != nil {
+		s.patrolH.RegisterRoutes(s.mux, auth)
+		s.patrolH.RegisterWebhookRoutes(s.mux) // webhooks are unauthenticated
+		if s.patrolMgr != nil {
+			s.patrolMgr.SetHub(s.hub)
+		}
+	}
+
 	s.mux.HandleFunc("POST /api/auth/logout", auth(s.auth.handleLogout))
 
 	// Session naming & pinning

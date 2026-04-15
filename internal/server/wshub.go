@@ -523,6 +523,22 @@ func (h *Hub) doBroadcastSessionsUpdate() {
 	}
 }
 
+// Broadcast sends an arbitrary JSON payload to all authenticated WS clients.
+// Used by patrol and other subsystems that need generic event push.
+func (h *Hub) Broadcast(v any) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.authenticated.Load() {
+			c.SendRaw(data)
+		}
+	}
+}
+
 // BroadcastCronResult notifies all connected WS clients that a cron job completed.
 func (h *Hub) BroadcastCronResult(jobID, result, errMsg string) {
 	payload := map[string]string{
