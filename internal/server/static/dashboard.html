@@ -610,6 +610,114 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .home-wiki-card .hwc-meta{font-size:11px;color:#6e7681;margin-top:4px}
 @media(max-width:768px){.home-stats{grid-template-columns:repeat(2,1fr);gap:8px}.home-view{padding:16px}}
 
+/* ===== Patrols View (Task 17) ===== */
+.patrols-view{padding:24px;overflow-y:auto;flex:1;width:100%}
+.patrols-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;max-width:1200px;margin-left:auto;margin-right:auto}
+.patrols-header h2{font-size:18px;color:#f0f6fc;font-weight:600}
+.patrols-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;max-width:1200px;margin:0 auto}
+.patrol-card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;transition:border-color .15s}
+.patrol-card:hover{border-color:#484f58}
+.patrol-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.patrol-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.patrol-dot.active{background:#10b981}
+.patrol-dot.running{background:#3b82f6;animation:pulse 1.5s ease-in-out infinite}
+.patrol-dot.paused{background:#f59e0b}
+.patrol-dot.disabled{background:#6b7280}
+.patrol-card-name{font-size:15px;color:#f0f6fc;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.patrol-state-badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;text-transform:uppercase}
+.patrol-state-badge.active{background:rgba(16,185,129,.15);color:#10b981}
+.patrol-state-badge.running{background:rgba(59,130,246,.15);color:#3b82f6}
+.patrol-state-badge.paused{background:rgba(245,158,11,.15);color:#f59e0b}
+.patrol-state-badge.disabled{background:rgba(107,114,128,.15);color:#6b7280}
+.patrol-card-desc{font-size:12px;color:#8b949e;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+.patrol-card-meta{font-size:11px;color:#6e7681;display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.patrol-card-meta span{display:flex;align-items:center;gap:3px}
+.patrol-card-stats{display:flex;gap:12px;font-size:11px;color:#6e7681;margin-bottom:12px;padding-top:8px;border-top:1px solid #21262d}
+.patrol-card-stats .ps-val{color:#c9d1d9;font-weight:600}
+.patrol-card-actions{display:flex;gap:6px}
+.patrol-action-btn{padding:5px 12px;border-radius:6px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s}
+.patrol-action-btn:hover{background:#30363d;border-color:#484f58}
+.patrol-action-btn.trigger{background:rgba(31,111,235,.1);border-color:#1f6feb;color:#58a6ff}
+.patrol-action-btn.trigger:hover{background:rgba(31,111,235,.2)}
+.patrol-logs-section{margin-top:12px;border-top:1px solid #21262d;padding-top:10px;max-height:0;overflow:hidden;transition:max-height .3s ease}
+.patrol-logs-section.open{max-height:600px}
+.patrol-log-item{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid #161b22;cursor:pointer}
+.patrol-log-item:last-child{border-bottom:none}
+.patrol-log-status{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.patrol-log-status.ok{background:#10b981}
+.patrol-log-status.warn{background:#f59e0b}
+.patrol-log-status.error{background:#da3633}
+.patrol-log-time{color:#6e7681;flex-shrink:0;font-size:11px}
+.patrol-log-summary{color:#c9d1d9;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.patrol-log-dur{color:#6e7681;flex-shrink:0;font-size:11px}
+.patrol-log-detail{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:10px;margin:6px 0;font-size:11px;color:#8b949e;white-space:pre-wrap;word-break:break-word;font-family:monospace;max-height:200px;overflow-y:auto;display:none}
+.patrol-log-detail.show{display:block}
+.patrols-empty{text-align:center;padding:60px 20px;color:#6e7681;font-size:14px}
+.patrols-empty .pe-icon{font-size:40px;opacity:.3;margin-bottom:12px}
+@media(max-width:768px){.patrols-grid{grid-template-columns:1fr}.patrols-view{padding:16px}}
+
+/* ===== Approvals View (Task 18) ===== */
+.approvals-view{padding:24px;overflow-y:auto;flex:1;width:100%}
+.approvals-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;max-width:800px;margin-left:auto;margin-right:auto}
+.approvals-header h2{font-size:18px;color:#f0f6fc;font-weight:600}
+.approvals-tabs{display:flex;gap:2px;margin-bottom:20px;max-width:800px;margin-left:auto;margin-right:auto}
+.approvals-tab{padding:6px 14px;border:none;border-radius:6px;background:none;color:#8b949e;font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s}
+.approvals-tab:hover{color:#c9d1d9;background:#21262d}
+.approvals-tab.active{color:#58a6ff;background:rgba(31,111,235,.12)}
+.approvals-list{max-width:800px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.approval-card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;border-left:4px solid #f59e0b;transition:all .3s ease}
+.approval-card.urgent{border-left-color:#da3633}
+.approval-card.sliding-out{opacity:0;transform:translateX(100px);max-height:0;padding:0;margin:0;overflow:hidden}
+.approval-card-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.approval-card-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.approval-card-info{flex:1;min-width:0}
+.approval-card-title{font-size:14px;color:#f0f6fc;font-weight:600}
+.approval-card-source{font-size:11px;color:#8b949e;margin-top:2px;display:flex;align-items:center;gap:6px}
+.approval-level-badge{font-size:9px;padding:1px 6px;border-radius:8px;font-weight:600;text-transform:uppercase}
+.approval-level-badge.critical{background:rgba(218,54,51,.15);color:#da3633}
+.approval-level-badge.high{background:rgba(245,158,11,.15);color:#f59e0b}
+.approval-card-time{font-size:11px;color:#6e7681;flex-shrink:0}
+.approval-card-detail{font-size:12px;color:#8b949e;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+.approval-card-full-detail{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:12px;margin-bottom:12px;font-size:11px;color:#8b949e;white-space:pre-wrap;word-break:break-word;font-family:monospace;max-height:300px;overflow-y:auto;display:none}
+.approval-card-full-detail.show{display:block}
+.approval-card-actions{display:flex;gap:8px;align-items:center}
+.approval-btn{padding:6px 16px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600;transition:all .15s}
+.approval-btn.approve{background:#238636;color:#fff}
+.approval-btn.approve:hover{background:#2ea043}
+.approval-btn.reject{background:#21262d;color:#8b949e;border:1px solid #30363d}
+.approval-btn.reject:hover{background:#30363d;color:#c9d1d9}
+.approval-btn.details{background:none;color:#58a6ff;border:none;padding:6px 8px;font-weight:400}
+.approval-btn.details:hover{text-decoration:underline}
+.approvals-empty{text-align:center;padding:60px 20px;color:#6e7681}
+.approvals-empty .ae-check{font-size:48px;color:#10b981;margin-bottom:12px}
+.approvals-empty .ae-title{font-size:16px;color:#f0f6fc;font-weight:600;margin-bottom:4px}
+.approvals-empty .ae-sub{font-size:13px;color:#6e7681}
+.approval-card.approved-flash{background:rgba(35,134,54,.1);border-color:#238636}
+@media(max-width:768px){.approvals-view{padding:16px}.approval-btn{min-height:44px;padding:8px 16px}}
+
+/* ===== Home Patrol/Approval Widgets (Task 20) ===== */
+.home-widget{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;margin-bottom:24px}
+.home-widget-header{padding:10px 14px;border-bottom:1px solid #21262d;display:flex;align-items:center;justify-content:space-between}
+.home-widget-header h3{font-size:13px;color:#f0f6fc;font-weight:600;margin:0}
+.home-widget-link{font-size:11px;color:#58a6ff;cursor:pointer;text-decoration:none}
+.home-widget-link:hover{text-decoration:underline}
+.hw-patrol-row{padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #161b22;font-size:12px}
+.hw-patrol-row:last-child{border-bottom:none}
+.hw-patrol-name{color:#c9d1d9;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hw-patrol-state{color:#8b949e;font-size:11px}
+.hw-patrol-time{color:#6e7681;font-size:10px;flex-shrink:0}
+.hw-approval-card{padding:10px 14px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .1s}
+.hw-approval-card:hover{background:#1c2128}
+.hw-approval-card:last-child{border-bottom:none}
+.hw-approval-card.urgent{border-left:3px solid #da3633}
+.hw-approval-info{flex:1;min-width:0}
+.hw-approval-title{font-size:12px;color:#e6edf3;font-weight:500}
+.hw-approval-meta{font-size:11px;color:#6e7681;margin-top:2px}
+.hw-approval-btn{padding:4px 10px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s;flex-shrink:0}
+.hw-approval-btn:hover{background:#30363d;border-color:#484f58}
+.hw-clear{padding:16px;text-align:center;font-size:12px;color:#10b981}
+.vb-btn .vb-badge{display:inline-block;min-width:14px;height:14px;border-radius:7px;background:#da3633;color:#fff;font-size:8px;font-weight:700;line-height:14px;text-align:center;margin-left:3px;padding:0 3px;vertical-align:middle}
+
 /* ===== Knowledge View (Task 11) ===== */
 .kv-container{display:flex;height:100%;overflow:hidden}
 .kv-tree{width:260px;border-right:1px solid #30363d;overflow-y:auto;flex-shrink:0;scrollbar-width:thin;scrollbar-color:#30363d transparent;background:#0d1117}
@@ -789,6 +897,8 @@ window.shikiReady = (async () => {
       <button class="vb-btn active" data-view="chat" onclick="switchView('chat',this)">Chat</button>
       <button class="vb-btn" data-view="knowledge" onclick="switchView('knowledge',this)">Knowledge</button>
       <button class="vb-btn" data-view="wiki" onclick="switchView('wiki',this)">Wiki</button>
+      <button class="vb-btn" data-view="patrols" onclick="switchView('patrols',this)">Patrols</button>
+      <button class="vb-btn" data-view="approvals" onclick="switchView('approvals',this)" id="vbApprovalsBtn">Approvals</button>
     </div>
     <div class="tag-filter" id="tagFilter">
       <span class="tag-pill active" data-filter="all" onclick="filterByTag('all',this)">All</span>
@@ -3544,6 +3654,19 @@ const wsm = {
           const cronUrgency = msg.success === false ? 'urgent' : 'info';
           addNotification('Cron ' + cronStatus + ': ' + cronName, msg.error || msg.summary || '', cronUrgency, '_none', 'local'); }
         break;
+      case 'patrol_event':
+        onPatrolEvent(msg);
+        break;
+      case 'approval_created':
+        onApprovalCreated(msg);
+        break;
+      case 'approval_resolved':
+      case 'approval_update':
+        onApprovalResolved(msg);
+        break;
+      case 'notification':
+        onWsNotification(msg);
+        break;
       case 'pong':
         break;
     }
@@ -4748,6 +4871,12 @@ initMobile();
 initSwipeDelete();
 initSwipeBack();
 initMobileCopyBtnTap();
+// Task 19: Fetch persistent notifications and badge count on load
+fetchNotifications();
+fetchApprovalsBadge();
+// Periodically refresh notification count and patrol status
+setInterval(fetchNotifCount, 60000);
+setInterval(function() { fetchApprovalsBadge(); }, 60000);
 // Task 13: Show Home view as default landing page
 renderHomeView();
 (function(){
@@ -5246,7 +5375,13 @@ function fhLsNavigate(path) {
 
 /* ===== View Switching (Tasks 11-13) ===== */
 
-let currentView = 'chat'; // 'chat', 'knowledge', 'wiki'
+let currentView = 'chat'; // 'chat', 'knowledge', 'wiki', 'patrols', 'approvals'
+let patrolsCache = [];
+let patrolsStatsCache = {};
+let approvalsCache = [];
+let approvalsStatsCache = {};
+let approvalsFilter = 'pending';
+let patrolRefreshTimer = null;
 
 function switchView(view, el) {
   if (currentView === view) return;
@@ -5267,6 +5402,8 @@ function switchView(view, el) {
     if (sessionList) sessionList.style.display = 'none';
     if (view === 'knowledge') renderKnowledgeView();
     else if (view === 'wiki') renderWikiView();
+    else if (view === 'patrols') renderPatrolsView();
+    else if (view === 'approvals') renderApprovalsView();
   }
 }
 
@@ -5284,16 +5421,22 @@ function renderHomeView() {
       '<div class="home-date">' + esc(dateStr) + '</div>' +
       '<div class="home-stats">' +
         '<div class="stat-card"><div class="sc-label">Active Sessions</div><div class="sc-value" id="stat-sessions">--</div><div class="sc-sub">running now</div></div>' +
-        '<div class="stat-card"><div class="sc-label">Cron Jobs</div><div class="sc-value" id="stat-crons">--</div><div class="sc-sub">scheduled</div></div>' +
+        '<div class="stat-card"><div class="sc-label">Active Patrols</div><div class="sc-value" id="stat-patrols">--</div><div class="sc-sub">monitoring</div></div>' +
+        '<div class="stat-card"><div class="sc-label">Pending Approvals</div><div class="sc-value" id="stat-approvals" style="color:#c9d1d9">--</div><div class="sc-sub">awaiting review</div></div>' +
         '<div class="stat-card"><div class="sc-label">Today\'s Cost</div><div class="sc-value" id="stat-cost">--</div><div class="sc-sub">total spend</div></div>' +
-        '<div class="stat-card"><div class="sc-label">Wiki Pages</div><div class="sc-value" id="stat-wiki">--</div><div class="sc-sub">compiled</div></div>' +
       '</div>' +
       '<div class="home-actions">' +
         '<button class="home-action" onclick="openNewSessionModal()">+ New Chat</button>' +
         '<button class="home-action" onclick="openSearch()">Search</button>' +
         '<button class="home-action" onclick="switchView(\'knowledge\',document.querySelector(\'[data-view=knowledge]\'))">Knowledge</button>' +
         '<button class="home-action" onclick="switchView(\'wiki\',document.querySelector(\'[data-view=wiki]\'))">Wiki</button>' +
+        '<button class="home-action" onclick="switchView(\'patrols\',document.querySelector(\'[data-view=patrols]\'))">Patrols</button>' +
+        '<button class="home-action" onclick="switchView(\'approvals\',document.querySelector(\'[data-view=approvals]\'))" id="homeApprovalsBtn">Approvals</button>' +
       '</div>' +
+      '<div class="home-section-title">Patrol Status <span class="home-widget-link" onclick="switchView(\'patrols\',document.querySelector(\'[data-view=patrols]\'))">View all</span></div>' +
+      '<div class="home-widget"><div id="homePatrolWidget"><div style="padding:12px 14px;font-size:12px;color:#6e7681">Loading...</div></div></div>' +
+      '<div class="home-section-title">Pending Approvals <span class="home-widget-link" onclick="switchView(\'approvals\',document.querySelector(\'[data-view=approvals]\'))">View all</span></div>' +
+      '<div class="home-widget"><div id="homeApprovalWidget"><div style="padding:12px 14px;font-size:12px;color:#6e7681">Loading...</div></div></div>' +
       '<div class="home-section-title">Recent Activity</div>' +
       '<div class="home-feed" id="homeFeed"><div class="feed-item"><div class="feed-icon">...</div><div class="feed-body"><div class="feed-title">Loading...</div></div></div></div>' +
       '<div class="home-section-title">Recently Compiled</div>' +
@@ -5303,27 +5446,54 @@ function renderHomeView() {
   loadHomeStats();
   loadHomeActivity();
   loadHomeWiki();
+  loadHomePatrolsAndApprovals();
 }
 
 async function loadHomeStats() {
   try {
-    const [sessResp, wikiResp] = await Promise.all([
+    const [sessResp, patrolResp, approvalResp] = await Promise.all([
       fetch('/api/sessions', { headers: authHeaders() }).then(r => r.ok ? r.json() : null),
-      fetch('/api/wiki', { headers: authHeaders() }).then(r => r.ok ? r.json() : []).catch(() => [])
+      fetch('/api/patrols', { headers: authHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/approvals?status=pending', { headers: authHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
     const sessions = sessResp && sessResp.sessions ? sessResp.sessions : [];
     const active = sessions.filter(s => s.state === 'running').length;
     const totalCost = sessions.reduce((sum, s) => sum + (s.total_cost || 0), 0);
-    const cronCount = cronJobs ? cronJobs.length : 0;
-    const wikiPages = Array.isArray(wikiResp) ? wikiResp : [];
-    const wikiCount = wikiPages.length;
 
-    const el = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    // Patrol stats
+    if (patrolResp) {
+      patrolsCache = patrolResp.patrols || [];
+      patrolsStatsCache = patrolResp.stats || {};
+    }
+    const activePatrols = (patrolsStatsCache.active || 0) + (patrolsStatsCache.running || 0);
+
+    // Approval stats
+    if (approvalResp) {
+      approvalsCache = approvalResp.approvals || [];
+      approvalsStatsCache = approvalResp.stats || {};
+    }
+    const pendingApprovals = approvalsStatsCache.pending || 0;
+
+    const el = (id, v, style) => { const e = document.getElementById(id); if (e) { e.textContent = v; if (style) e.style.color = style; } };
     el('stat-sessions', active);
-    el('stat-crons', cronCount);
+    el('stat-patrols', activePatrols);
+    el('stat-approvals', pendingApprovals, pendingApprovals > 0 ? '#da3633' : '#c9d1d9');
     el('stat-cost', '$' + totalCost.toFixed(2));
-    el('stat-wiki', wikiCount);
+
+    updateApprovalsBadge();
   } catch (e) { console.error('loadHomeStats:', e); }
+}
+
+async function loadHomePatrolsAndApprovals() {
+  // Fetch patrols and approvals if not already loaded
+  await Promise.all([
+    patrolsCache.length === 0 ? fetchPatrols() : Promise.resolve(),
+    approvalsCache.length === 0 ? fetchApprovals('pending') : Promise.resolve()
+  ]);
+  var pc = document.getElementById('homePatrolWidget');
+  if (pc) renderHomePatrolWidgetContent(pc);
+  var ac = document.getElementById('homeApprovalWidget');
+  if (ac) renderHomeApprovalWidgetContent(ac);
 }
 
 function loadHomeActivity() {
@@ -5372,6 +5542,501 @@ function authHeaders() {
   const t = getToken();
   if (t) h['Authorization'] = 'Bearer ' + t;
   return h;
+}
+
+/* ===== Task 17: Patrols View ===== */
+
+async function fetchPatrols() {
+  try {
+    const resp = await fetch('/api/patrols', { headers: authHeaders() });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    patrolsCache = data.patrols || [];
+    patrolsStatsCache = data.stats || {};
+  } catch (e) { console.error('fetchPatrols:', e); }
+}
+
+function renderPatrolsView() {
+  const main = document.getElementById('main');
+  main.innerHTML =
+    '<div class="patrols-view" id="patrolsView">' +
+      '<div class="patrols-header"><h2>Patrols</h2></div>' +
+      '<div class="patrols-grid" id="patrolsGrid"><div style="color:#6e7681;font-size:13px;grid-column:1/-1;text-align:center;padding:40px 0">Loading patrols...</div></div>' +
+    '</div>';
+  fetchPatrols().then(() => renderPatrolCards());
+  // Auto-refresh every 30s
+  if (patrolRefreshTimer) clearInterval(patrolRefreshTimer);
+  patrolRefreshTimer = setInterval(function() {
+    if (currentView === 'patrols') fetchPatrols().then(() => renderPatrolCards());
+    else { clearInterval(patrolRefreshTimer); patrolRefreshTimer = null; }
+  }, 30000);
+}
+
+function renderPatrolCards() {
+  const grid = document.getElementById('patrolsGrid');
+  if (!grid) return;
+  if (patrolsCache.length === 0) {
+    grid.innerHTML = '<div class="patrols-empty"><div class="pe-icon">&#128737;</div><div>No patrols configured. Add patrols in config.yaml.</div></div>';
+    return;
+  }
+  grid.innerHTML = patrolsCache.map(function(p) {
+    var stateClass = (p.state || 'active').toLowerCase();
+    var stateLabel = p.state || 'Active';
+    var desc = p.prompt ? p.prompt.substring(0, 120) : 'No description';
+    var metaParts = [];
+    if (p.schedule) metaParts.push('<span>&#128339; ' + esc(p.schedule) + '</span>');
+    if (p.trigger) metaParts.push('<span>&#9889; ' + esc(p.trigger) + '</span>');
+    if (p.agent) metaParts.push('<span>&#129302; ' + esc(p.agent) + '</span>');
+    var lastRunText = '';
+    if (p.last_run && p.last_run.timestamp) {
+      lastRunText = timeAgo(typeof p.last_run.timestamp === 'number' ? p.last_run.timestamp : new Date(p.last_run.timestamp).getTime());
+    }
+    if (lastRunText) metaParts.push('<span>Last: ' + lastRunText + '</span>');
+
+    var pauseLabel = stateClass === 'paused' ? 'Resume' : 'Pause';
+    var canTrigger = stateClass === 'active';
+
+    return '<div class="patrol-card" data-patrol="' + escAttr(p.name) + '">' +
+      '<div class="patrol-card-header">' +
+        '<span class="patrol-dot ' + stateClass + '"></span>' +
+        '<span class="patrol-card-name">' + esc(p.name) + '</span>' +
+        '<span class="patrol-state-badge ' + stateClass + '">' + esc(stateLabel) + '</span>' +
+      '</div>' +
+      '<div class="patrol-card-desc">' + esc(desc) + '</div>' +
+      '<div class="patrol-card-meta">' + metaParts.join('') + '</div>' +
+      '<div class="patrol-card-stats">' +
+        '<span>Runs: <span class="ps-val">' + (p.total_runs || 0) + '</span></span>' +
+        '<span>Errors: <span class="ps-val">' + (p.total_errors || 0) + '</span></span>' +
+        '<span>Cost: <span class="ps-val">$' + (p.total_cost || 0).toFixed(2) + '</span></span>' +
+      '</div>' +
+      '<div class="patrol-card-actions">' +
+        '<button class="patrol-action-btn" onclick="patrolToggleState(\'' + escJs(p.name) + '\',\'' + escJs(stateClass) + '\')">' + pauseLabel + '</button>' +
+        (canTrigger ? '<button class="patrol-action-btn trigger" onclick="patrolTrigger(\'' + escJs(p.name) + '\')">Trigger</button>' : '') +
+        '<button class="patrol-action-btn" onclick="patrolToggleLogs(\'' + escJs(p.name) + '\',this)">Logs</button>' +
+      '</div>' +
+      '<div class="patrol-logs-section" id="patrol-logs-' + escAttr(p.name) + '"></div>' +
+    '</div>';
+  }).join('');
+}
+
+async function patrolToggleState(name, currentState) {
+  var newState = currentState === 'paused' ? 'active' : 'paused';
+  try {
+    var resp = await fetch('/api/patrols/' + encodeURIComponent(name) + '/state', {
+      method: 'PUT',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: JSON.stringify({ state: newState })
+    });
+    if (!resp.ok) { var e = await resp.json().catch(function() { return {}; }); showToast(e.error || 'Failed to change state'); return; }
+    await fetchPatrols();
+    renderPatrolCards();
+  } catch (e) { showToast('Network error'); }
+}
+
+async function patrolTrigger(name) {
+  try {
+    var resp = await fetch('/api/patrols/' + encodeURIComponent(name) + '/trigger', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: '{}'
+    });
+    if (!resp.ok) { var e = await resp.json().catch(function() { return {}; }); showToast(e.error || 'Failed to trigger'); return; }
+    showToast('Patrol triggered: ' + name);
+    // Refresh after short delay to show running state
+    setTimeout(function() { fetchPatrols().then(function() { renderPatrolCards(); }); }, 1500);
+  } catch (e) { showToast('Network error'); }
+}
+
+async function patrolToggleLogs(name, btn) {
+  var section = document.getElementById('patrol-logs-' + name);
+  if (!section) return;
+  if (section.classList.contains('open')) {
+    section.classList.remove('open');
+    return;
+  }
+  section.innerHTML = '<div style="padding:8px;font-size:11px;color:#6e7681">Loading logs...</div>';
+  section.classList.add('open');
+  try {
+    var resp = await fetch('/api/patrols/' + encodeURIComponent(name) + '/logs?limit=5', { headers: authHeaders() });
+    if (!resp.ok) { section.innerHTML = '<div style="padding:8px;font-size:11px;color:#6e7681">Failed to load logs</div>'; return; }
+    var data = await resp.json();
+    var logs = data.logs || [];
+    if (logs.length === 0) {
+      section.innerHTML = '<div style="padding:8px;font-size:11px;color:#6e7681">No execution logs yet</div>';
+      return;
+    }
+    section.innerHTML = logs.map(function(l, idx) {
+      var statusCls = (l.status || 'ok').toLowerCase();
+      var ts = l.timestamp ? timeAgo(typeof l.timestamp === 'number' ? l.timestamp : new Date(l.timestamp).getTime()) : '';
+      var dur = l.duration ? (l.duration / 1000).toFixed(1) + 's' : '';
+      var summary = l.summary || l.error || '(no summary)';
+      var detailId = 'plog-detail-' + name + '-' + idx;
+      return '<div class="patrol-log-item" onclick="var d=document.getElementById(\'' + detailId + '\');if(d)d.classList.toggle(\'show\')">' +
+        '<span class="patrol-log-status ' + statusCls + '"></span>' +
+        '<span class="patrol-log-time">' + esc(ts) + '</span>' +
+        '<span class="patrol-log-summary">' + esc(summary.substring(0, 100)) + '</span>' +
+        '<span class="patrol-log-dur">' + esc(dur) + '</span>' +
+      '</div>' +
+      (l.detail ? '<div class="patrol-log-detail" id="' + detailId + '">' + esc(l.detail) + '</div>' : '');
+    }).join('');
+  } catch (e) { section.innerHTML = '<div style="padding:8px;font-size:11px;color:#6e7681">Error loading logs</div>'; }
+}
+
+function onPatrolEvent(msg) {
+  // Update cache in place if possible
+  var found = false;
+  for (var i = 0; i < patrolsCache.length; i++) {
+    if (patrolsCache[i].name === msg.patrol) {
+      patrolsCache[i].state = (msg.status === 'ok' || msg.status === 'warn' || msg.status === 'error') ? 'active' : (msg.status || 'active');
+      if (msg.summary) patrolsCache[i].last_run = { summary: msg.summary, status: msg.status, timestamp: msg.time || Date.now() };
+      found = true;
+      break;
+    }
+  }
+  if (currentView === 'patrols') renderPatrolCards();
+  // Add notification
+  var urgency = msg.status === 'error' ? 'urgent' : (msg.status === 'warn' ? 'warning' : 'info');
+  addNotification('Patrol ' + (msg.status || 'done') + ': ' + (msg.patrol || ''), msg.summary || '', urgency, '_none', 'local');
+  // Update home widgets if visible
+  updateHomePatrolWidget();
+}
+
+/* ===== Task 18: Approvals View ===== */
+
+async function fetchApprovals(status) {
+  try {
+    var url = '/api/approvals';
+    if (status) url += '?status=' + encodeURIComponent(status);
+    var resp = await fetch(url, { headers: authHeaders() });
+    if (!resp.ok) return;
+    var data = await resp.json();
+    approvalsCache = data.approvals || [];
+    approvalsStatsCache = data.stats || {};
+    updateApprovalsBadge();
+  } catch (e) { console.error('fetchApprovals:', e); }
+}
+
+function updateApprovalsBadge() {
+  var pending = approvalsStatsCache.pending || 0;
+  var btn = document.getElementById('vbApprovalsBtn');
+  if (!btn) return;
+  var existing = btn.querySelector('.vb-badge');
+  if (pending > 0) {
+    if (!existing) {
+      var badge = document.createElement('span');
+      badge.className = 'vb-badge';
+      btn.appendChild(badge);
+      existing = badge;
+    }
+    existing.textContent = pending > 99 ? '99+' : pending;
+  } else if (existing) {
+    existing.remove();
+  }
+}
+
+function renderApprovalsView() {
+  var main = document.getElementById('main');
+  main.innerHTML =
+    '<div class="approvals-view" id="approvalsView">' +
+      '<div class="approvals-header"><h2>Approvals</h2></div>' +
+      '<div class="approvals-tabs" id="approvalsTabs">' +
+        '<button class="approvals-tab' + (approvalsFilter === 'pending' ? ' active' : '') + '" onclick="switchApprovalFilter(\'pending\',this)">Pending</button>' +
+        '<button class="approvals-tab' + (approvalsFilter === 'approved' ? ' active' : '') + '" onclick="switchApprovalFilter(\'approved\',this)">Approved</button>' +
+        '<button class="approvals-tab' + (approvalsFilter === 'rejected' ? ' active' : '') + '" onclick="switchApprovalFilter(\'rejected\',this)">Rejected</button>' +
+        '<button class="approvals-tab' + (approvalsFilter === '' ? ' active' : '') + '" onclick="switchApprovalFilter(\'\',this)">All</button>' +
+      '</div>' +
+      '<div class="approvals-list" id="approvalsList"><div style="color:#6e7681;font-size:13px;text-align:center;padding:40px 0">Loading approvals...</div></div>' +
+    '</div>';
+  fetchApprovals(approvalsFilter || '').then(function() { renderApprovalCards(); });
+}
+
+function switchApprovalFilter(status, el) {
+  approvalsFilter = status;
+  document.querySelectorAll('#approvalsTabs .approvals-tab').forEach(function(b) { b.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  fetchApprovals(status).then(function() { renderApprovalCards(); });
+}
+
+function renderApprovalCards() {
+  var list = document.getElementById('approvalsList');
+  if (!list) return;
+
+  var filtered = approvalsCache;
+  if (approvalsFilter) {
+    filtered = approvalsCache.filter(function(a) { return (a.status || '').toLowerCase() === approvalsFilter; });
+  }
+
+  if (filtered.length === 0) {
+    if (approvalsFilter === 'pending' || !approvalsFilter) {
+      list.innerHTML = '<div class="approvals-empty"><div class="ae-check">&#10003;</div><div class="ae-title">All caught up!</div><div class="ae-sub">No pending approvals</div></div>';
+    } else {
+      list.innerHTML = '<div class="approvals-empty"><div class="ae-sub">No ' + esc(approvalsFilter) + ' approvals</div></div>';
+    }
+    return;
+  }
+
+  list.innerHTML = filtered.map(function(a) {
+    var urgencyClass = (a.urgency === 'urgent') ? ' urgent' : '';
+    var isPending = (a.status || '').toLowerCase() === 'pending';
+    var levelClass = (a.level === 'critical') ? 'critical' : 'high';
+    var icon = approvalIcon(a.action || a.summary || '');
+    var ts = a.created_at ? timeAgo(typeof a.created_at === 'number' ? a.created_at : new Date(a.created_at).getTime()) : '';
+    var detailId = 'approval-detail-' + (a.id || '');
+
+    return '<div class="approval-card' + urgencyClass + '" id="approval-card-' + escAttr(a.id || '') + '">' +
+      '<div class="approval-card-header">' +
+        '<span class="approval-card-icon">' + icon + '</span>' +
+        '<div class="approval-card-info">' +
+          '<div class="approval-card-title">' + esc(a.action || a.summary || 'Approval Request') + '</div>' +
+          '<div class="approval-card-source">' +
+            (a.patrol ? 'from <strong>' + esc(a.patrol) + '</strong>' : '') +
+            (a.level ? ' <span class="approval-level-badge ' + levelClass + '">' + esc(a.level) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<span class="approval-card-time">' + esc(ts) + '</span>' +
+      '</div>' +
+      (a.detail || a.summary ? '<div class="approval-card-detail">' + esc(a.detail || a.summary || '') + '</div>' : '') +
+      (a.detail ? '<div class="approval-card-full-detail" id="' + detailId + '">' + esc(a.detail) + '</div>' : '') +
+      '<div class="approval-card-actions">' +
+        (isPending ? '<button class="approval-btn approve" onclick="approvalAction(\'' + escJs(a.id) + '\',\'approve\')">Approve</button>' +
+          '<button class="approval-btn reject" onclick="approvalAction(\'' + escJs(a.id) + '\',\'reject\')">Reject</button>' : '') +
+        (a.detail ? '<button class="approval-btn details" onclick="var d=document.getElementById(\'' + detailId + '\');if(d)d.classList.toggle(\'show\')">Details</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function approvalIcon(action) {
+  var a = (action || '').toLowerCase();
+  if (a.indexOf('terraform') >= 0) return '&#127959;';
+  if (a.indexOf('delete') >= 0 || a.indexOf('drop') >= 0 || a.indexOf('rm ') >= 0) return '&#128465;';
+  if (a.indexOf('deploy') >= 0 || a.indexOf('push') >= 0) return '&#128640;';
+  if (a.indexOf('kubectl') >= 0) return '&#9784;';
+  return '&#128275;';
+}
+
+async function approvalAction(id, action) {
+  var card = document.getElementById('approval-card-' + id);
+  // Optimistic animation
+  if (card) {
+    card.classList.add(action === 'approve' ? 'approved-flash' : '');
+    setTimeout(function() { if (card) card.classList.add('sliding-out'); }, 200);
+  }
+  try {
+    var resp = await fetch('/api/approvals/' + encodeURIComponent(id) + '/' + action, {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: JSON.stringify(action === 'approve' ? { approved_by: 'dashboard' } : { rejected_by: 'dashboard' })
+    });
+    if (!resp.ok) {
+      // Rollback animation
+      if (card) { card.classList.remove('sliding-out', 'approved-flash'); }
+      var e = await resp.json().catch(function() { return {}; });
+      showToast(e.error || 'Failed to ' + action);
+      return;
+    }
+    // Remove card after animation
+    setTimeout(function() {
+      fetchApprovals(approvalsFilter || '').then(function() { renderApprovalCards(); });
+    }, 400);
+  } catch (e) {
+    if (card) { card.classList.remove('sliding-out', 'approved-flash'); }
+    showToast('Network error');
+  }
+}
+
+function onApprovalCreated(msg) {
+  var approval = msg.approval || msg;
+  addNotification('Approval needed: ' + (approval.action || approval.summary || ''), 'from ' + (approval.patrol || 'patrol'), approval.urgency === 'urgent' ? 'urgent' : 'warning', '_none', 'local');
+  // Refresh if on approvals view
+  if (currentView === 'approvals') {
+    fetchApprovals(approvalsFilter || '').then(function() { renderApprovalCards(); });
+  }
+  // Update badge
+  fetchApprovalsBadge();
+  updateHomeApprovalWidget();
+}
+
+function onApprovalResolved(msg) {
+  var status = msg.status || 'resolved';
+  // Remove card with animation if on approvals view
+  if (currentView === 'approvals') {
+    var cardId = msg.id || (msg.approval && msg.approval.id);
+    var card = cardId ? document.getElementById('approval-card-' + cardId) : null;
+    if (card) card.classList.add('sliding-out');
+    setTimeout(function() {
+      fetchApprovals(approvalsFilter || '').then(function() { renderApprovalCards(); });
+    }, 400);
+  }
+  fetchApprovalsBadge();
+  updateHomeApprovalWidget();
+}
+
+async function fetchApprovalsBadge() {
+  try {
+    var resp = await fetch('/api/approvals?status=pending', { headers: authHeaders() });
+    if (!resp.ok) return;
+    var data = await resp.json();
+    approvalsStatsCache = data.stats || {};
+    updateApprovalsBadge();
+  } catch (e) { /* ignore */ }
+}
+
+/* ===== Task 19: Notification Center Enhancement ===== */
+
+async function fetchNotifications() {
+  try {
+    var resp = await fetch('/api/notifications?limit=20', { headers: authHeaders() });
+    if (!resp.ok) return;
+    var data = await resp.json();
+    var serverNotifs = data.notifications || [];
+    // Merge server notifications into the local array
+    for (var i = 0; i < serverNotifs.length; i++) {
+      var sn = serverNotifs[i];
+      var exists = notifications.find(function(n) { return n.serverId === sn.id; });
+      if (!exists) {
+        notifications.push({
+          id: ++notifIdCounter,
+          serverId: sn.id,
+          title: sn.title || sn.type || 'Notification',
+          desc: sn.summary || '',
+          time: sn.created_at ? (typeof sn.created_at === 'number' ? sn.created_at : new Date(sn.created_at).getTime()) : Date.now(),
+          read: !!sn.read,
+          urgency: sn.urgency === 'urgent' ? 'urgent' : 'info',
+          sourceType: sn.source_type || '',
+          sourceRef: sn.source_ref || '',
+          sessionKey: null,
+          sessionNode: 'local'
+        });
+      }
+    }
+    // Sort by time descending
+    notifications.sort(function(a, b) { return b.time - a.time; });
+    if (notifications.length > 50) notifications.length = 50;
+    updateNotifBadge();
+    renderNotifications();
+  } catch (e) { console.error('fetchNotifications:', e); }
+}
+
+async function fetchNotifCount() {
+  try {
+    var resp = await fetch('/api/notifications/count', { headers: authHeaders() });
+    if (!resp.ok) return;
+    var data = await resp.json();
+    var serverUnread = data.unread_count || 0;
+    // Use the max of server and local unread
+    var localUnread = notifications.filter(function(n) { return !n.read; }).length;
+    var totalUnread = Math.max(serverUnread, localUnread);
+    var badge = document.getElementById('notifBadge');
+    if (!badge) return;
+    if (totalUnread > 0) {
+      badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function onWsNotification(msg) {
+  var n = msg.notification || msg;
+  addNotification(
+    n.title || n.type || 'Notification',
+    n.summary || '',
+    n.urgency === 'urgent' ? 'urgent' : 'info',
+    '_none',
+    'local'
+  );
+}
+
+// Override clearAllNotifs to also call server-side mark-all-read
+var _origClearAllNotifs = clearAllNotifs;
+clearAllNotifs = function() {
+  _origClearAllNotifs();
+  fetch('/api/notifications/read-all', { method: 'POST', headers: authHeaders() }).catch(function() {});
+};
+
+// Enhanced onNotifClick to navigate to source views
+var _origOnNotifClick = onNotifClick;
+onNotifClick = function(id) {
+  var n = notifications.find(function(x) { return x.id === id; });
+  if (n) { n.read = true; }
+  updateNotifBadge();
+  renderNotifications();
+  closeNotifPanel();
+  // Navigate based on sourceType
+  if (n && n.sourceType === 'patrol') {
+    switchView('patrols', document.querySelector('[data-view=patrols]'));
+    return;
+  }
+  if (n && n.sourceType === 'approval') {
+    switchView('approvals', document.querySelector('[data-view=approvals]'));
+    return;
+  }
+  // Fall back to session navigation
+  if (n && n.sessionKey && n.sessionKey !== '_none') {
+    switchView('chat', document.querySelector('[data-view=chat]'));
+    var card = document.querySelector('.session-card[data-key="' + n.sessionKey + '"]');
+    if (card) card.click();
+  }
+};
+
+/* ===== Task 20: Home Dashboard Integration ===== */
+
+function updateHomePatrolWidget() {
+  var container = document.getElementById('homePatrolWidget');
+  if (!container) return;
+  renderHomePatrolWidgetContent(container);
+}
+
+function updateHomeApprovalWidget() {
+  var container = document.getElementById('homeApprovalWidget');
+  if (!container) return;
+  renderHomeApprovalWidgetContent(container);
+}
+
+function renderHomePatrolWidgetContent(container) {
+  if (patrolsCache.length === 0) {
+    container.innerHTML = '<div style="padding:12px 14px;font-size:12px;color:#6e7681">No patrols configured</div>';
+    return;
+  }
+  var nonDisabled = patrolsCache.filter(function(p) { return (p.state || '').toLowerCase() !== 'disabled'; });
+  if (nonDisabled.length === 0) {
+    container.innerHTML = '<div style="padding:12px 14px;font-size:12px;color:#6e7681">All patrols disabled</div>';
+    return;
+  }
+  container.innerHTML = nonDisabled.slice(0, 6).map(function(p) {
+    var stateClass = (p.state || 'active').toLowerCase();
+    var lastTime = '';
+    if (p.last_run && p.last_run.timestamp) {
+      lastTime = timeAgo(typeof p.last_run.timestamp === 'number' ? p.last_run.timestamp : new Date(p.last_run.timestamp).getTime());
+    }
+    return '<div class="hw-patrol-row">' +
+      '<span class="patrol-dot ' + stateClass + '" style="width:7px;height:7px"></span>' +
+      '<span class="hw-patrol-name">' + esc(p.name) + '</span>' +
+      '<span class="hw-patrol-state">' + esc(p.state || 'Active') + '</span>' +
+      (lastTime ? '<span class="hw-patrol-time">' + esc(lastTime) + '</span>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function renderHomeApprovalWidgetContent(container) {
+  var pending = approvalsCache.filter(function(a) { return (a.status || '').toLowerCase() === 'pending'; });
+  if (pending.length === 0) {
+    container.innerHTML = '<div class="hw-clear">&#10003; All clear</div>';
+    return;
+  }
+  container.innerHTML = pending.slice(0, 3).map(function(a) {
+    var urgencyClass = a.urgency === 'urgent' ? ' urgent' : '';
+    var ts = a.created_at ? timeAgo(typeof a.created_at === 'number' ? a.created_at : new Date(a.created_at).getTime()) : '';
+    return '<div class="hw-approval-card' + urgencyClass + '" onclick="switchView(\'approvals\',document.querySelector(\'[data-view=approvals]\'))">' +
+      '<div class="hw-approval-info">' +
+        '<div class="hw-approval-title">' + esc(a.action || a.summary || 'Approval') + '</div>' +
+        '<div class="hw-approval-meta">' + esc(a.patrol || '') + (ts ? ' \u00b7 ' + esc(ts) : '') + '</div>' +
+      '</div>' +
+      '<button class="hw-approval-btn" onclick="event.stopPropagation();switchView(\'approvals\',document.querySelector(\'[data-view=approvals]\'))">Review</button>' +
+    '</div>';
+  }).join('');
 }
 
 /* ===== Task 11: Knowledge View ===== */
