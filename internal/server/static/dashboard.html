@@ -1015,7 +1015,7 @@ window.shikiReady = (async () => {
       import('https://esm.sh/shiki@3.2.1/langs/yaml.mjs'),
       import('https://esm.sh/shiki@3.2.1/langs/json.mjs'),
       import('https://esm.sh/shiki@3.2.1/langs/bash.mjs'),
-      import('https://esm.sh/shiki@3.2.1/langs/hcl.mjs'),
+
       import('https://esm.sh/shiki@3.2.1/langs/rust.mjs'),
       import('https://esm.sh/shiki@3.2.1/langs/sql.mjs'),
       import('https://esm.sh/shiki@3.2.1/langs/html.mjs'),
@@ -5667,8 +5667,8 @@ async function loadHomeStats() {
 async function loadHomePatrolsAndApprovals() {
   // Fetch patrols and approvals if not already loaded
   await Promise.all([
-    patrolsCache.length === 0 ? fetchPatrols() : Promise.resolve(),
-    approvalsCache.length === 0 ? fetchApprovals('pending') : Promise.resolve()
+    (!patrolsCache || patrolsCache.length === 0) ? fetchPatrols().catch(function(){}) : Promise.resolve(),
+    (!approvalsCache || approvalsCache.length === 0) ? fetchApprovals('pending').catch(function(){}) : Promise.resolve()
   ]);
   var pc = document.getElementById('homePatrolWidget');
   if (pc) renderHomePatrolWidgetContent(pc);
