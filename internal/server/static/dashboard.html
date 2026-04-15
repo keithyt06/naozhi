@@ -6522,11 +6522,51 @@ async function loadVaultFile(path) {
         try { highlightBlock(el); } catch(ex) {}
       });
     }
+    // Render KaTeX math formulas in vault content
+    // Process display math ($$...$$) and inline math ($...$)
+    kvRenderMath(content);
     // Mobile: hide tree, show content
     var container = document.getElementById('kvContainer');
     if (container) container.classList.remove('show-tree');
   } catch (e) {
     content.innerHTML = '<div class="kv-empty"><span>' + esc(e.message) + '</span></div>';
+  }
+}
+
+// Process math in vault-rendered HTML: find $$...$$ and $...$ in text nodes and render with KaTeX
+function kvRenderMath(container) {
+  if (!container) return;
+  // Load KaTeX JS if not already loaded
+  loadKatex();
+  var html = container.innerHTML;
+  // Display math: $$...$$
+  html = html.replace(/\$\$([\s\S]+?)\$\$/g, function(match, tex) {
+    return '<div class="md-math-display">' + renderKatex(tex.trim(), true) + '</div>';
+  });
+  // Inline math: $...$ (but not $$)
+  html = html.replace(/(?<!\$)\$(?!\$)([^\$\n]+?)\$(?!\$)/g, function(match, tex) {
+    return renderKatex(tex.trim(), false);
+  });
+  if (html !== container.innerHTML) {
+    container.innerHTML = html;
+    // Re-wire wikilinks and callouts after innerHTML replacement
+    container.querySelectorAll('a.wikilink[data-target]').forEach(function(a) {
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var target = this.getAttribute('data-target');
+        if (target) {
+          var filePath = findVaultFilePath(target);
+          if (filePath) loadVaultFile(filePath);
+          else loadVaultFile(target.endsWith('.md') ? target : target + '.md');
+        }
+      });
+    });
+    container.querySelectorAll('.callout[data-foldable]').forEach(function(el) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function() { this.classList.toggle('folded'); });
+    });
+    // Run pending KaTeX renders
+    runKatex();
   }
 }
 

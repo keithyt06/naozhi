@@ -17,6 +17,7 @@ type WikiPage struct {
 	Title      string   `json:"title" yaml:"title"`
 	CompiledAt string   `json:"compiled_at" yaml:"compiled_at"`
 	Sources    int      `json:"sources" yaml:"sources"`
+	Category   string   `json:"category" yaml:"category"`
 	Entities   []string `json:"entities" yaml:"entities"`
 	Content    string   `json:"content,omitempty" yaml:"-"`
 }
