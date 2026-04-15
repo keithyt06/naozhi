@@ -80,6 +80,33 @@ func (kh *KnowledgeHandlers) handleVaultRaw(w http.ResponseWriter, r *http.Reque
 		writeJSONStatus(w, map[string]string{"error": "vault not configured"}, http.StatusServiceUnavailable)
 		return
 	}
+
+	// Check if this is an image file and resolve its path
+	ext := strings.ToLower(path)
+	if idx := strings.LastIndex(ext, "."); idx >= 0 {
+		ext = ext[idx:]
+	}
+	imageTypes := map[string]string{
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".gif":  "image/gif",
+		".svg":  "image/svg+xml",
+		".webp": "image/webp",
+	}
+	if contentType, isImage := imageTypes[ext]; isImage {
+		resolved, _ := kh.vault.ResolveImagePath(path)
+		data, err := kh.vault.ReadFile(resolved)
+		if err != nil {
+			writeJSONStatus(w, map[string]string{"error": err.Error()}, http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Write(data)
+		return
+	}
+
 	data, err := kh.vault.ReadFile(path)
 	if err != nil {
 		writeJSONStatus(w, map[string]string{"error": err.Error()}, http.StatusNotFound)

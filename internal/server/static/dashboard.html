@@ -734,11 +734,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .kv-tree .kv-children{display:none}
 .kv-tree .kv-children.open{display:block}
 .kv-content-area{flex:1;overflow-y:auto;padding:0;display:flex;flex-direction:column}
-.kv-breadcrumb{padding:10px 24px;font-size:12px;color:#8b949e;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:4px;flex-shrink:0}
-.kv-breadcrumb span{cursor:pointer;color:#58a6ff}
-.kv-breadcrumb span:hover{text-decoration:underline}
-.kv-breadcrumb span:last-child{color:#c9d1d9;cursor:default}
-.kv-breadcrumb span:last-child:hover{text-decoration:none}
+.kv-breadcrumb{padding:10px 24px;font-size:12px;color:#8b949e;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:0;flex-shrink:0;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.kv-breadcrumb::-webkit-scrollbar{display:none}
+.kv-breadcrumb .kv-crumb{cursor:pointer;color:#58a6ff;padding:2px 4px;border-radius:3px;transition:background .1s}
+.kv-breadcrumb .kv-crumb:hover{text-decoration:underline;background:rgba(88,166,255,.08)}
+.kv-breadcrumb .kv-crumb-current{color:#c9d1d9;cursor:default;padding:2px 4px}
+.kv-breadcrumb .kv-crumb-current:hover{text-decoration:none}
+.kv-breadcrumb .kv-sep{color:#484f58;margin:0 2px;user-select:none}
+.kv-mobile-back{display:none;padding:8px 12px;font-size:13px;color:#58a6ff;cursor:pointer;border-bottom:1px solid #21262d;background:#0d1117;font-family:inherit;border:none;width:100%;text-align:left}
 .kv-rendered{padding:24px;max-width:760px;line-height:1.8;color:#c9d1d9;font-size:15px;flex:1;overflow-y:auto}
 .kv-rendered h1,.kv-rendered h2,.kv-rendered h3,.kv-rendered h4{color:#f0f6fc;margin:16px 0 8px}
 .kv-rendered h1{font-size:24px;border-bottom:1px solid #30363d;padding-bottom:8px}
@@ -799,7 +802,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .kv-ai-send:disabled{opacity:.5;pointer-events:none}
 .kv-ai-response{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:13px;color:#c9d1d9;line-height:1.6;max-height:200px;overflow-y:auto;display:none}
 .kv-ai-response.show{display:block}
-@media(max-width:768px){.kv-tree{display:none}.kv-container.show-tree .kv-tree{display:block;position:absolute;inset:0;z-index:5;width:100%;background:#0d1117}.kv-container.show-tree .kv-content-area{display:none}}
+@media(max-width:768px){
+.kv-container{flex-direction:column}
+.kv-tree{display:none;width:100%;border-right:none;border-bottom:1px solid #30363d}
+.kv-container.show-tree .kv-tree{display:block;position:absolute;inset:0;z-index:5;width:100%;background:#0d1117;overflow-y:auto}
+.kv-container.show-tree .kv-content-area{display:none}
+.kv-tree .kv-dir{min-height:44px;padding:10px 12px;font-size:14px}
+.kv-tree .kv-file{min-height:44px;padding:10px 12px 10px 28px;font-size:14px;display:flex;align-items:center}
+.kv-mobile-back{display:block}
+.kv-breadcrumb{padding:8px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.kv-rendered{padding:16px}
+.kv-rendered pre{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:calc(100vw - 32px)}
+.kv-rendered code{word-break:break-all}
+.kv-search{font-size:14px;padding:8px 10px}
+}
 
 /* ===== Wiki View (Task 12) ===== */
 .wv-container{display:flex;height:100%;overflow:hidden}
@@ -6247,16 +6263,21 @@ function renderHomeApprovalWidgetContent(container) {
 /* ===== Task 11: Knowledge View ===== */
 
 var kvCurrentPath = '';
+var kvCachedTree = null;
 
 function renderKnowledgeView() {
   const main = document.getElementById('main');
   main.innerHTML =
-    '<div class="kv-container" id="kvContainer">' +
+    '<div class="kv-container show-tree" id="kvContainer">' +
       '<div class="kv-tree" id="kvTree">' +
-        '<div class="kv-tree-header">Vault</div>' +
+        '<div class="kv-tree-header">' +
+          '<span>Vault</span>' +
+          '<input class="kv-search" id="kvSearchInput" placeholder="Search files..." oninput="filterVaultTree(this.value)">' +
+        '</div>' +
         '<div id="kvTreeContent"><div class="kv-loading">Loading vault...</div></div>' +
       '</div>' +
       '<div class="kv-content-area">' +
+        '<button class="kv-mobile-back" id="kvMobileBack" onclick="kvShowTree()">\u2190 Back to vault tree</button>' +
         '<div class="kv-breadcrumb" id="kvBreadcrumb"></div>' +
         '<div class="kv-rendered" id="kvContent"><div class="kv-empty"><span style="font-size:28px;opacity:.3">&#128218;</span><span>Select a file from the vault tree</span></div></div>' +
         '<div class="kv-ai-response" id="kvAiResponse"></div>' +
@@ -6272,6 +6293,11 @@ function renderKnowledgeView() {
   loadVaultTree();
 }
 
+function kvShowTree() {
+  var container = document.getElementById('kvContainer');
+  if (container) container.classList.add('show-tree');
+}
+
 async function loadVaultTree() {
   const container = document.getElementById('kvTreeContent');
   if (!container) return;
@@ -6284,13 +6310,60 @@ async function loadVaultTree() {
       container.innerHTML = '<div class="kv-loading" style="color:#6e7681">Vault not configured</div>';
       return;
     }
-    container.innerHTML = renderTreeNode(tree.children || [tree], 0);
+    kvCachedTree = tree.children || [tree];
+    container.innerHTML = renderTreeNode(kvCachedTree, 0);
   } catch (e) {
     container.innerHTML = '<div class="kv-loading" style="color:#6e7681">' + esc(e.message || 'Failed to load vault') + '</div>';
   }
 }
 
-function renderTreeNode(nodes, depth) {
+function filterVaultTree(query) {
+  var container = document.getElementById('kvTreeContent');
+  if (!container || !kvCachedTree) return;
+  query = (query || '').trim().toLowerCase();
+  if (!query) {
+    container.innerHTML = renderTreeNode(kvCachedTree, 0);
+    return;
+  }
+  var filtered = filterTreeNodes(kvCachedTree, query);
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="kv-loading" style="color:#6e7681">No matching files</div>';
+    return;
+  }
+  container.innerHTML = renderTreeNode(filtered, 0, query);
+  // Auto-expand all directories in filtered results
+  container.querySelectorAll('.kv-children').forEach(function(el) { el.classList.add('open'); });
+  container.querySelectorAll('.kv-dir-arrow').forEach(function(el) { el.classList.add('open'); });
+}
+
+function filterTreeNodes(nodes, query) {
+  var results = [];
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    if (n.is_dir) {
+      var childMatches = filterTreeNodes(n.children || [], query);
+      var dirNameMatches = n.name.toLowerCase().indexOf(query) !== -1;
+      if (childMatches.length > 0 || dirNameMatches) {
+        results.push({ name: n.name, path: n.path, is_dir: true, children: childMatches.length > 0 ? childMatches : n.children, file_count: n.file_count });
+      }
+    } else {
+      if (n.name.toLowerCase().indexOf(query) !== -1 || n.path.toLowerCase().indexOf(query) !== -1) {
+        results.push(n);
+      }
+    }
+  }
+  return results;
+}
+
+function highlightMatch(text, query) {
+  if (!query) return esc(text);
+  var lower = text.toLowerCase();
+  var idx = lower.indexOf(query.toLowerCase());
+  if (idx === -1) return esc(text);
+  return esc(text.substring(0, idx)) + '<span class="kv-highlight">' + esc(text.substring(idx, idx + query.length)) + '</span>' + esc(text.substring(idx + query.length));
+}
+
+function renderTreeNode(nodes, depth, query) {
   if (!nodes || nodes.length === 0) return '';
   let html = '<ul style="padding-left:' + (depth > 0 ? 12 : 0) + 'px">';
   // Sort: dirs first, then files, alphabetical
@@ -6300,17 +6373,17 @@ function renderTreeNode(nodes, depth) {
   });
   for (const n of sorted) {
     if (n.is_dir) {
-      const childHtml = renderTreeNode(n.children || [], depth + 1);
+      const childHtml = renderTreeNode(n.children || [], depth + 1, query);
       html += '<li>' +
         '<div class="kv-dir" onclick="toggleKvDir(this)">' +
           '<span class="kv-dir-arrow">\u25B6</span>' +
-          esc(n.name) +
+          (query ? highlightMatch(n.name, query) : esc(n.name)) +
         '</div>' +
         '<div class="kv-children">' + childHtml + '</div>' +
       '</li>';
     } else {
       html += '<li><div class="kv-file" data-path="' + escAttr(n.path) + '" onclick="loadVaultFile(\'' + escJs(n.path) + '\')">' +
-        esc(n.name.replace(/\.md$/, '')) + '</div></li>';
+        (query ? highlightMatch(n.name.replace(/\.md$/, ''), query) : esc(n.name.replace(/\.md$/, ''))) + '</div></li>';
     }
   }
   html += '</ul>';
@@ -6328,53 +6401,103 @@ async function loadVaultFile(path) {
   kvCurrentPath = path;
   // Highlight active file
   document.querySelectorAll('#kvTree .kv-file').forEach(f => f.classList.toggle('active', f.dataset.path === path));
-  // Update breadcrumb
-  const bc = document.getElementById('kvBreadcrumb');
+  // Update breadcrumb with clickable segments
+  var bc = document.getElementById('kvBreadcrumb');
   if (bc) {
-    const parts = path.split('/');
-    let bcHtml = '<span onclick="loadVaultFile(\'\')">Vault</span>';
-    let cumPath = '';
-    for (let i = 0; i < parts.length; i++) {
-      cumPath += (i > 0 ? '/' : '') + parts[i];
-      bcHtml += ' / <span' + (i < parts.length - 1 ? '' : '') + '>' + esc(parts[i].replace(/\.md$/, '')) + '</span>';
+    if (!path) {
+      bc.innerHTML = '<span class="kv-crumb-current">Vault</span>';
+    } else {
+      var parts = path.split('/');
+      var bcHtml = '<span class="kv-crumb" onclick="kvShowTree();kvExpandToFolder(\'\')">Vault</span>';
+      var cumPath = '';
+      for (var i = 0; i < parts.length; i++) {
+        cumPath += (i > 0 ? '/' : '') + parts[i];
+        bcHtml += '<span class="kv-sep">/</span>';
+        if (i < parts.length - 1) {
+          bcHtml += '<span class="kv-crumb" onclick="kvExpandToFolder(\'' + escJs(cumPath) + '\')">' + esc(parts[i]) + '</span>';
+        } else {
+          bcHtml += '<span class="kv-crumb-current">' + esc(parts[i].replace(/\.md$/, '')) + '</span>';
+        }
+      }
+      bc.innerHTML = bcHtml;
     }
-    bc.innerHTML = bcHtml;
+  }
+  // If path is empty, show empty state
+  if (!path) {
+    var content0 = document.getElementById('kvContent');
+    if (content0) content0.innerHTML = '<div class="kv-empty"><span style="font-size:28px;opacity:.3">&#128218;</span><span>Select a file from the vault tree</span></div>';
+    return;
   }
   // Load content
-  const content = document.getElementById('kvContent');
+  var content = document.getElementById('kvContent');
   if (!content) return;
   content.innerHTML = '<div class="kv-loading">Loading...</div>';
   try {
-    const data = await fetch('/api/vault/read?path=' + encodeURIComponent(path), { headers: authHeaders() }).then(r => {
+    var data = await fetch('/api/vault/read?path=' + encodeURIComponent(path), { headers: authHeaders() }).then(function(r) {
       if (!r.ok) throw new Error('File not found');
       return r.json();
     });
-    let html = '';
+    var html = '';
     // Frontmatter
     if (data.frontmatter && typeof data.frontmatter === 'object' && Object.keys(data.frontmatter).length > 0) {
       html += '<div class="kv-frontmatter">';
-      for (const [k, v] of Object.entries(data.frontmatter)) {
-        const val = Array.isArray(v) ? v.join(', ') : String(v);
-        html += '<div class="kv-fm-key">' + esc(k) + '</div><div class="kv-fm-val">' + esc(val) + '</div>';
+      for (var _k of Object.keys(data.frontmatter)) {
+        var _v = data.frontmatter[_k];
+        var val = Array.isArray(_v) ? _v.join(', ') : String(_v);
+        html += '<div class="kv-fm-key">' + esc(_k) + '</div><div class="kv-fm-val">' + esc(val) + '</div>';
       }
       html += '</div>';
     }
     html += data.html || '<p style="color:#6e7681">Empty file</p>';
     content.innerHTML = html;
     // Wire wikilink clicks
-    content.querySelectorAll('a[data-wiki]').forEach(a => {
+    content.querySelectorAll('a[data-wiki]').forEach(function(a) {
       a.addEventListener('click', function(e) {
         e.preventDefault();
-        const target = this.getAttribute('data-wiki');
+        var target = this.getAttribute('data-wiki');
         if (target) loadVaultFile(target.endsWith('.md') ? target : target + '.md');
       });
     });
     // Mobile: hide tree, show content
-    const container = document.getElementById('kvContainer');
+    var container = document.getElementById('kvContainer');
     if (container) container.classList.remove('show-tree');
   } catch (e) {
     content.innerHTML = '<div class="kv-empty"><span>' + esc(e.message) + '</span></div>';
   }
+}
+
+function kvExpandToFolder(folderPath) {
+  // Expand tree nodes to reach the specified folder path
+  var treeContainer = document.getElementById('kvTreeContent');
+  if (!treeContainer) return;
+  // Open all dir nodes along the path
+  var dirs = treeContainer.querySelectorAll('.kv-dir');
+  dirs.forEach(function(dirEl) {
+    var dirText = dirEl.textContent.trim();
+    var children = dirEl.nextElementSibling;
+    var arrow = dirEl.querySelector('.kv-dir-arrow');
+    // Walk up through parents to build full path
+    var pathParts = [];
+    var node = dirEl;
+    while (node) {
+      var parentDir = node.closest('.kv-children');
+      if (!parentDir) break;
+      var parentDirEl = parentDir.previousElementSibling;
+      if (parentDirEl && parentDirEl.classList.contains('kv-dir')) {
+        pathParts.unshift(parentDirEl.textContent.trim());
+        node = parentDirEl;
+      } else {
+        break;
+      }
+    }
+    pathParts.push(dirText);
+    var fullPath = pathParts.join('/');
+    // If this dir is part of the target path, expand it
+    if (folderPath.indexOf(fullPath) === 0 || fullPath.indexOf(folderPath) === 0) {
+      if (children) children.classList.add('open');
+      if (arrow) arrow.classList.add('open');
+    }
+  });
 }
 
 /* ===== Knowledge AI Chat (Gap 5) ===== */

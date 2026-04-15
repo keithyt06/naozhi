@@ -64,6 +64,33 @@ func (v *Vault) ReadFile(relPath string) ([]byte, error) {
 	return os.ReadFile(absPath)
 }
 
+// ResolveImagePath tries to find an image file in common Obsidian asset locations.
+// It returns the resolved relative path and true if found, or the original path and false.
+func (v *Vault) ResolveImagePath(relPath string) (string, bool) {
+	// Try the path as-is first
+	candidates := []string{
+		relPath,
+		"assets/" + relPath,
+		"Attachments/" + relPath,
+	}
+	// Also try with just the filename in case relPath has directory parts
+	base := filepath.Base(relPath)
+	if base != relPath {
+		candidates = append(candidates, base, "assets/"+base, "Attachments/"+base)
+	}
+	for _, candidate := range candidates {
+		absPath := filepath.Join(v.cfg.VaultPath, candidate)
+		absPath = filepath.Clean(absPath)
+		if !strings.HasPrefix(absPath, filepath.Clean(v.cfg.VaultPath)) {
+			continue
+		}
+		if _, err := os.Stat(absPath); err == nil {
+			return candidate, true
+		}
+	}
+	return relPath, false
+}
+
 // RenderFile reads and renders a vault Markdown file to HTML.
 func (v *Vault) RenderFile(relPath string) (string, map[string]interface{}, error) {
 	src, err := v.ReadFile(relPath)
@@ -75,9 +102,12 @@ func (v *Vault) RenderFile(relPath string) (string, map[string]interface{}, erro
 
 // Render converts markdown bytes to HTML, returning rendered HTML and frontmatter.
 func (v *Vault) Render(src []byte) (string, map[string]interface{}, error) {
+	// Pre-process image embeds: ![[image.png]] → <img> tag
+	processed := processImageEmbeds(src)
+
 	// Pre-process wikilinks: [[target]] → <a class="wikilink">target</a>
 	// and [[target|alias]] → <a class="wikilink">alias</a>
-	processed := processWikilinks(src)
+	processed = processWikilinks(processed)
 
 	// Pre-process callouts: > [!type] → <div class="callout type">
 	processed = processCallouts(processed)
@@ -118,6 +148,17 @@ func sanitizeHTML(html string) string {
 // Configured returns true if the vault has a configured path.
 func (v *Vault) Configured() bool {
 	return v.cfg.VaultPath != ""
+}
+
+var imageEmbedRe = regexp.MustCompile(`!\[\[([^\]]+\.(?:png|jpg|jpeg|gif|svg|webp))\]\]`)
+
+func processImageEmbeds(src []byte) []byte {
+	return imageEmbedRe.ReplaceAllFunc(src, func(match []byte) []byte {
+		parts := imageEmbedRe.FindSubmatch(match)
+		filename := string(parts[1])
+		// Pass the filename to the raw handler; it will resolve asset paths
+		return []byte(fmt.Sprintf(`<img class="obs-img" src="/api/vault/raw?path=%s" alt="%s">`, filename, filename))
+	})
 }
 
 var wikilinkRe = regexp.MustCompile(`\[\[([^\]|]+)(?:\|([^\]]+))?\]\]`)
