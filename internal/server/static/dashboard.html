@@ -4998,12 +4998,12 @@ renderHomeView();
 
 /* ===== File Hub ===== */
 
-let fhOpen = false;
-let fhPath = '';
-let fhEntries = [];
-let fhSelected = new Set();
-let fhSessionContext = null;
-let fhShowHidden = false;
+var fhOpen = false;
+var fhPath = '';
+var fhEntries = [];
+var fhSelected = new Set();
+var fhSessionContext = null;
+var fhShowHidden = false;
 
 async function fhFetch(endpoint, options) {
   const headers = options && options.headers ? {...options.headers} : {};
@@ -5638,7 +5638,7 @@ function renderActivityFeed() {
   });
 
   // Patrol completed events
-  patrolsCache.forEach(p => {
+  (patrolsCache || []).forEach(p => {
     if (p.last_run) {
       const ts = typeof p.last_run === 'string' ? new Date(p.last_run).getTime() : p.last_run;
       activities.push({
@@ -5653,7 +5653,7 @@ function renderActivityFeed() {
   });
 
   // Wiki compiled events (from wvPages if loaded)
-  wvPages.forEach(p => {
+  (wvPages || []).forEach(p => {
     if (p.compiled_at) {
       activities.push({
         type: 'wiki_compiled',
@@ -5667,7 +5667,7 @@ function renderActivityFeed() {
   });
 
   // Approval events
-  approvalsCache.forEach(a => {
+  (approvalsCache || []).forEach(a => {
     const ts = a.created_at ? (typeof a.created_at === 'string' ? new Date(a.created_at).getTime() : a.created_at) : 0;
     if (ts) {
       activities.push({
@@ -6791,8 +6791,8 @@ async function handleMeetingUpload(input) {
 
 /* ===== Task 14: Context Panel ===== */
 
-let ctxPanelOpen = false;
-let ctxActiveTab = 'saved';
+var ctxPanelOpen = false;
+var ctxActiveTab = 'saved';
 
 function toggleCtxPanel() {
   ctxPanelOpen = !ctxPanelOpen;
@@ -6898,8 +6898,8 @@ async function deleteBookmark(id) {
 
 /* ===== Task 15: Bookmark UI ===== */
 
-let _bmSessionBookmarks = {}; // session_key -> Set of event indices with bookmarks
-let _bmIndexToId = {}; // session_key -> { eventIndex -> bookmark_id }
+var _bmSessionBookmarks = {}; // session_key -> Set of event indices with bookmarks
+var _bmIndexToId = {}; // session_key -> { eventIndex -> bookmark_id }
 
 async function loadSessionBookmarks() {
   if (!selectedKey) return;
@@ -7022,9 +7022,9 @@ function navigateSearchResult(source, pathOrKey) {
 }
 
 /* ── Cmd+K Global Search ── */
-let _searchSelectedIdx = -1;
-let _searchResults = []; // [{key, node, type}]
-let _searchInputBound = false;
+var _searchSelectedIdx = -1;
+var _searchResults = []; // [{key, node, type}]
+var _searchInputBound = false;
 
 function openSearch() {
   var ov = document.getElementById('searchOverlay');
@@ -7649,17 +7649,17 @@ document.addEventListener('keydown', function(e) {
 
 /* ===== Phase 4A: Knowledge Graph Visualization ===== */
 
-let graphData = null;
-let graphSim = null;
-let graphSelectedNode = null;
-let graphTypeFilter = 'all';
-let graphD3 = null;
+var graphData = null;
+var graphSim = null;
+var graphSelectedNode = null;
+var graphTypeFilter = 'all';
+var graphD3 = null;
 
-const GRAPH_COLORS = {
+var GRAPH_COLORS = {
   hub: '#a376ff', service: '#58a6ff', project: '#3fb950',
   infra: '#d29922', security: '#da3633'
 };
-const GRAPH_LABELS = {
+var GRAPH_LABELS = {
   hub: 'Knowledge Hub', service: 'AWS Service', project: 'Project',
   infra: 'Infrastructure', security: 'Security'
 };
@@ -7879,8 +7879,8 @@ function focusGraphNode(id) {
 
 /* ===== Phase 4D: Decision Journal ===== */
 
-let wikiSubTab = 'pages';
-let decisionsCache = [];
+var wikiSubTab = 'pages';
+var decisionsCache = [];
 
 function switchWikiSubTab(tab, el) {
   wikiSubTab = tab;
