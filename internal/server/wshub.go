@@ -249,8 +249,22 @@ func (h *Hub) handleSubscribe(c *wsClient, msg node.ClientMsg) {
 
 // completeSubscribe finishes a subscription once a valid session is available.
 func (h *Hub) completeSubscribe(c *wsClient, key string, msg node.ClientMsg, sess *session.ManagedSession) {
+	// Suspended/dead sessions have no process but may have persisted history.
+	// Send that history so the dashboard shows conversation context before
+	// the user resumes the session.
 	if !sess.HasProcess() {
-		slog.Debug("completeSubscribe: no process", "key", key)
+		snap := sess.Snapshot()
+		var entries []cli.EventEntry
+		if msg.After > 0 {
+			entries = sess.EventEntriesSince(msg.After)
+		} else {
+			entries = sess.EventLastN(100)
+		}
+		slog.Debug("completeSubscribe: no process, sending persisted history", "key", key, "entries", len(entries), "state", snap.State)
+		c.SendJSON(node.ServerMsg{Type: "subscribed", Key: key, State: snap.State})
+		if len(entries) > 0 {
+			c.SendJSON(node.ServerMsg{Type: "history", Key: key, Events: entries})
+		}
 		return
 	}
 	notify, unsub := sess.SubscribeEvents()

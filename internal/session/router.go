@@ -207,6 +207,17 @@ func NewRouter(cfg RouterConfig) *Router {
 		}
 	}
 
+	// Build sessionID → cost index from store for history session cost recovery.
+	// When a previously-managed session reappears via filesystem discovery
+	// (e.g. after being pruned from the store), this carries over cost data
+	// that was accumulated during active management.
+	storeCosts := make(map[string]float64)
+	for _, s := range r.sessions {
+		if id := s.getSessionID(); id != "" && s.totalCost > 0 {
+			storeCosts[id] = s.totalCost
+		}
+	}
+
 	// Discover recent sessions from filesystem and register as resumable.
 	// This gives the dashboard immediate access to past conversations.
 	// Only exclude session IDs that are currently managed (active in store + their chains),
@@ -240,6 +251,10 @@ func NewRouter(cfg RouterConfig) *Router {
 				workspace: rs.Workspace,
 			}
 			s.setSessionID(rs.SessionID)
+			// Carry over cost from store if this session was previously managed.
+			if cost, ok := storeCosts[rs.SessionID]; ok {
+				s.totalCost = cost
+			}
 			if rs.LastActive != 0 {
 				s.lastActive.Store(rs.LastActive * 1_000_000) // ms → ns
 			} else {
@@ -1443,6 +1458,9 @@ func (r *Router) RegisterForResume(key, sessionID, workspace, lastPrompt string)
 
 // ManagedExcludeSets returns PIDs, session IDs, and CWDs of all managed sessions
 // in a single lock acquisition. Used by discovery.Scan to avoid three separate mutex grabs.
+// Session IDs include the full chain (prevSessionIDs + current) from ALL sessions
+// (not just those with live processes) to prevent suspended sessions from being
+// rediscovered as external sessions, which would create duplicate entries.
 func (r *Router) ManagedExcludeSets() (pids map[int]bool, sessionIDs map[string]bool, cwds map[string]bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -1451,6 +1469,9 @@ func (r *Router) ManagedExcludeSets() (pids map[int]bool, sessionIDs map[string]
 	cwds = make(map[string]bool)
 	for _, s := range r.sessions {
 		if id := s.getSessionID(); id != "" {
+			sessionIDs[id] = true
+		}
+		for _, id := range s.prevSessionIDs {
 			sessionIDs[id] = true
 		}
 		if p := s.loadProcess(); p != nil && p.Alive() {
