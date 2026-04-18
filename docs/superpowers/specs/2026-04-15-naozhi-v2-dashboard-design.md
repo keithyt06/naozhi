@@ -1,5 +1,9 @@
 # Naozhi V2.0 设计规格文档
 
+> ⚠️  **Meeting Intelligence 功能已于 2026-04-18 下线**（见
+> `docs/superpowers/specs/2026-04-18-naozhi-ddd-refactor-design.md` §6
+> Phase 0）。本 spec 中涉及 Meeting 的章节仅作历史参考。
+
 > **From AI Gateway to CTO Operating System**
 >
 > V1 解决了 "随时随地和 Claude 对话"。V2 解决 "AI 随时随地为你工作"。

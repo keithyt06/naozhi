@@ -1,5 +1,9 @@
 # Naozhi V2.0 Phase 4: Platform & Moonshots 实施计划
 
+> ⚠️  **Meeting Intelligence 功能已于 2026-04-18 下线**（见
+> `docs/superpowers/specs/2026-04-18-naozhi-ddd-refactor-design.md` §6
+> Phase 0）。本 plan 中涉及 Meeting 的章节仅作历史参考。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在 Phase 1-3 构建的 Dashboard UI、Knowledge Layer 和 Patrol 自主 Agent 基础上，实现六大高级功能模块: Knowledge Graph 可视化、Observability Bridge 告警桥接、Meeting Intelligence 会议智能、Decision Journal 决策日志、Session Replay 回放分享、CTO Digital Twin 数字分身。这些功能将 Naozhi 从 "AI 对话管理工具" 推向 "CTO Operating System" 的完整形态。
