@@ -152,13 +152,6 @@ func (s *Server) registerDashboard() {
 		s.mux.HandleFunc("GET /api/graph/nodes/", auth(s.graphH.HandleNodeDetail))
 	}
 
-	// Meeting API
-	if s.meetingH != nil {
-		s.mux.HandleFunc("GET /api/meetings", auth(s.meetingH.handleList))
-		s.mux.HandleFunc("POST /api/meetings/upload", auth(s.meetingH.handleUpload))
-		s.mux.HandleFunc("GET /api/meetings/", auth(s.meetingH.handleGet))
-	}
-
 	// Replay API (Session Replay & Sharing)
 	if s.replayH != nil {
 		s.mux.HandleFunc("GET /api/sessions/replay", auth(s.replayH.handleReplay))

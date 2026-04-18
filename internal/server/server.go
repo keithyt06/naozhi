@@ -69,7 +69,6 @@ type Server struct {
 	filesH      *FileHandlers
 	knowledgeH  *KnowledgeHandlers
 	graphH      *graph.Handlers
-	meetingH    *MeetingHandlers
 	replayH     *ReplayHandlers
 	twinH       *TwinHandlers
 
@@ -325,14 +324,6 @@ func New(addr string, router *session.Router, platforms map[string]platform.Plat
 		s.knowledgeH.lint = knowledge.NewLintEngine(wiki, 30)
 		s.knowledgeH.cliSync = knowledge.NewCLISyncManager(search)
 		s.graphH = graph.NewHandlers(wiki.Dir())
-	}
-
-	// Meeting handlers (initialized when naozDir is available)
-	if naozDir != "" {
-		meetingStore := knowledge.NewMeetingStore(filepath.Join(naozDir, "meetings.json"))
-		audioDir := filepath.Join(naozDir, "meetings")
-		processor := knowledge.NewMeetingProcessor(meetingStore, opts.Transcriber, audioDir)
-		s.meetingH = NewMeetingHandlers(meetingStore, processor)
 	}
 
 	// Replay handlers (C2: persist shares to disk)
