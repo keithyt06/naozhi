@@ -928,34 +928,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;backgroun
 .wv-src-entity{display:inline-block;padding:2px 8px;border-radius:4px;background:#21262d;color:#c9d1d9;font-size:12px;margin:2px 3px 2px 0}
 @media(max-width:768px){.wv-list{display:none}.wv-lint-panel{display:none!important}.wv-sources-panel{display:none!important}}
 
-/* ===== Meeting Intelligence (Phase 4C) ===== */
-.mt-container{display:flex;height:100%;overflow:hidden}
-.mt-list{width:300px;border-right:1px solid #30363d;overflow-y:auto;flex-shrink:0;scrollbar-width:thin;background:#0d1117}
-.mt-list-header{padding:10px 12px;font-size:11px;color:#8b949e;border-bottom:1px solid #21262d;display:flex;align-items:center;justify-content:space-between}
-.mt-list-header .mt-list-title{font-weight:600;text-transform:uppercase;letter-spacing:.3px}
-.mt-upload-btn{padding:3px 10px;border-radius:4px;border:1px solid #1f6feb;background:rgba(31,111,235,.12);color:#58a6ff;cursor:pointer;font-size:10px;font-family:inherit;transition:all .15s}
-.mt-upload-btn:hover{background:rgba(31,111,235,.2)}
-.mt-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid #21262d;transition:background .1s}
-.mt-item:hover{background:#161b22}
-.mt-item.active{background:rgba(31,111,235,.12);border-left:2px solid #58a6ff}
-.mt-item-title{font-size:13px;color:#e6edf3;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mt-item-meta{font-size:11px;color:#6e7681;margin-top:2px;display:flex;gap:6px}
-.mt-status{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600}
-.mt-status.completed{background:rgba(35,134,54,.12);color:#3fb950}
-.mt-status.processing{background:rgba(158,106,3,.2);color:#d29922}
-.mt-status.failed{background:rgba(218,54,51,.2);color:#da3633}
-.mt-status.pending{background:#21262d;color:#8b949e}
-.mt-detail{flex:1;overflow-y:auto;padding:24px;max-width:760px}
-.mt-detail-title{font-size:22px;font-weight:600;color:#f0f6fc;margin-bottom:12px}
-.mt-detail-meta{font-size:12px;color:#8b949e;margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap}
-.mt-section{margin-bottom:24px}
-.mt-section h3{font-size:14px;font-weight:600;color:#e6edf3;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #21262d}
-.mt-section ul{padding-left:20px;margin:0}
-.mt-section li{font-size:13px;color:#c9d1d9;line-height:1.8}
-.mt-transcript{font-size:13px;color:#c9d1d9;line-height:1.8;white-space:pre-wrap;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;max-height:400px;overflow-y:auto}
-.mt-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#6e7681;gap:12px;padding:20px;font-size:14px}
-@media(max-width:768px){.mt-list{display:none}}
-
 /* ===== Context Panel (Task 14) ===== */
 .ctx-panel{width:0;border-left:none;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width .25s ease,border-left .25s;background:#0d1117}
 .ctx-panel.open{width:320px;border-left:1px solid #30363d}
@@ -1057,7 +1029,6 @@ window.shikiReady = (async () => {
       <button class="vb-btn" data-view="wiki" onclick="switchView('wiki',this)">Wiki</button>
       <button class="vb-btn" data-view="patrols" onclick="switchView('patrols',this)">Patrols</button>
       <button class="vb-btn" data-view="approvals" onclick="switchView('approvals',this)" id="vbApprovalsBtn">Approvals</button>
-      <button class="vb-btn" data-view="meetings" onclick="switchView('meetings',this)">Meetings</button>
       <button class="vb-btn" data-view="graph" onclick="switchView('graph',this)">Graph</button>
     </div>
     <div class="tag-filter" id="tagFilter">
@@ -5577,7 +5548,6 @@ function switchView(view, el) {
     else if (view === 'wiki') renderWikiView();
     else if (view === 'patrols') renderPatrolsView();
     else if (view === 'approvals') renderApprovalsView();
-    else if (view === 'meetings') renderMeetingView();
     else if (view === 'graph') renderGraphView();
   }
 }
@@ -6901,142 +6871,6 @@ async function triggerLint(btn) {
     btn.textContent = 'Lint';
     showToast('Lint failed: ' + e.message);
   }
-}
-
-/* ===== Phase 4C: Meeting Intelligence ===== */
-
-var mtMeetings = [];
-var mtCurrentId = '';
-
-function renderMeetingView() {
-  const main = document.getElementById('main');
-  main.innerHTML =
-    '<div class="mt-container" id="mtContainer">' +
-      '<div class="mt-list" id="mtList">' +
-        '<div class="mt-list-header">' +
-          '<span class="mt-list-title">Meetings</span>' +
-          '<label class="mt-upload-btn">Upload<input type="file" accept="audio/*" style="display:none" onchange="handleMeetingUpload(this)"></label>' +
-        '</div>' +
-        '<div id="mtPageList"><div class="kv-loading">Loading...</div></div>' +
-      '</div>' +
-      '<div class="mt-detail" id="mtDetail">' +
-        '<div class="mt-empty"><span style="font-size:28px;opacity:.3">&#127908;</span><span>Select a meeting or upload audio</span></div>' +
-      '</div>' +
-    '</div>';
-  loadMeetingList();
-}
-
-async function loadMeetingList() {
-  var container = document.getElementById('mtPageList');
-  if (!container) return;
-  try {
-    var data = await fetch('/api/meetings', { headers: authHeaders() }).then(function(r) { return r.ok ? r.json() : { meetings: [] }; });
-    mtMeetings = data.meetings || [];
-    if (mtMeetings.length === 0) {
-      container.innerHTML = '<div class="ctx-empty">No meetings yet. Upload an audio file to get started.</div>';
-      return;
-    }
-    var html = '';
-    for (var i = 0; i < mtMeetings.length; i++) {
-      var m = mtMeetings[i];
-      var active = mtCurrentId === m.id ? ' active' : '';
-      var dateStr = m.date ? new Date(m.date).toLocaleDateString() : '';
-      var pCount = (m.participants || []).length;
-      html += '<div class="mt-item' + active + '" data-id="' + escAttr(m.id) + '" onclick="loadMeetingDetail(\'' + escJs(m.id) + '\')">' +
-        '<div class="mt-item-title">' + esc(m.title || 'Untitled') + '</div>' +
-        '<div class="mt-item-meta">' +
-          '<span>' + esc(dateStr) + '</span>' +
-          (pCount > 0 ? '<span>' + pCount + ' participants</span>' : '') +
-          '<span class="mt-status ' + esc(m.status || '') + '">' + esc(m.status || 'unknown') + '</span>' +
-        '</div>' +
-      '</div>';
-    }
-    container.innerHTML = html;
-  } catch (e) {
-    container.innerHTML = '<div class="ctx-empty">' + esc(e.message) + '</div>';
-  }
-}
-
-async function loadMeetingDetail(id) {
-  mtCurrentId = id;
-  document.querySelectorAll('#mtPageList .mt-item').forEach(function(el) { el.classList.toggle('active', el.dataset.id === id); });
-  var detail = document.getElementById('mtDetail');
-  if (!detail) return;
-  detail.innerHTML = '<div class="kv-loading">Loading...</div>';
-  try {
-    var m = await fetch('/api/meetings/' + encodeURIComponent(id), { headers: authHeaders() }).then(function(r) {
-      if (!r.ok) throw new Error('Meeting not found');
-      return r.json();
-    });
-    var html = '<div class="mt-detail-title">' + esc(m.title || 'Untitled') + '</div>';
-    html += '<div class="mt-detail-meta">';
-    if (m.date) html += '<span>Date: ' + esc(new Date(m.date).toLocaleString()) + '</span>';
-    if (m.duration) html += '<span>Duration: ' + esc(m.duration) + '</span>';
-    if (m.participants && m.participants.length > 0) html += '<span>Participants: ' + esc(m.participants.join(', ')) + '</span>';
-    html += '<span class="mt-status ' + esc(m.status || '') + '">' + esc(m.status || '') + '</span>';
-    html += '</div>';
-
-    if (m.summary) {
-      html += '<div class="mt-section"><h3>Summary</h3><p style="font-size:13px;color:#c9d1d9;line-height:1.8">' + esc(m.summary) + '</p></div>';
-    }
-    if (m.decisions && m.decisions.length > 0) {
-      html += '<div class="mt-section"><h3>Decisions</h3><ul>';
-      for (var d = 0; d < m.decisions.length; d++) html += '<li>' + esc(m.decisions[d]) + '</li>';
-      html += '</ul></div>';
-    }
-    if (m.action_items && m.action_items.length > 0) {
-      html += '<div class="mt-section"><h3>Action Items</h3><ul>';
-      for (var a = 0; a < m.action_items.length; a++) {
-        var ai = m.action_items[a];
-        var checked = ai.done ? ' checked' : '';
-        html += '<li><label><input type="checkbox"' + checked + ' disabled> ' + esc(ai.description);
-        if (ai.assignee) html += ' <span style="color:#58a6ff">@' + esc(ai.assignee) + '</span>';
-        if (ai.due_date) html += ' <span style="color:#d29922">(Due: ' + esc(ai.due_date) + ')</span>';
-        html += '</label></li>';
-      }
-      html += '</ul></div>';
-    }
-    if (m.transcript) {
-      html += '<div class="mt-section"><h3>Transcript</h3><div class="mt-transcript">' + esc(m.transcript) + '</div></div>';
-    }
-    detail.innerHTML = html;
-  } catch (e) {
-    detail.innerHTML = '<div class="mt-empty">' + esc(e.message) + '</div>';
-  }
-}
-
-async function handleMeetingUpload(input) {
-  if (!input.files || !input.files[0]) return;
-  var file = input.files[0];
-  if (file.size > 100 * 1024 * 1024) {
-    showToast('File too large (max 100MB)');
-    input.value = '';
-    return;
-  }
-  var title = prompt('Meeting title:', file.name.replace(/\.[^.]+$/, ''));
-  if (title === null) { input.value = ''; return; }
-  var participants = prompt('Participants (comma-separated):', '');
-  var fd = new FormData();
-  fd.append('file', file);
-  fd.append('title', title || file.name);
-  if (participants) fd.append('participants', participants);
-  try {
-    showToast('Uploading...');
-    var res = await fetch('/api/meetings/upload', {
-      method: 'POST',
-      headers: authHeaders(),
-      body: fd
-    });
-    if (!res.ok) {
-      var err = await res.json().catch(function() { return {}; });
-      throw new Error(err.error || 'Upload failed');
-    }
-    showToast('Meeting uploaded, processing...');
-    setTimeout(loadMeetingList, 1000);
-  } catch (e) {
-    showToast('Upload error: ' + e.message);
-  }
-  input.value = '';
 }
 
 /* ===== Task 14: Context Panel ===== */
