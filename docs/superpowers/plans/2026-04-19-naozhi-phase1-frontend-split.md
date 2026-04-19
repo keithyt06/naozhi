@@ -1148,17 +1148,17 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 **Files:** Modify `js/legacy.js`, `js/app.js`; write `js/views/wiki.js`.
 
-- [ ] **Step 12.1: Locate source**
+- [x] **Step 12.1: Locate source**
 
 Run: `grep -n "function renderWikiView\|function loadWikiPages\|function loadWikiPage\|function renderWikiSourcesPanel\|function loadDecisions\|function saveDecisionFromForm" internal/server/static/js/legacy.js`
 
 Wiki includes the Decision Journal (ADR) UI and Sources Panel — all part of this module.
 
-- [ ] **Step 12.2: Cut + wrap + self-register**
+- [x] **Step 12.2: Cut + wrap + self-register**
 
 Follow template.
 
-- [ ] **Step 12.3: Smoke test**
+- [x] **Step 12.3: Smoke test**
 
 - Click **Wiki** tab
 - Page list on left, content on right
@@ -1166,7 +1166,7 @@ Follow template.
 - Decision Journal: view existing decisions, create new decision (fill title/context/decision/consequences → save → appears in list)
 - Ingest button triggers `POST /api/wiki/ingest` (don't actually run in smoke test — just click once and confirm the spinner fires without error; cancel the operation if it's slow)
 
-- [ ] **Step 12.4: Commit**
+- [x] **Step 12.4: Commit**
 
 ```bash
 git add internal/server/static/js/
