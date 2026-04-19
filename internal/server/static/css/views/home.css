@@ -1,1 +1,52 @@
-/* css/views/home.css — Phase 1 split placeholder */
+/* ===== Home View (Task 13) ===== */
+.home-view{padding:24px;overflow-y:auto;flex:1;max-width:960px;margin:0 auto;width:100%}
+.home-greeting{font-size:22px;color:#f0f6fc;font-weight:600;margin-bottom:4px}
+.home-date{font-size:13px;color:#8b949e;margin-bottom:20px}
+.home-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px}
+.stat-card .sc-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.3px}
+.stat-card .sc-value{font-size:28px;color:#f0f6fc;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+.stat-card .sc-sub{font-size:11px;color:#6e7681;margin-top:2px}
+.home-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+.home-action{padding:12px 16px;border-radius:10px;border:1px solid #30363d;background:#161b22;color:#c9d1d9;cursor:pointer;font-size:13px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;white-space:nowrap}
+.home-action:hover{background:#21262d;border-color:#58a6ff;color:#f0f6fc;transform:translateY(-1px)}
+.home-action .ha-icon{font-size:18px}
+@media(max-width:600px){.home-actions{grid-template-columns:repeat(2,1fr)}}
+.home-section-title{font-size:14px;color:#f0f6fc;font-weight:600;margin-bottom:10px}
+.home-feed{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;margin-bottom:24px}
+.feed-item{padding:10px 14px;border-bottom:1px solid #21262d;display:flex;gap:10px;align-items:flex-start}
+.feed-item:last-child{border-bottom:none}
+.feed-icon{font-size:14px;flex-shrink:0;margin-top:2px}
+.feed-body{flex:1;min-width:0}
+.feed-title{font-size:13px;color:#e6edf3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed-meta{font-size:11px;color:#6e7681;margin-top:2px}
+.home-wiki-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.home-wiki-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px;cursor:pointer;transition:all .15s}
+.home-wiki-card:hover{border-color:#484f58;background:#1c2128}
+.home-wiki-card .hwc-name{font-size:13px;color:#e6edf3;font-weight:500}
+.home-wiki-card .hwc-meta{font-size:11px;color:#6e7681;margin-top:4px}
+@media(max-width:768px){.home-stats{grid-template-columns:repeat(2,1fr);gap:8px}.home-view{padding:16px}}
+
+/* ===== Home Patrol/Approval Widgets (Task 20) ===== */
+.home-widget{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;margin-bottom:24px}
+.home-widget-header{padding:10px 14px;border-bottom:1px solid #21262d;display:flex;align-items:center;justify-content:space-between}
+.home-widget-header h3{font-size:13px;color:#f0f6fc;font-weight:600;margin:0}
+.home-widget-link{font-size:11px;color:#58a6ff;cursor:pointer;text-decoration:none}
+.home-widget-link:hover{text-decoration:underline}
+.hw-patrol-row{padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #161b22;font-size:12px}
+.hw-patrol-row:last-child{border-bottom:none}
+.hw-patrol-name{color:#c9d1d9;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hw-patrol-state{color:#8b949e;font-size:11px}
+.hw-patrol-time{color:#6e7681;font-size:10px;flex-shrink:0}
+.hw-approval-card{padding:10px 14px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .1s}
+.hw-approval-card:hover{background:#1c2128}
+.hw-approval-card:last-child{border-bottom:none}
+.hw-approval-card.urgent{border-left:3px solid #da3633}
+.hw-approval-info{flex:1;min-width:0}
+.hw-approval-title{font-size:12px;color:#e6edf3;font-weight:500}
+.hw-approval-meta{font-size:11px;color:#6e7681;margin-top:2px}
+.hw-approval-btn{padding:4px 10px;border-radius:4px;border:1px solid #30363d;background:#21262d;color:#c9d1d9;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s;flex-shrink:0}
+.hw-approval-btn:hover{background:#30363d;border-color:#484f58}
+.hw-clear{padding:16px;text-align:center;font-size:12px;color:#10b981}
+.vb-btn .vb-badge{display:inline-block;min-width:14px;height:14px;border-radius:7px;background:#da3633;color:#fff;font-size:8px;font-weight:700;line-height:14px;text-align:center;margin-left:3px;padding:0 3px;vertical-align:middle}
+
