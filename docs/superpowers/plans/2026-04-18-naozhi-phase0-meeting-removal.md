@@ -507,7 +507,7 @@ Expected: no issues.
 
 **Files:** deploy binary to production.
 
-- [ ] **Step 16.1: Build production binary**
+- [x] **Step 16.1: Build production binary**
 
 Run:
 ```bash
@@ -516,7 +516,7 @@ ls -la bin/naozhi
 ```
 Expected: `bin/naozhi` exists, ~20-40 MB.
 
-- [ ] **Step 16.2: Upload**
+- [x] **Step 16.2: Upload**
 
 Run:
 ```bash
@@ -526,7 +526,7 @@ scp -i $PEM bin/naozhi $EC2:/tmp/naozhi
 ```
 Expected: upload succeeds.
 
-- [ ] **Step 16.3: Replace + restart**
+- [x] **Step 16.3: Replace + restart**
 
 Run:
 ```bash
@@ -538,12 +538,12 @@ ssh -i $PEM $EC2 "sudo systemctl stop naozhi && \
 ```
 Expected: prints `active`.
 
-- [ ] **Step 16.4: Health check**
+- [x] **Step 16.4: Health check**
 
 Run: `ssh -i $PEM $EC2 "curl -s http://localhost:8180/health"`
 Expected: `{"cli_available":true,...,"status":"ok",...}`.
 
-- [ ] **Step 16.5: API surface check**
+- [x] **Step 16.5: API surface check**
 
 Run: `ssh -i $PEM $EC2 "curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8180/api/meetings"`
 Expected: `404` (route is gone — good). Any 200/500 → stop and investigate.
@@ -556,7 +556,7 @@ Expected: `404` (route is gone — good). Any 200/500 → stop and investigate.
 
 **⚠️  Destructive step — STOP and confirm with user before running.** Once deleted, meeting transcripts and audio are gone forever.
 
-- [ ] **Step 17.1: Inspect what will be deleted**
+- [x] **Step 17.1: Inspect what will be deleted**
 
 Run:
 ```bash
@@ -564,7 +564,7 @@ ssh -i $PEM $EC2 "sudo ls -la /root/.naozhi/meetings.json /root/.naozhi/meetings
 ```
 Report the output to the user for review.
 
-- [ ] **Step 17.2: Backup first**
+- [x] **Step 17.2: Backup first**
 
 Run:
 ```bash
@@ -574,11 +574,11 @@ ssh -i $PEM $EC2 "sudo tar czf /root/.naozhi/meetings-backup-\$(date +%Y%m%d).tg
 ```
 Expected: tarball exists. If tar fails because the files don't exist at all (clean server), skip Steps 17.3-17.4.
 
-- [ ] **Step 17.3: Confirm with user**
+- [x] **Step 17.3: Confirm with user**
 
 Ask: "About to delete `/root/.naozhi/meetings.json` and `/root/.naozhi/meetings/` on EC2. Backup saved to `/root/.naozhi/meetings-backup-YYYYMMDD.tgz`. Proceed?" Wait for explicit yes.
 
-- [ ] **Step 17.4: Delete**
+- [x] **Step 17.4: Delete**
 
 Run:
 ```bash
@@ -594,7 +594,7 @@ Expected: last grep returns only the backup `.tgz` file.
 
 **Files:** no code changes, tag the commit.
 
-- [ ] **Step 18.1: Manual dashboard smoke test**
+- [x] **Step 18.1: Manual dashboard smoke test**
 
 From user's phone or browser:
 1. Load `https://naozhi.keithyu.cloud/dashboard`
@@ -604,7 +604,7 @@ From user's phone or browser:
 
 Report PASS/FAIL to user.
 
-- [ ] **Step 18.2: Check logs for residual errors**
+- [x] **Step 18.2: Check logs for residual errors**
 
 Run:
 ```bash
@@ -612,14 +612,14 @@ ssh -i $PEM $EC2 "sudo journalctl -u naozhi -n 100 --no-pager | grep -i 'meeting
 ```
 Expected: only historical log entries predating this restart; no new errors.
 
-- [ ] **Step 18.3: Tag the commit**
+- [x] **Step 18.3: Tag the commit**
 
 Run:
 ```bash
 git tag -a phase-0-meeting-removed -m "Phase 0 complete: Meeting Intelligence removed (backend + frontend + data + docs)"
 ```
 
-- [ ] **Step 18.4: Update deployment manual changelog**
+- [x] **Step 18.4: Update deployment manual changelog**
 
 Add a one-line entry to `/root/keith-space/AWS/EC2-Workload/naozhi-deployment.md` under Changelog:
 
@@ -649,14 +649,14 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 Phase 0 is complete when **all** of the following hold:
 
-- [ ] `go build ./... && go test ./...` green (Task 15.2)
-- [ ] `grep -rn -i "meeting" --include="*.go" --include="*.html" internal/` empty (Task 15.1)
-- [ ] EC2 `curl /health` returns `status:ok` (Task 16.4)
-- [ ] EC2 `curl /api/meetings` returns 404 (Task 16.5)
-- [ ] Dashboard has no Meetings tab, all other tabs work (Task 18.1)
-- [ ] EC2 `/root/.naozhi/meetings.json` + `meetings/` deleted (Task 17.4)
-- [ ] Commit `phase-0-meeting-removed` tagged (Task 18.3)
-- [ ] `naozhi-deployment.md` changelog entry committed (Task 18.4)
+- [x] `go build ./... && go test ./...` green (Task 15.2)
+- [x] `grep -rn -i "meeting" --include="*.go" --include="*.html" internal/` empty (Task 15.1)
+- [x] EC2 `curl /health` returns `status:ok` (Task 16.4)
+- [x] EC2 `curl /api/meetings` returns 404 (Task 16.5)
+- [x] Dashboard has no Meetings tab, all other tabs work (Task 18.1)
+- [x] EC2 `/root/.naozhi/meetings.json` + `meetings/` deleted (Task 17.4)
+- [x] Commit `phase-0-meeting-removed` tagged (Task 18.3)
+- [x] `naozhi-deployment.md` changelog entry committed (Task 18.4)
 
 ## Next
 
