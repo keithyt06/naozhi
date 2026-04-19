@@ -1185,7 +1185,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 Do each as a separate commit (three commits total in this task).
 
-- [ ] **Step 13.1: Patrols — cut + wrap + register**
+- [x] **Step 13.1: Patrols — cut + wrap + register**
 
 Grep: `function renderPatrolsView\|function renderPatrolCards\|function togglePatrolRule\|function editPatrolRule`. Template.
 

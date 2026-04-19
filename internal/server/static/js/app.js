@@ -27,6 +27,7 @@ import './views/chat.js';
 // bridges are installed before the legacy bootstrap IIFE runs.
 import './views/knowledge.js';
 import './views/wiki.js';
+import './views/patrols.js';
 
 // Mark bootstrap complete so the legacy inline script (and any future
 // consumers) can detect readiness.
