@@ -1,33 +1,87 @@
 package server
 
 import (
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"html/template"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/naozhi/naozhi/internal/project"
 	"github.com/naozhi/naozhi/internal/session"
 )
 
-// dashboardETag is computed once at init from the embedded HTML content.
-var dashboardETag string
-
-func init() {
-	data, err := staticFS.ReadFile("static/dashboard.html")
-	if err != nil {
-		return
-	}
-	h := sha256.Sum256(data)
-	dashboardETag = `"` + hex.EncodeToString(h[:8]) + `"`
-}
+// dashboardETag is computed once at init from the rendered HTML output
+// (template + asset manifest), so any hash change busts the shell cache.
+var (
+	dashboardETag  string
+	dashboardTmpl  *template.Template
+	staticManifest map[string]string // logical path -> hashed path, e.g. "js/app.js" -> "js/app.abc12345.js"
+	dashboardBody  []byte            // pre-rendered HTML (template output) for hot-path serving
+)
 
 //go:embed all:static
 var staticFS embed.FS
+
+// asset returns the URL for a logical static asset. When a hashed copy exists
+// in the manifest we emit the immutable /static/dist/<hashed> URL; otherwise
+// we fall back to the unhashed /static/<logical> path (dev mode, before
+// `make static` has been run).
+func asset(logical string) string {
+	if h, ok := staticManifest[logical]; ok {
+		return "/static/dist/" + h
+	}
+	return "/static/" + logical
+}
+
+func init() {
+	// Load the asset manifest first so the template's asset helper can use it.
+	if data, err := staticFS.ReadFile("static/dist/manifest.json"); err == nil {
+		_ = json.Unmarshal(data, &staticManifest)
+	} else {
+		slog.Warn("static asset manifest missing; serving unhashed paths (run `make static` to enable immutable cache)",
+			"err", err)
+	}
+
+	tmplBytes, err := staticFS.ReadFile("static/dashboard.html")
+	if err != nil {
+		return
+	}
+	dashboardTmpl = template.Must(template.New("dashboard").
+		Funcs(template.FuncMap{"asset": asset}).
+		Parse(string(tmplBytes)))
+
+	var buf bytes.Buffer
+	if err := dashboardTmpl.Execute(&buf, nil); err != nil {
+		slog.Error("render dashboard template", "err", err)
+		return
+	}
+	dashboardBody = buf.Bytes()
+
+	// ETag covers both the template source and every manifest entry so any
+	// rebuild with a changed asset hash invalidates the cached shell.
+	h := sha256.New()
+	h.Write(dashboardBody)
+	keys := make([]string, 0, len(staticManifest))
+	for k := range staticManifest {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		h.Write([]byte(k))
+		h.Write([]byte{0})
+		h.Write([]byte(staticManifest[k]))
+		h.Write([]byte{0})
+	}
+	sum := h.Sum(nil)
+	dashboardETag = `"` + hex.EncodeToString(sum[:8]) + `"`
+}
 
 const authCookieName = "naozhi_auth"
 
@@ -189,10 +243,16 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		s.auth.serveLoginPage(w)
 		return
 	}
-	data, err := staticFS.ReadFile("static/dashboard.html")
-	if err != nil {
-		http.Error(w, "dashboard not found", http.StatusNotFound)
-		return
+	data := dashboardBody
+	if len(data) == 0 {
+		// Template render failed at init; fall back to raw embedded HTML
+		// so the dashboard still loads (unhashed asset URLs).
+		raw, err := staticFS.ReadFile("static/dashboard.html")
+		if err != nil {
+			http.Error(w, "dashboard not found", http.StatusNotFound)
+			return
+		}
+		data = raw
 	}
 	// ETag-based caching: browser must revalidate every time, but gets
 	// a 304 if the content hasn't changed. This ensures code fixes are
@@ -258,7 +318,9 @@ func (s *Server) handleSW(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleStatic serves files from internal/server/static under /static/*.
-// Phase 1: short cache (1h). Task 14 switches hashed files to immutable 1y.
+// Files under /static/dist/ are content-hashed (see tools/hashstatic) and
+// served with a 1-year immutable cache. Other /static/ paths remain as a
+// dev-mode fallback with a 1h cache.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/static/")
 	if path == "" || strings.Contains(path, "..") {
@@ -278,7 +340,11 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(path, ".json"):
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	}
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if strings.HasPrefix(path, "dist/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	}
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") &&
 		(strings.HasSuffix(path, ".css") || strings.HasSuffix(path, ".js")) {
 		w.Header().Set("Content-Encoding", "gzip")

@@ -10,15 +10,15 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="theme-color" content="#0d1117">
-<link rel="stylesheet" href="/static/css/base.css">
-<link rel="stylesheet" href="/static/css/components.css">
-<link rel="stylesheet" href="/static/css/views/home.css">
-<link rel="stylesheet" href="/static/css/views/chat.css">
-<link rel="stylesheet" href="/static/css/views/knowledge.css">
-<link rel="stylesheet" href="/static/css/views/wiki.css">
-<link rel="stylesheet" href="/static/css/views/patrols.css">
-<link rel="stylesheet" href="/static/css/views/approvals.css">
-<link rel="stylesheet" href="/static/css/views/graph.css">
+<link rel="stylesheet" href="{{ asset "css/base.css" }}">
+<link rel="stylesheet" href="{{ asset "css/components.css" }}">
+<link rel="stylesheet" href="{{ asset "css/views/home.css" }}">
+<link rel="stylesheet" href="{{ asset "css/views/chat.css" }}">
+<link rel="stylesheet" href="{{ asset "css/views/knowledge.css" }}">
+<link rel="stylesheet" href="{{ asset "css/views/wiki.css" }}">
+<link rel="stylesheet" href="{{ asset "css/views/patrols.css" }}">
+<link rel="stylesheet" href="{{ asset "css/views/approvals.css" }}">
+<link rel="stylesheet" href="{{ asset "css/views/graph.css" }}">
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
 <script type="module">
 import { createHighlighterCore } from 'https://esm.sh/shiki@3.2.1/core';
@@ -124,8 +124,8 @@ window.shikiReady = (async () => {
 <!-- ES module entry point. app.js imports core/{html,utils,api,state,router}
      and installs their window.* bridges before the inline legacy <script>
      below runs. -->
-<script type="module" src="/static/js/app.js"></script>
-<script src="/static/js/legacy.js" defer></script>
+<script type="module" src="{{ asset "js/app.js" }}"></script>
+<script src="{{ asset "js/legacy.js" }}" defer></script>
 <div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
   <div class="search-modal">
     <div class="sm-header">

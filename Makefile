@@ -3,9 +3,12 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 BINARY  := naozhi
 MAIN    := ./cmd/naozhi/
 
-.PHONY: build vet test deploy release clean
+.PHONY: static build vet test deploy release clean
 
-build:
+static:
+	go run ./tools/hashstatic
+
+build: static
 	CGO_ENABLED=0 go build -trimpath -ldflags='$(LDFLAGS)' -o bin/$(BINARY) $(MAIN)
 
 deploy: build
