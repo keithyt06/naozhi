@@ -1201,7 +1201,7 @@ Smoke test: Approvals tab → queue renders → click Approve on an item (if que
 
 Commit: `refactor(frontend): migrate approvals view to js/views/approvals.js`.
 
-- [ ] **Step 13.3: Graph — cut + wrap + register + move d3 import inside**
+- [x] **Step 13.3: Graph — cut + wrap + register + move d3 import inside**
 
 Graph is special: it lazy-loads `d3` from CDN. Move the `import('https://cdn.jsdelivr.net/npm/d3@...')` call **inside** `js/views/graph.js` so d3 is only downloaded when the user clicks Graph.
 

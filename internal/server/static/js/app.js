@@ -30,6 +30,12 @@ import './views/wiki.js';
 import './views/patrols.js';
 import './views/approvals.js';
 
+// Task 13: Phase 4A Knowledge Graph. The graph module itself is small
+// and eager-loaded; d3 is dynamically imported inside graph.js on
+// first mount, so the ~250KB d3 bundle only ships when the user opens
+// the graph view.
+import './views/graph.js';
+
 // Mark bootstrap complete so the legacy inline script (and any future
 // consumers) can detect readiness.
 if (typeof window !== 'undefined') {
