@@ -413,3 +413,40 @@ func TestHandleAPISessions_NodeAggregation(t *testing.T) {
 		t.Error("remote session with node='macbook' not found in aggregated sessions")
 	}
 }
+
+// ─── Task 15: lazy view import bootstrap ────────────────────────────────────
+
+// TestHandleDashboard_ManifestInjection verifies the dashboard HTML embeds
+// window.__MANIFEST + window.__resolveAsset before app.js, so dynamic
+// imports of lazy view modules can resolve hashed URLs at runtime.
+func TestHandleDashboard_ManifestInjection(t *testing.T) {
+	srv := newTestServer(&mockPlatform{})
+	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	w := httptest.NewRecorder()
+	srv.handleDashboard(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "window.__MANIFEST = ") {
+		t.Error("body missing window.__MANIFEST assignment")
+	}
+	if !strings.Contains(body, "window.__resolveAsset = function(") {
+		t.Error("body missing window.__resolveAsset helper")
+	}
+	// Manifest script must precede the app.js module tag so lazy imports
+	// have the resolver available when the router evaluates.
+	mIdx := strings.Index(body, "window.__MANIFEST")
+	appIdx := strings.Index(body, `src="/static/`)
+	if appIdx > 0 && mIdx > appIdx {
+		t.Errorf("manifest script appears after app.js script (idx %d > %d)", mIdx, appIdx)
+	}
+	// Confirm no eager <script> tag exists for the lazy view modules —
+	// they must only be fetched via dynamic import().
+	for _, v := range []string{"views/knowledge.js", "views/wiki.js", "views/patrols.js", "views/approvals.js", "views/graph.js"} {
+		if strings.Contains(body, `src="/static/js/`+v) || strings.Contains(body, `src="/static/dist/js/`+v) {
+			t.Errorf("lazy view %s should not be eagerly loaded via <script src>", v)
+		}
+	}
+}

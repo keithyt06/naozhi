@@ -20,10 +20,11 @@ import (
 // dashboardETag is computed once at init from the rendered HTML output
 // (template + asset manifest), so any hash change busts the shell cache.
 var (
-	dashboardETag  string
-	dashboardTmpl  *template.Template
-	staticManifest map[string]string // logical path -> hashed path, e.g. "js/app.js" -> "js/app.abc12345.js"
-	dashboardBody  []byte            // pre-rendered HTML (template output) for hot-path serving
+	dashboardETag      string
+	dashboardTmpl      *template.Template
+	staticManifest     map[string]string // logical path -> hashed path, e.g. "js/app.js" -> "js/app.abc12345.js"
+	staticManifestJSON template.JS       // JSON-encoded manifest, embedded inline for runtime asset resolution
+	dashboardBody      []byte            // pre-rendered HTML (template output) for hot-path serving
 )
 
 //go:embed all:static
@@ -49,6 +50,17 @@ func init() {
 			"err", err)
 	}
 
+	// Pre-encode the manifest as JSON for inline injection. Empty manifest
+	// becomes `{}` so the resolver helper degrades gracefully in dev mode.
+	if len(staticManifest) == 0 {
+		staticManifestJSON = template.JS("{}")
+	} else if b, err := json.Marshal(staticManifest); err == nil {
+		staticManifestJSON = template.JS(b)
+	} else {
+		slog.Error("marshal static manifest", "err", err)
+		staticManifestJSON = template.JS("{}")
+	}
+
 	tmplBytes, err := staticFS.ReadFile("static/dashboard.html")
 	if err != nil {
 		return
@@ -57,8 +69,12 @@ func init() {
 		Funcs(template.FuncMap{"asset": asset}).
 		Parse(string(tmplBytes)))
 
+	tmplData := struct {
+		ManifestJSON template.JS
+	}{ManifestJSON: staticManifestJSON}
+
 	var buf bytes.Buffer
-	if err := dashboardTmpl.Execute(&buf, nil); err != nil {
+	if err := dashboardTmpl.Execute(&buf, tmplData); err != nil {
 		slog.Error("render dashboard template", "err", err)
 		return
 	}
@@ -321,6 +337,14 @@ func (s *Server) handleSW(w http.ResponseWriter, r *http.Request) {
 // Files under /static/dist/ are content-hashed (see tools/hashstatic) and
 // served with a 1-year immutable cache. Other /static/ paths remain as a
 // dev-mode fallback with a 1h cache.
+//
+// Transitive-import fallback (Task 15): a hashed JS module like
+// /static/dist/js/views/wiki.<hash>.js contains relative imports such as
+// `import '../core/html.js'`, which the browser resolves to
+// /static/dist/js/core/html.js (UNHASHED). hashstatic only writes hashed
+// copies into dist/, so we fall back to the unhashed source under
+// static/ when the exact dist path is absent. The response bytes are the
+// same; only the cache TTL differs.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/static/")
 	if path == "" || strings.Contains(path, "..") {
@@ -328,6 +352,11 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data, err := staticFS.ReadFile("static/" + path)
+	if err != nil && strings.HasPrefix(path, "dist/") {
+		// Fallback: serve the unhashed source so relative imports inside
+		// hashed modules still resolve. See doc comment above.
+		data, err = staticFS.ReadFile("static/" + strings.TrimPrefix(path, "dist/"))
+	}
 	if err != nil {
 		http.NotFound(w, r)
 		return

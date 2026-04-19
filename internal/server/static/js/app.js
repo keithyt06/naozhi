@@ -3,8 +3,15 @@
 // Importing the core modules here is load-bearing: each of them
 // installs its `window.*` bridges as a side effect of first evaluation,
 // which is what the pre-split inline <script> block below relies on.
-// Keep this file minimal — it is the bootstrap only. View modules
-// (Tasks 8-13) will add their own imports here as they are extracted.
+// Keep this file minimal — it is the bootstrap only.
+//
+// Task 15: only core/*, ws, and chat (plus home, imported transitively
+// by chat.js) are eagerly shipped in the first-paint bundle. Every
+// other view (knowledge / wiki / patrols / approvals / graph) is loaded
+// on demand via the router's dynamic-import path — see core/router.js
+// `ensureViewLoaded`. This keeps the initial JS payload small; the
+// lazy chunks resolve through window.__resolveAsset so hashed URLs are
+// picked up when the manifest is present.
 
 import './core/html.js';
 import './core/utils.js';
@@ -12,29 +19,14 @@ import './core/api.js';
 import './core/state.js';
 import './core/router.js';
 
-// Home is the first-paint view (rendered when no session is
-// selected) — load eagerly so the landing page has no jank.
-import './views/home.js';
-
 // Task 9: WebSocket manager + chat view. Order matters — ws.js must
 // load first because chat.js references `wsm` (via window bridge) for
 // the send flow. Both are eagerly imported so the first-paint chat
-// experience has no extra round trip.
+// experience has no extra round trip. chat.js imports views/home.js
+// statically (ESM), so the home renderer is bundled alongside chat
+// without another network round trip.
 import './core/ws.js';
 import './views/chat.js';
-
-// Task 10-12: non-chat view modules. Eager-imported so their window.*
-// bridges are installed before the legacy bootstrap IIFE runs.
-import './views/knowledge.js';
-import './views/wiki.js';
-import './views/patrols.js';
-import './views/approvals.js';
-
-// Task 13: Phase 4A Knowledge Graph. The graph module itself is small
-// and eager-loaded; d3 is dynamically imported inside graph.js on
-// first mount, so the ~250KB d3 bundle only ships when the user opens
-// the graph view.
-import './views/graph.js';
 
 // Mark bootstrap complete so the legacy inline script (and any future
 // consumers) can detect readiness.

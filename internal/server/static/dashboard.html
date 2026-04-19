@@ -121,6 +121,12 @@ window.shikiReady = (async () => {
     <div class="vo-hint" id="vo-hint"></div>
   </div>
 </div>
+<!-- Inline asset manifest + resolver. Task 15 dynamic imports use this to
+     map logical view paths (e.g. "js/views/wiki.js") to hashed URLs. Must
+     appear BEFORE app.js so the router can read window.__MANIFEST during
+     the first lazy import. -->
+<script>window.__MANIFEST = {{ .ManifestJSON }};
+window.__resolveAsset = function(p) { var h = window.__MANIFEST && window.__MANIFEST[p]; return h ? '/static/dist/' + h : '/static/' + p; };</script>
 <!-- ES module entry point. app.js imports core/{html,utils,api,state,router}
      and installs their window.* bridges before the inline legacy <script>
      below runs. -->
