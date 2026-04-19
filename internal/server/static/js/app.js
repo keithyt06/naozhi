@@ -16,9 +16,12 @@ import './core/router.js';
 // selected) — load eagerly so the landing page has no jank.
 import './views/home.js';
 
-// ws.js is a Task 9 target (chat view migration). Until then, the
-// legacy inline script owns the WebSocket lifecycle.
-// import './core/ws.js';
+// Task 9: WebSocket manager + chat view. Order matters — ws.js must
+// load first because chat.js references `wsm` (via window bridge) for
+// the send flow. Both are eagerly imported so the first-paint chat
+// experience has no extra round trip.
+import './core/ws.js';
+import './views/chat.js';
 
 // Mark bootstrap complete so the legacy inline script (and any future
 // consumers) can detect readiness.

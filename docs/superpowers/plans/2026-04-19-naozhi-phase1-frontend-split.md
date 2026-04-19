@@ -1020,7 +1020,7 @@ EOF
 
 **Note:** Chat is the **largest** view — it owns `renderMainShell`, `renderSessionList`, `renderSidebar`, message rendering, tool-call cards, bookmark buttons, input handling, drag-drop, voice recording, and the context panel. Budget this task a full day; break into sub-steps freely.
 
-- [ ] **Step 10.1: Identify the chat boundary**
+- [x] **Step 10.1: Identify the chat boundary**
 
 Grep:
 ```bash
@@ -1029,7 +1029,7 @@ grep -n "function renderMainShell\|function renderSessionList\|function renderSi
 
 Expected: ~20+ functions. Record the set.
 
-- [ ] **Step 10.2: Identify shared-by-chat helpers that other views call**
+- [x] **Step 10.2: Identify shared-by-chat helpers that other views call**
 
 Run: `grep -n "renderMainShell\|renderSessionList\|renderSidebar" internal/server/static/js/legacy.js`
 
@@ -1039,7 +1039,7 @@ Anywhere these are called from **outside** the chat function cluster (e.g. from 
 window.renderMainShell = (...args) => import('/static/js/views/chat.js').then(m => m.renderMainShell(...args));
 ```
 
-- [ ] **Step 10.3: Cut into `js/views/chat.js`**
+- [x] **Step 10.3: Cut into `js/views/chat.js`**
 
 Export both `mount` / `unmount` and named helpers (`renderMainShell`, `renderSidebar`, etc.) so the `window.*` bridges in Step 10.2 resolve. `mount(slot)`:
 
@@ -1060,17 +1060,17 @@ export async function mount(slot) {
 
 `unmount()` clears any chat-specific timers. Leave it minimal; the aggressive cleanup can come later.
 
-- [ ] **Step 10.4: Delete from `legacy.js`**
+- [x] **Step 10.4: Delete from `legacy.js`**
 
 Remove all the chat functions cut above.
 
-- [ ] **Step 10.5: Eager-import in `app.js`**
+- [x] **Step 10.5: Eager-import in `app.js`**
 
 ```js
 import('./views/chat.js');
 ```
 
-- [ ] **Step 10.6: Smoke test — long checklist**
+- [x] **Step 10.6: Smoke test — long checklist**
 
 Build, run, open dashboard, then:
 - Session list in sidebar loads (≥ 1 session visible if server has any)
@@ -1087,7 +1087,7 @@ Build, run, open dashboard, then:
 
 If any step fails, stop and diff the cut range against the module — you likely dropped a function.
 
-- [ ] **Step 10.7: Commit**
+- [x] **Step 10.7: Commit**
 
 ```bash
 git add internal/server/static/js/
