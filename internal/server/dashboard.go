@@ -18,7 +18,7 @@ import (
 var dashboardETag string
 
 func init() {
-	data, err := dashboardHTML.ReadFile("static/dashboard.html")
+	data, err := staticFS.ReadFile("static/dashboard.html")
 	if err != nil {
 		return
 	}
@@ -26,14 +26,8 @@ func init() {
 	dashboardETag = `"` + hex.EncodeToString(h[:8]) + `"`
 }
 
-//go:embed static/dashboard.html
-var dashboardHTML embed.FS
-
-//go:embed static/manifest.json
-var manifestJSON embed.FS
-
-//go:embed static/sw.js
-var swJS embed.FS
+//go:embed all:static
+var staticFS embed.FS
 
 const authCookieName = "naozhi_auth"
 
@@ -101,7 +95,7 @@ func (s *Server) registerDashboard() {
 	if s.patrolH != nil {
 		s.patrolH.RegisterRoutes(s.mux, auth)
 		s.patrolH.RegisterWebhookRoutes(s.mux) // webhooks are unauthenticated
-		s.patrolH.RegisterAlertRoutes(s.mux)    // alert webhooks are unauthenticated
+		s.patrolH.RegisterAlertRoutes(s.mux)   // alert webhooks are unauthenticated
 		if s.patrolMgr != nil {
 			s.patrolMgr.SetHub(s.hub)
 		}
@@ -183,6 +177,7 @@ func (s *Server) registerDashboard() {
 	s.mux.HandleFunc("GET /dashboard", s.handleDashboard)
 	s.mux.HandleFunc("GET /manifest.json", s.handleManifest)
 	s.mux.HandleFunc("GET /sw.js", s.handleSW)
+	s.mux.HandleFunc("GET /static/", s.handleStatic)
 	s.mux.HandleFunc("GET /ws", s.hub.HandleUpgrade)
 	if s.reverseNodeServer != nil {
 		s.mux.Handle("GET /ws-node", s.reverseNodeServer)
@@ -194,7 +189,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		s.auth.serveLoginPage(w)
 		return
 	}
-	data, err := dashboardHTML.ReadFile("static/dashboard.html")
+	data, err := staticFS.ReadFile("static/dashboard.html")
 	if err != nil {
 		http.Error(w, "dashboard not found", http.StatusNotFound)
 		return
@@ -236,7 +231,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
-	data, err := manifestJSON.ReadFile("static/manifest.json")
+	data, err := staticFS.ReadFile("static/manifest.json")
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -249,7 +244,7 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSW(w http.ResponseWriter, r *http.Request) {
-	data, err := swJS.ReadFile("static/sw.js")
+	data, err := staticFS.ReadFile("static/sw.js")
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -260,6 +255,39 @@ func (s *Server) handleSW(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(data); err != nil {
 		slog.Debug("sw write", "err", err)
 	}
+}
+
+// handleStatic serves files from internal/server/static under /static/*.
+// Phase 1: short cache (1h). Task 14 switches hashed files to immutable 1y.
+func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/static/")
+	if path == "" || strings.Contains(path, "..") {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := staticFS.ReadFile("static/" + path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	switch {
+	case strings.HasSuffix(path, ".css"):
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	case strings.HasSuffix(path, ".js"):
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	case strings.HasSuffix(path, ".json"):
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") &&
+		(strings.HasSuffix(path, ".css") || strings.HasSuffix(path, ".js")) {
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		_, _ = gz.Write(data)
+		return
+	}
+	_, _ = w.Write(data)
 }
 
 // strOrFallback extracts a string from a map, trying the primary key first then the fallback.
