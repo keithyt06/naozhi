@@ -470,7 +470,7 @@ EOF
 
 **Files:** Modify `dashboard.html`; write `js/core/utils.js`, `js/core/html.js`, `js/core/api.js`, `js/core/state.js`.
 
-- [ ] **Step 6.1: Write `js/core/html.js`**
+- [x] **Step 6.1: Write `js/core/html.js`**
 
 Replace the placeholder with:
 
@@ -513,11 +513,11 @@ if (typeof window !== 'undefined') {
 }
 ```
 
-- [ ] **Step 6.2: Write `js/core/utils.js`**
+- [x] **Step 6.2: Write `js/core/utils.js`**
 
 Grep the current `dashboard.html` for `function isToday`, `function isYesterday`, `function matchesTagFilter`, `function filterByTag`, `function debounce` (if any), `function majorMinor`, `function cliIcon`. Move each intact into `js/core/utils.js` and add `export` to every function. At the bottom, for each export, add `window.<name> = <name>` to keep existing inline handlers working. Target line count: ~80 LOC.
 
-- [ ] **Step 6.3: Write `js/core/api.js`**
+- [x] **Step 6.3: Write `js/core/api.js`**
 
 Grep for `function getToken`, `function setToken`, `function authHeaders` (search — it's used everywhere). Move them plus any shared `fetchJSON`/`fetchWithRetry` helpers into `js/core/api.js` with named exports + `window.*` legacy bridge.
 
@@ -559,7 +559,7 @@ if (typeof window !== 'undefined') {
 
 Only replace the legacy `authHeaders()` implementation if it's currently `function authHeaders() { return {}; }`. If it does more (e.g. attaches a token), preserve that logic verbatim.
 
-- [ ] **Step 6.4: Write `js/core/state.js`**
+- [x] **Step 6.4: Write `js/core/state.js`**
 
 Move the `let selectedKey`, `let sessionsData`, `let allSessionsCache`, etc. globals (currently at dashboard.html lines 1085-1116) into `js/core/state.js`:
 
@@ -621,7 +621,7 @@ if (typeof window !== 'undefined') {
 
 **Critical:** `let selectedKey = null` in the current code is a lexical binding; `window.selectedKey` won't shadow it. After this task, delete the `let selectedKey = ...` lines at dashboard.html:1085-1116. The `defineProperty` bridge makes `window.selectedKey = 'foo'` and `selectedKey === 'foo'` both work for legacy code, because the legacy code runs as a plain `<script>` (not a module) in the remaining inline block, so unqualified `selectedKey` resolves through the global object.
 
-- [ ] **Step 6.5: Delete the migrated globals + helpers from `dashboard.html`**
+- [x] **Step 6.5: Delete the migrated globals + helpers from `dashboard.html`**
 
 In `dashboard.html`:
 1. Remove lines 1085-1116 (the `let ... ` globals now in `state.js`)
@@ -629,7 +629,7 @@ In `dashboard.html`:
 3. Remove the `function getToken`, `setToken`, `authHeaders` definitions (now in `api.js`)
 4. Remove any standalone `function esc`, `escAttr`, `escJs` (now in `html.js`)
 
-- [ ] **Step 6.6: Add the bootstrap module loader at the bottom of `<script>…</script>`**
+- [x] **Step 6.6: Add the bootstrap module loader at the bottom of `<script>…</script>`**
 
 **Do not** convert the entire remaining inline `<script>` to `type="module"` yet — that breaks `onclick="..."` resolution. Instead, leave the inline `<script>…</script>` as is, and **above it** (just after `</head>` or inside `<body>` top) inject a small preload:
 
@@ -660,7 +660,7 @@ Simpler: use `defer` on the inline block by **moving** the legacy inline `<scrip
 - Replace those lines in `dashboard.html` with `<script src="/static/js/legacy.js" defer></script>`
 - The module imports of `html.js` / `utils.js` / `api.js` / `state.js` run before `legacy.js` because modules are deferred by default and registered earlier in the document
 
-- [ ] **Step 6.7: Build and smoke test**
+- [x] **Step 6.7: Build and smoke test**
 
 ```bash
 go build ./... && CGO_ENABLED=0 go build -o bin/naozhi ./cmd/naozhi/
@@ -672,14 +672,14 @@ kill %1 2>/dev/null
 ```
 Expected: both return 200. In browser, reload `/dashboard`, open DevTools Console — no `ReferenceError`, session list renders, clicking a session opens chat. Any `selectedKey is not defined` → the `state.js` bridge didn't land — re-check Step 6.4.
 
-- [ ] **Step 6.8: Verify line counts**
+- [x] **Step 6.8: Verify line counts**
 
 ```bash
 wc -l internal/server/static/dashboard.html internal/server/static/js/legacy.js internal/server/static/js/core/*.js
 ```
 Expected: dashboard.html ≲ 150 LOC (pure HTML shell + link/script tags), legacy.js ~6800 LOC, core/*.js totals ~250 LOC.
 
-- [ ] **Step 6.9: Commit**
+- [x] **Step 6.9: Commit**
 
 ```bash
 git add internal/server/static/js/ internal/server/static/dashboard.html
