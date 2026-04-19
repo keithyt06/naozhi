@@ -1,6 +1,6 @@
 # Phase 0: Meeting Feature Removal — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Completely remove the Meeting Intelligence feature (backend handlers + domain code + frontend UI + persisted data + doc references) so the codebase is clean for the Phase 1 frontend split and Phase 2 DDD refactor.
 
@@ -44,22 +44,22 @@
 
 **Files:** none modified.
 
-- [ ] **Step 1.1: Confirm clean working tree**
+- [x] **Step 1.1: Confirm clean working tree**
 
 Run: `git status`
 Expected: branch `naozhi-2.0`, no uncommitted meeting-related changes. Any unrelated `M`/untracked files that existed before (docs, plans) are acceptable — note them.
 
-- [ ] **Step 1.2: Confirm baseline build passes**
+- [x] **Step 1.2: Confirm baseline build passes**
 
 Run: `go build ./...`
 Expected: exits 0, no output.
 
-- [ ] **Step 1.3: Confirm baseline tests pass**
+- [x] **Step 1.3: Confirm baseline tests pass**
 
 Run: `go test ./... 2>&1 | tail -20`
 Expected: all green. If any pre-existing failures unrelated to meeting, record them so we can distinguish later.
 
-- [ ] **Step 1.4: Snapshot the meeting surface**
+- [x] **Step 1.4: Snapshot the meeting surface**
 
 Run:
 ```bash
@@ -73,7 +73,7 @@ Expected: ~145 matches (sanity check — this number should drop to 0 by the end
 
 **Files:** Modify `internal/server/dashboard.go:155-160`.
 
-- [ ] **Step 2.1: Read surrounding context**
+- [x] **Step 2.1: Read surrounding context**
 
 Run: `sed -n '150,165p' internal/server/dashboard.go`
 
@@ -87,11 +87,11 @@ Expect to see:
 	}
 ```
 
-- [ ] **Step 2.2: Delete the block**
+- [x] **Step 2.2: Delete the block**
 
 Edit `internal/server/dashboard.go` — remove exactly these 6 lines (including the comment `// Meeting API` and the closing `}`).
 
-- [ ] **Step 2.3: Verify**
+- [x] **Step 2.3: Verify**
 
 Run: `grep -n "meeting\|Meeting" internal/server/dashboard.go`
 Expected: no output.
@@ -102,7 +102,7 @@ Expected: no output.
 
 **Files:** Modify `internal/server/server.go:72` and `internal/server/server.go:329-336`.
 
-- [ ] **Step 3.1: Remove the struct field**
+- [x] **Step 3.1: Remove the struct field**
 
 Open `internal/server/server.go` and find line 72 (`meetingH    *MeetingHandlers`). Delete that line.
 
@@ -115,7 +115,7 @@ Context (line 68-76 before):
 	decisionH   *DecisionHandlers
 ```
 
-- [ ] **Step 3.2: Remove the init block**
+- [x] **Step 3.2: Remove the init block**
 
 Find lines 329-336 (the `// Meeting handlers` comment and the `if naozDir != ""` block that initialises `meetingStore` / `audioDir` / `processor` / `s.meetingH`). Delete all 8 lines including the leading blank line.
 
@@ -143,12 +143,12 @@ After:
 	// Replay handlers (C2: persist shares to disk)
 ```
 
-- [ ] **Step 3.3: Verify**
+- [x] **Step 3.3: Verify**
 
 Run: `grep -n "meeting\|Meeting" internal/server/server.go`
 Expected: no output.
 
-- [ ] **Step 3.4: Check for unused imports**
+- [x] **Step 3.4: Check for unused imports**
 
 Run: `go build ./internal/server/ 2>&1`
 Expected: fails with "undefined: MeetingHandlers" (the handler files are still around) — that's OK, Task 4 fixes it. If it fails with "imported and not used" for `filepath`, check whether another line in server.go still uses it (it will — lots of other init code uses filepath). No import removal needed.
@@ -159,16 +159,16 @@ Expected: fails with "undefined: MeetingHandlers" (the handler files are still a
 
 **Files:** Delete `internal/server/dashboard_meeting.go`.
 
-- [ ] **Step 4.1: Delete the file**
+- [x] **Step 4.1: Delete the file**
 
 Run: `rm internal/server/dashboard_meeting.go`
 
-- [ ] **Step 4.2: Verify no dangling references**
+- [x] **Step 4.2: Verify no dangling references**
 
 Run: `grep -rn "MeetingHandlers\|NewMeetingHandlers" internal/server/`
 Expected: no output.
 
-- [ ] **Step 4.3: Build**
+- [x] **Step 4.3: Build**
 
 Run: `go build ./internal/server/ 2>&1`
 Expected: still fails — the `knowledge.NewMeetingStore` / `knowledge.NewMeetingProcessor` references were already removed in Task 3, so this should now succeed. If it fails for other reasons, stop and investigate.
@@ -181,24 +181,24 @@ If it succeeds, move on.
 
 **Files:** Delete `internal/knowledge/meeting.go`, `internal/knowledge/meeting_processor.go`.
 
-- [ ] **Step 5.1: Delete files**
+- [x] **Step 5.1: Delete files**
 
 Run:
 ```bash
 rm internal/knowledge/meeting.go internal/knowledge/meeting_processor.go
 ```
 
-- [ ] **Step 5.2: Verify no dangling references in knowledge package**
+- [x] **Step 5.2: Verify no dangling references in knowledge package**
 
 Run: `grep -n "Meeting" internal/knowledge/*.go`
 Expected: no output.
 
-- [ ] **Step 5.3: Full build**
+- [x] **Step 5.3: Full build**
 
 Run: `go build ./...`
 Expected: exits 0.
 
-- [ ] **Step 5.4: Full test suite**
+- [x] **Step 5.4: Full test suite**
 
 Run: `go test ./... 2>&1 | tail -30`
 Expected: same green baseline as Task 1. Any new failures → investigate before proceeding.
@@ -209,7 +209,7 @@ Expected: same green baseline as Task 1. Any new failures → investigate before
 
 **Files:** staged changes from Tasks 2-5.
 
-- [ ] **Step 6.1: Review staged diff**
+- [x] **Step 6.1: Review staged diff**
 
 Run:
 ```bash
@@ -224,7 +224,7 @@ Expected in diff-stat:
 - `internal/knowledge/meeting.go` deleted
 - `internal/knowledge/meeting_processor.go` deleted
 
-- [ ] **Step 6.2: Stage and commit**
+- [x] **Step 6.2: Stage and commit**
 
 Run:
 ```bash
@@ -256,7 +256,7 @@ Expected: commit succeeds. Build still passes (tests may temporarily fail if any
 
 **Files:** Modify `internal/server/static/dashboard.html:6906-7041`.
 
-- [ ] **Step 7.1: Read block boundaries**
+- [x] **Step 7.1: Read block boundaries**
 
 Run:
 ```bash
@@ -273,11 +273,11 @@ Expected end (right before line 7042):
 /* ===== Task 14: Context Panel ===== */
 ```
 
-- [ ] **Step 7.2: Delete lines 6906-7041 inclusive**
+- [x] **Step 7.2: Delete lines 6906-7041 inclusive**
 
 Do this in one edit. The range contains: `mtMeetings`/`mtCurrentId` globals, `renderMeetingView()`, `loadMeetingList()`, `loadMeetingDetail()`, `handleMeetingUpload()`, helpers. After deletion, line 6905 (which is blank/comment) should directly precede what was line 7042 (`/* ===== Task 14: Context Panel ===== */`).
 
-- [ ] **Step 7.3: Verify**
+- [x] **Step 7.3: Verify**
 
 Run: `grep -n "mtMeetings\|renderMeetingView\|loadMeetingList\|loadMeetingDetail\|handleMeetingUpload" internal/server/static/dashboard.html`
 Expected: no output.
@@ -288,7 +288,7 @@ Expected: no output.
 
 **Files:** Modify `internal/server/static/dashboard.html:931-958`.
 
-- [ ] **Step 8.1: Confirm block boundaries**
+- [x] **Step 8.1: Confirm block boundaries**
 
 Run:
 ```bash
@@ -302,11 +302,11 @@ Expected start (line 931):
 ```
 Expected line 959 or 960 to be the next `/* ===== ... ===== */` block for a different feature.
 
-- [ ] **Step 8.2: Delete lines 931-958**
+- [x] **Step 8.2: Delete lines 931-958**
 
 Inclusive of both the start comment and the last CSS rule before the next comment.
 
-- [ ] **Step 8.3: Verify**
+- [x] **Step 8.3: Verify**
 
 Run: `grep -n "mt-item\|mt-upload-btn\|mt-list-title\|mt-empty\|Meeting Intelligence" internal/server/static/dashboard.html`
 Expected: no output.
@@ -317,7 +317,7 @@ Expected: no output.
 
 **Files:** Modify `internal/server/static/dashboard.html:1060` and `:5580`.
 
-- [ ] **Step 9.1: Remove nav button**
+- [x] **Step 9.1: Remove nav button**
 
 Find and delete this single line (was line 1060 before Task 8 — recalculate if edits shifted lines):
 
@@ -325,7 +325,7 @@ Find and delete this single line (was line 1060 before Task 8 — recalculate if
       <button class="vb-btn" data-view="meetings" onclick="switchView('meetings',this)">Meetings</button>
 ```
 
-- [ ] **Step 9.2: Remove switchView case**
+- [x] **Step 9.2: Remove switchView case**
 
 Find and delete this single line (was 5580):
 
@@ -335,7 +335,7 @@ Find and delete this single line (was 5580):
 
 If this line is part of an `else if` chain, verify the chain still compiles: the preceding and following `else if` branches should join cleanly.
 
-- [ ] **Step 9.3: Final verify**
+- [x] **Step 9.3: Final verify**
 
 Run:
 ```bash
@@ -343,7 +343,7 @@ grep -n -i "meeting" internal/server/static/dashboard.html
 ```
 Expected: no output.
 
-- [ ] **Step 9.4: Sanity check line counts**
+- [x] **Step 9.4: Sanity check line counts**
 
 Run: `wc -l internal/server/static/dashboard.html`
 Expected: roughly `8309 - 164 = ~8145` lines.
@@ -354,7 +354,7 @@ Expected: roughly `8309 - 164 = ~8145` lines.
 
 **Files:** none modified.
 
-- [ ] **Step 10.1: Build binary**
+- [x] **Step 10.1: Build binary**
 
 Run:
 ```bash
@@ -362,7 +362,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/naozhi ./cmd/naozhi/
 ```
 Expected: exits 0, `bin/naozhi` exists.
 
-- [ ] **Step 10.2: Quick grep pass for embedded HTML**
+- [x] **Step 10.2: Quick grep pass for embedded HTML**
 
 Run:
 ```bash
@@ -376,12 +376,12 @@ If matches appear, revisit Tasks 7-9.
 
 ## Task 11: Commit frontend removal
 
-- [ ] **Step 11.1: Review diff**
+- [x] **Step 11.1: Review diff**
 
 Run: `git diff --stat internal/server/static/dashboard.html`
 Expected: ~164 lines removed.
 
-- [ ] **Step 11.2: Commit**
+- [x] **Step 11.2: Commit**
 
 Run:
 ```bash
@@ -407,17 +407,17 @@ EOF
 
 **Files:** Modify `README.md`.
 
-- [ ] **Step 12.1: Locate Meeting section**
+- [x] **Step 12.1: Locate Meeting section**
 
 Run: `grep -n -i "meeting" README.md`
 
 Look at line numbers and read context around each with `sed -n '<line-10>,<line+10>p' README.md` to understand the boundaries.
 
-- [ ] **Step 12.2: Remove Meeting Intelligence paragraph(s)**
+- [x] **Step 12.2: Remove Meeting Intelligence paragraph(s)**
 
 Delete any `### Meeting Intelligence` (or equivalent) heading and its content. If Meeting is only mentioned inline (e.g. in a feature list), remove that bullet.
 
-- [ ] **Step 12.3: Verify**
+- [x] **Step 12.3: Verify**
 
 Run: `grep -n -i "meeting" README.md`
 Expected: no output.
@@ -428,7 +428,7 @@ Expected: no output.
 
 **Files:** Modify two historical docs (do **not** delete — they are history).
 
-- [ ] **Step 13.1: Banner for dashboard-design spec**
+- [x] **Step 13.1: Banner for dashboard-design spec**
 
 Prepend a banner immediately after the H1 heading in `docs/superpowers/specs/2026-04-15-naozhi-v2-dashboard-design.md`:
 
@@ -438,11 +438,11 @@ Prepend a banner immediately after the H1 heading in `docs/superpowers/specs/202
 > Phase 0）。本 spec 中涉及 Meeting 的章节仅作历史参考。
 ```
 
-- [ ] **Step 13.2: Banner for phase4-moonshots plan**
+- [x] **Step 13.2: Banner for phase4-moonshots plan**
 
 Same banner style prepended to `docs/superpowers/plans/2026-04-15-naozhi-v2-phase4-platform-moonshots.md` after its H1.
 
-- [ ] **Step 13.3: Verify banners exist**
+- [x] **Step 13.3: Verify banners exist**
 
 Run:
 ```bash
@@ -455,7 +455,7 @@ Expected: both show the banner near the top.
 
 ## Task 14: Commit docs
 
-- [ ] **Step 14.1: Commit**
+- [x] **Step 14.1: Commit**
 
 Run:
 ```bash
@@ -480,7 +480,7 @@ EOF
 
 **Files:** none modified.
 
-- [ ] **Step 15.1: Grep audit**
+- [x] **Step 15.1: Grep audit**
 
 Run:
 ```bash
@@ -488,7 +488,7 @@ grep -rn -i "meeting" --include="*.go" --include="*.html" internal/ docs/superpo
 ```
 Expected: **empty output** (the only remaining references should be in the deprecation banners + historical v2 docs, which are outside this grep scope by design).
 
-- [ ] **Step 15.2: Build + test**
+- [x] **Step 15.2: Build + test**
 
 Run:
 ```bash
@@ -496,7 +496,7 @@ go build ./... && go test ./... 2>&1 | tail -10
 ```
 Expected: build OK, tests green.
 
-- [ ] **Step 15.3: `go vet`**
+- [x] **Step 15.3: `go vet`**
 
 Run: `go vet ./...`
 Expected: no issues.
