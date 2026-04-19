@@ -23,6 +23,10 @@ import './views/home.js';
 import './core/ws.js';
 import './views/chat.js';
 
+// Task 10-12: non-chat view modules. Eager-imported so their window.*
+// bridges are installed before the legacy bootstrap IIFE runs.
+import './views/knowledge.js';
+
 // Mark bootstrap complete so the legacy inline script (and any future
 // consumers) can detect readiness.
 if (typeof window !== 'undefined') {

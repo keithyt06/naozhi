@@ -1112,17 +1112,17 @@ EOF
 
 **Files:** Modify `js/legacy.js`, `js/app.js`; write `js/views/knowledge.js`.
 
-- [ ] **Step 11.1: Locate source**
+- [x] **Step 11.1: Locate source**
 
 Run: `grep -n "function renderKnowledgeView\|function loadVaultTree\|function renderVaultTree\|function openVaultFile\|function knowledgeSearch\|function knowledgeAIChat" internal/server/static/js/legacy.js`
 
 Range is approximately what was lines 6264-6668 in the pre-split HTML. In `legacy.js` the lines will differ — grep is the source of truth.
 
-- [ ] **Step 11.2: Cut + wrap + self-register**
+- [x] **Step 11.2: Cut + wrap + self-register**
 
 Follow the view migration template.
 
-- [ ] **Step 11.3: Smoke test**
+- [x] **Step 11.3: Smoke test**
 
 - Click **Knowledge** tab
 - Vault tree renders on the left, content panel on the right
@@ -1131,7 +1131,7 @@ Follow the view migration template.
 - Search box → type → results update
 - AI Chat panel opens if clicked, accepts input
 
-- [ ] **Step 11.4: Commit**
+- [x] **Step 11.4: Commit**
 
 ```bash
 git add internal/server/static/js/
