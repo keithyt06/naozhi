@@ -962,27 +962,27 @@ Each view task below fills in the specifics.
 
 **Files:** Modify `js/legacy.js`, `js/app.js`; write `js/views/home.js`.
 
-- [ ] **Step 9.1: Locate source**
+- [x] **Step 9.1: Locate source**
 
 Run: `grep -n "function renderHomeView\|function loadHomeStats\|function loadHomeActivity\|function loadHomeWiki\|function loadHomePatrolsAndApprovals\|function renderHomePatrolWidgetContent\|function renderHomeApprovalWidgetContent" internal/server/static/js/legacy.js`
 
 Expected: 7 functions. Their total range is roughly contiguous, ~240 LOC.
 
-- [ ] **Step 9.2: Cut into `js/views/home.js`**
+- [x] **Step 9.2: Cut into `js/views/home.js`**
 
 Create `js/views/home.js` per template. The `mount(slot)` body is the current `renderHomeView` body (with `document.getElementById('main')` replaced by `slot`). Keep the 4 `loadHome*` helpers as module-scoped functions (not exported). Keep `renderHomePatrolWidgetContent`/`renderHomeApprovalWidgetContent` as module-scoped (they were called from both Home and Patrols/Approvals — grep confirms; if they're also called from elsewhere, keep a copy via `window.renderHomePatrolWidgetContent = ...` compat).
 
-- [ ] **Step 9.3: Delete from `legacy.js`**
+- [x] **Step 9.3: Delete from `legacy.js`**
 
 Remove the 7 cut functions.
 
-- [ ] **Step 9.4: Register in `app.js`**
+- [x] **Step 9.4: Register in `app.js`**
 
 ```js
 import('./views/home.js');
 ```
 
-- [ ] **Step 9.5: Smoke test**
+- [x] **Step 9.5: Smoke test**
 
 Build, run locally, click **Home** (or load landing; Home renders when no session is selected). Checklist:
 - Greeting + date + 5 stat cards + 4 action buttons render
@@ -994,7 +994,7 @@ Build, run locally, click **Home** (or load landing; Home renders when no sessio
 
 `grep -n "renderHomeView" internal/server/static/js/legacy.js` → no output.
 
-- [ ] **Step 9.6: Commit**
+- [x] **Step 9.6: Commit**
 
 ```bash
 git add internal/server/static/js/

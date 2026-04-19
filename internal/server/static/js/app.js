@@ -12,6 +12,10 @@ import './core/api.js';
 import './core/state.js';
 import './core/router.js';
 
+// Home is the first-paint view (rendered when no session is
+// selected) — load eagerly so the landing page has no jank.
+import './views/home.js';
+
 // ws.js is a Task 9 target (chat view migration). Until then, the
 // legacy inline script owns the WebSocket lifecycle.
 // import './core/ws.js';
