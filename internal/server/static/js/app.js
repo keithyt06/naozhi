@@ -28,6 +28,7 @@ import './views/chat.js';
 import './views/knowledge.js';
 import './views/wiki.js';
 import './views/patrols.js';
+import './views/approvals.js';
 
 // Mark bootstrap complete so the legacy inline script (and any future
 // consumers) can detect readiness.

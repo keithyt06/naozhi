@@ -1193,7 +1193,7 @@ Smoke test: Patrols tab → rule cards render → toggle pause/resume → edit r
 
 Commit: `refactor(frontend): migrate patrols view to js/views/patrols.js`.
 
-- [ ] **Step 13.2: Approvals — cut + wrap + register**
+- [x] **Step 13.2: Approvals — cut + wrap + register**
 
 Grep: `function renderApprovalsView\|function renderApprovalCards\|function approveItem\|function rejectItem\|function dismissApproval`. Template.
 
