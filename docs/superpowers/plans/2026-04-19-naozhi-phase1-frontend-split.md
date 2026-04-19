@@ -1213,7 +1213,7 @@ Smoke test: Graph tab → triggers d3 download (visible in Network tab) → SVG 
 
 Commit: `refactor(frontend): migrate graph view to js/views/graph.js (d3 now lazy-loaded on demand)`.
 
-- [ ] **Step 13.4: Verify all views are in modules**
+- [x] **Step 13.4: Verify all views are in modules**
 
 Run:
 ```bash
@@ -1221,7 +1221,7 @@ grep -n "function render.*View\b" internal/server/static/js/legacy.js
 ```
 Expected: no output (all 7 `render<Name>View` functions are gone).
 
-- [ ] **Step 13.5: Verify legacy.js is now small**
+- [x] **Step 13.5: Verify legacy.js is now small**
 
 ```bash
 wc -l internal/server/static/js/legacy.js
