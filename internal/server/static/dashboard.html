@@ -121,16 +121,10 @@ window.shikiReady = (async () => {
     <div class="vo-hint" id="vo-hint"></div>
   </div>
 </div>
-<script type="module">
-  // Core JS modules — loaded before the legacy inline <script> via deferred
-  // module ordering. The `window.*` bridges inside each module make helpers
-  // available to the non-module legacy code below.
-  import '/static/js/core/html.js';
-  import '/static/js/core/utils.js';
-  import '/static/js/core/api.js';
-  import '/static/js/core/state.js';
-  window.__naozhiCoreReady = true;
-</script>
+<!-- ES module entry point. app.js imports core/{html,utils,api,state,router}
+     and installs their window.* bridges before the inline legacy <script>
+     below runs. -->
+<script type="module" src="/static/js/app.js"></script>
 <script>
 window.onerror = function(msg, url, line, col, err) {
   var d = document.createElement('div');
@@ -4489,32 +4483,7 @@ var approvalsStatsCache = {};
 var approvalsFilter = 'pending';
 var patrolRefreshTimer = null;
 
-function switchView(view, el) {
-  if (currentView === view) return;
-  currentView = view;
-  document.querySelectorAll('#viewBar .vb-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  const tagFilter = document.getElementById('tagFilter');
-  const sessionList = document.getElementById('session-list');
-  if (view === 'chat') {
-    if (tagFilter) tagFilter.style.display = '';
-    if (sessionList) sessionList.style.display = '';
-    if (selectedKey) {
-      renderMainShell();
-    } else {
-      renderHomeView();
-    }
-  } else {
-    if (tagFilter) tagFilter.style.display = 'none';
-    if (sessionList) sessionList.style.display = 'none';
-    // On mobile, hide sidebar so #main content is visible
-    document.body.classList.remove('mobile-list-view');
-    if (view === 'knowledge') renderKnowledgeView();
-    else if (view === 'wiki') renderWikiView();
-    else if (view === 'patrols') renderPatrolsView();
-    else if (view === 'approvals') renderApprovalsView();
-    else if (view === 'graph') renderGraphView();
-  }
-}
+// switchView moved to js/core/router.js (bridged via window.switchView).
 
 /* ===== Task 13: Home Dashboard ===== */
 

@@ -791,7 +791,7 @@ EOF
 
 The router replaces the current `function switchView(view, el)` (line 5528). It keeps `window.switchView` so existing `onclick="switchView(...)"` attributes continue to resolve, but behind the scenes it dynamically `import()`s the view module.
 
-- [ ] **Step 8.1: Write `js/core/router.js`**
+- [x] **Step 8.1: Write `js/core/router.js`**
 
 ```js
 // js/core/router.js — view registry + switchView + history API.
@@ -844,7 +844,7 @@ if (typeof window !== 'undefined') {
 }
 ```
 
-- [ ] **Step 8.2: Rewrite `js/app.js` as the bootstrap**
+- [x] **Step 8.2: Rewrite `js/app.js` as the bootstrap**
 
 ```js
 // js/app.js — dashboard entrypoint.
@@ -863,11 +863,11 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 ```
 
-- [ ] **Step 8.3: In `legacy.js`, rename the existing `function switchView`**
+- [x] **Step 8.3: In `legacy.js`, rename the existing `function switchView`**
 
 Change `function switchView(view, el)` (line ~5528 of original) to `function __legacySwitchView(view, el)`, and expose it: `window.__legacySwitchView = __legacySwitchView;`. Do **not** re-export the name `switchView` from legacy — `router.js` owns that.
 
-- [ ] **Step 8.4: Update `dashboard.html` to load `app.js`**
+- [x] **Step 8.4: Update `dashboard.html` to load `app.js`**
 
 Replace the four individual module imports from Task 6.6 with a single entry:
 
@@ -878,7 +878,7 @@ Replace the four individual module imports from Task 6.6 with a single entry:
 
 The module and the defer script both run after parsing; the module's static imports execute first (by spec), so by the time `legacy.js` runs, `window.switchView` + `window.__naozhiCoreReady` are set.
 
-- [ ] **Step 8.5: Build and full smoke test**
+- [x] **Step 8.5: Build and full smoke test**
 
 ```bash
 go build ./... && CGO_ENABLED=0 go build -o bin/naozhi ./cmd/naozhi/
