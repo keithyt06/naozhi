@@ -1141,6 +1141,10 @@ const FEAT = (name) => window.__resolveAsset('js/features/' + name + '.js');
 
 window.openContextPanel = async (...a) =>
   (await import(FEAT('context-panel'))).open(...a);
+window.toggleCtxPanel = async (...a) =>
+  (await import(FEAT('context-panel'))).open(...a);
+window.switchCtxTab = async (...a) =>
+  (await import(FEAT('context-panel'))).switchTab(...a);
 
 window.setupPushNotifications = async (...a) =>
   (await import(FEAT('notif-enhance'))).setup(...a);

@@ -121,5 +121,10 @@ export async function open(...args) {
   return toggleCtxPanel(...args);
 }
 
+export async function switchTab(...args) {
+  ensureInit();
+  return switchCtxTab(...args);
+}
+
 // Internal-only helpers exposed for other feature modules that may need them:
 export { refreshCtxPanel, deleteBookmark };
