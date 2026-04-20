@@ -65,3 +65,34 @@ ssh ubuntu@10.0.11.189 'sudo cp /usr/local/bin/naozhi.pre-phase1 /usr/local/bin/
 ```
 
 **Perf note**: First-paint JS ≈ 70 KB gzip. This is the structural split baseline; additional shrink (tree-shake, code-split further, defer legacy) is deferred to Phase 3.
+
+### Phase 3 — legacy.js feature split (2026-04-19)
+
+**Tag:** `phase-3-legacy-split`
+**Binary backup:** `/usr/local/bin/naozhi.pre-phase3`
+**Deployed:** 2026-04-20 02:43 UTC on 10.0.11.189 (this host)
+
+**What changed:**
+- `internal/server/static/js/legacy.js`: 2728 → 1163 lines (−57%).
+- `internal/server/static/js/features/`: 8 new lazy modules
+  (context-panel, notif-enhance, bookmark, twin, replay, cron,
+  file-hub, search), all loaded via dynamic `import()` end-oil shims.
+- First-paint JS gzip: 70.1 KB → 55.3 KB (−21%). `legacy.js` alone
+  shrank 27.9 KB → 13.2 KB gzip. Missed the <50 KB target by 5.3 KB;
+  the remaining bulk is `views/chat.js` (25.2 KB gzip), a Phase 3
+  non-goal. Follow-up chat.js split tracked as Phase 4.
+
+**Deploy steps executed** (build host = production host; no SSH needed):
+1. `go run ./tools/hashstatic` — wrote manifest + 32 hashed files under `dist/`
+2. `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/naozhi-phase3 ./cmd/naozhi/`
+3. `sudo cp /usr/local/bin/naozhi /usr/local/bin/naozhi.pre-phase3`
+4. `sudo install -m 755 /tmp/naozhi-phase3 /usr/local/bin/naozhi`
+5. `sudo systemctl restart naozhi`
+6. Smoke: `/health` returned `status: ok`, `/dashboard` 200, all 8
+   feature chunks return 200 with
+   `Cache-Control: public, max-age=31536000, immutable`.
+
+**Rollback:**
+```bash
+sudo cp /usr/local/bin/naozhi.pre-phase3 /usr/local/bin/naozhi && sudo systemctl restart naozhi
+```
