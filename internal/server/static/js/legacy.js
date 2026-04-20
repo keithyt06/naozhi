@@ -876,6 +876,36 @@ renderNotifications();
 
 /* ===== Initialization ===== */
 
+// Badge-only approvals fetch. Stays in legacy.js so the bootstrap
+// populates the Approvals nav-bar badge without eagerly importing
+// views/approvals.js. approvals.js's own fetchApprovalsBadge export
+// overrides window.fetchApprovalsBadge when the view first loads,
+// so post-nav refreshes use the full module version.
+async function fetchApprovalsBadge() {
+  try {
+    var headers = {};
+    var t = getToken();
+    if (t) headers['Authorization'] = 'Bearer ' + t;
+    var r = await fetch('/api/approvals?status=pending', { headers });
+    if (!r.ok) return;
+    var data = await r.json();
+    var pending = (data.stats && data.stats.pending) || 0;
+    var btn = document.getElementById('vbApprovalsBtn');
+    if (!btn) return;
+    var existing = btn.querySelector('.vb-badge');
+    if (pending > 0) {
+      if (!existing) {
+        existing = document.createElement('span');
+        existing.className = 'vb-badge';
+        btn.appendChild(existing);
+      }
+      existing.textContent = pending > 99 ? '99+' : pending;
+    } else if (existing) {
+      existing.remove();
+    }
+  } catch (e) { /* ignore */ }
+}
+
 // Badge-only cron fetch. Stays in legacy.js so the bootstrap + ws
 // cron_result handler don't pull the lazy cron module on every page
 // load (Phase 3 keeps the full panel in features/cron.js).
