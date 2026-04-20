@@ -1205,10 +1205,10 @@ function naozhiBootstrap() {
   initSwipeBack();
   initMobileCopyBtnTap();
   // Task 19: Fetch persistent notifications and badge count on load
-  fetchNotifications();
+  window.setupPushNotifications();
   fetchApprovalsBadge();
   // Periodically refresh notification count and patrol status
-  setInterval(fetchNotifCount, 60000);
+  setInterval(function() { window.fetchNotifCount(); }, 60000);
   setInterval(function() { fetchApprovalsBadge(); }, 60000);
   // Task 13: Show Home view as default landing page.
   if (typeof window.renderHomeView === 'function') {
@@ -1752,104 +1752,6 @@ var patrolRefreshTimer = null;
    approvalsCache/approvalsStatsCache/approvalsFilter vars remain
    declared above in the /* View Switching */ block. */
 
-/* ===== Task 19: Notification Center Enhancement ===== */
-
-async function fetchNotifications() {
-  try {
-    var resp = await fetch('/api/notifications?limit=20', { headers: authHeaders() });
-    if (!resp.ok) return;
-    var data = await resp.json();
-    var serverNotifs = data.notifications || [];
-    // Merge server notifications into the local array
-    for (var i = 0; i < serverNotifs.length; i++) {
-      var sn = serverNotifs[i];
-      var exists = notifications.find(function(n) { return n.serverId === sn.id; });
-      if (!exists) {
-        notifications.push({
-          id: ++notifIdCounter,
-          serverId: sn.id,
-          title: sn.title || sn.type || 'Notification',
-          desc: sn.summary || '',
-          time: sn.created_at ? (typeof sn.created_at === 'number' ? sn.created_at : new Date(sn.created_at).getTime()) : Date.now(),
-          read: !!sn.read,
-          urgency: sn.urgency === 'urgent' ? 'urgent' : 'info',
-          sourceType: sn.source_type || '',
-          sourceRef: sn.source_ref || '',
-          sessionKey: null,
-          sessionNode: 'local'
-        });
-      }
-    }
-    // Sort by time descending
-    notifications.sort(function(a, b) { return b.time - a.time; });
-    if (notifications.length > 50) notifications.length = 50;
-    updateNotifBadge();
-    renderNotifications();
-  } catch (e) { console.error('fetchNotifications:', e); }
-}
-
-async function fetchNotifCount() {
-  try {
-    var resp = await fetch('/api/notifications/count', { headers: authHeaders() });
-    if (!resp.ok) return;
-    var data = await resp.json();
-    var serverUnread = data.unread_count || 0;
-    // Use the max of server and local unread
-    var localUnread = notifications.filter(function(n) { return !n.read; }).length;
-    var totalUnread = Math.max(serverUnread, localUnread);
-    var badge = document.getElementById('notifBadge');
-    if (!badge) return;
-    if (totalUnread > 0) {
-      badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-      badge.style.display = 'flex';
-    } else {
-      badge.style.display = 'none';
-    }
-  } catch (e) { /* ignore */ }
-}
-
-function onWsNotification(msg) {
-  var n = msg.notification || msg;
-  addNotification(
-    n.title || n.type || 'Notification',
-    n.summary || '',
-    n.urgency === 'urgent' ? 'urgent' : 'info',
-    '_none',
-    'local'
-  );
-}
-
-// Override clearAllNotifs to also call server-side mark-all-read
-var _origClearAllNotifs = clearAllNotifs;
-clearAllNotifs = function() {
-  _origClearAllNotifs();
-  fetch('/api/notifications/read-all', { method: 'POST', headers: authHeaders() }).catch(function() {});
-};
-
-// Enhanced onNotifClick to navigate to source views
-var _origOnNotifClick = onNotifClick;
-onNotifClick = function(id) {
-  var n = notifications.find(function(x) { return x.id === id; });
-  if (n) { n.read = true; }
-  updateNotifBadge();
-  renderNotifications();
-  closeNotifPanel();
-  // Navigate based on sourceType
-  if (n && n.sourceType === 'patrol') {
-    switchView('patrols', document.querySelector('[data-view=patrols]'));
-    return;
-  }
-  if (n && n.sourceType === 'approval') {
-    switchView('approvals', document.querySelector('[data-view=approvals]'));
-    return;
-  }
-  // Fall back to session navigation
-  if (n && n.sessionKey && n.sessionKey !== '_none') {
-    switchView('chat', document.querySelector('[data-view=chat]'));
-    var card = document.querySelector('.session-card[data-key="' + n.sessionKey + '"]');
-    if (card) card.click();
-  }
-};
 
 /* Task 20: Home Dashboard Integration moved to js/views/home.js
    (updateHomePatrolWidget, updateHomeApprovalWidget,
@@ -1865,224 +1767,6 @@ onNotifClick = function(id) {
    triggerLint, switchWikiSubTab, loadDecisions/render/show/submit
    all bridged on window. wvPages mirrored on window so home.js can
    enumerate compiled pages. */
-
-/* ===== Task 14: Context Panel ===== */
-
-var ctxPanelOpen = false;
-var ctxActiveTab = 'saved';
-
-function toggleCtxPanel() {
-  ctxPanelOpen = !ctxPanelOpen;
-  const panel = document.getElementById('ctxPanel');
-  const toggle = document.getElementById('ctxToggle');
-  if (panel) panel.classList.toggle('open', ctxPanelOpen);
-  if (toggle) toggle.innerHTML = ctxPanelOpen ? '&#9664;' : '&#9654;';
-  if (ctxPanelOpen) refreshCtxPanel();
-}
-
-function switchCtxTab(tab, el) {
-  ctxActiveTab = tab;
-  document.querySelectorAll('#ctxPanel .ctx-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  refreshCtxPanel();
-}
-
-async function refreshCtxPanel() {
-  const body = document.getElementById('ctxBody');
-  if (!body) return;
-  if (ctxActiveTab === 'saved') {
-    await loadCtxSaved(body);
-  } else if (ctxActiveTab === 'related') {
-    await loadCtxRelated(body);
-  } else {
-    body.innerHTML = '<div class="ctx-ai-placeholder"><div style="font-size:24px;opacity:.3;margin-bottom:8px">&#129302;</div>Ask about this session<br><span style="font-size:11px;color:#484f58">(Coming in Phase 3)</span></div>';
-  }
-}
-
-async function loadCtxSaved(body) {
-  if (!selectedKey) {
-    body.innerHTML = '<div class="ctx-empty">Select a session to see bookmarks</div>';
-    return;
-  }
-  try {
-    const bms = await fetch('/api/bookmarks?session=' + encodeURIComponent(selectedKey), { headers: authHeaders() }).then(r => r.ok ? r.json() : []).catch(() => []);
-    const list = Array.isArray(bms) ? bms : [];
-    if (list.length === 0) {
-      body.innerHTML = '<div class="ctx-empty">No bookmarks for this session.<br><span style="font-size:11px">Hover AI messages and click the bookmark icon to save.</span></div>';
-      return;
-    }
-    body.innerHTML = list.map(b =>
-      '<div class="ctx-bm-card" data-bm-id="' + escAttr(b.id || '') + '">' +
-        '<button class="ctx-bm-del" onclick="deleteBookmark(\'' + escJs(b.id || '') + '\')" title="Remove">&times;</button>' +
-        '<div class="ctx-bm-text">' + esc((b.content || b.summary || '').substring(0, 300)) + '</div>' +
-        '<div class="ctx-bm-meta">' +
-          '<span class="ctx-source-badge src-' + esc(b.source || 'dashboard') + '">' + esc(b.source || 'dashboard') + '</span>' +
-          '<span>' + (b.created_at ? timeAgo(b.created_at) : '') + '</span>' +
-        '</div>' +
-        (b.tags && b.tags.length > 0 ? '<div class="ctx-bm-tags">' + b.tags.map(t => '<span class="ctx-bm-tag">' + esc(t) + '</span>').join('') + '</div>' : '') +
-      '</div>'
-    ).join('');
-  } catch (e) {
-    body.innerHTML = '<div class="ctx-empty">Failed to load bookmarks</div>';
-  }
-}
-
-async function loadCtxRelated(body) {
-  if (!selectedKey) {
-    body.innerHTML = '<div class="ctx-empty">Select a session to find related content</div>';
-    return;
-  }
-  // Extract keywords from current session
-  const s = sessionsData[sid(selectedKey, selectedNode)] || {};
-  const keywords = (s.name || s.last_prompt || s.summary || '').substring(0, 100);
-  if (!keywords) {
-    body.innerHTML = '<div class="ctx-empty">No keywords to match</div>';
-    return;
-  }
-  try {
-    const data = await fetch('/api/search?q=' + encodeURIComponent(keywords) + '&limit=8', { headers: authHeaders() }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
-    const results = data.results || [];
-    if (results.length === 0) {
-      body.innerHTML = '<div class="ctx-empty">No related content found</div>';
-      return;
-    }
-    body.innerHTML = results.map(r =>
-      '<div class="ctx-bm-card" style="cursor:pointer" onclick="navigateSearchResult(\'' + escJs(r.source || '') + '\',\'' + escJs(r.path || r.session_key || '') + '\')">' +
-        '<div class="ctx-bm-text">' + esc((r.title || '').substring(0, 100)) + '</div>' +
-        '<div class="ctx-bm-meta">' +
-          '<span class="ctx-source-badge src-' + esc(r.source || '') + '">' + esc(r.source || '') + '</span>' +
-          (r.match ? '<span>' + esc(r.match.substring(0, 60)) + '</span>' : '') +
-        '</div>' +
-      '</div>'
-    ).join('');
-  } catch (e) {
-    body.innerHTML = '<div class="ctx-empty">Search failed</div>';
-  }
-}
-
-async function deleteBookmark(id) {
-  if (!id) return;
-  try {
-    await fetch('/api/bookmarks/' + encodeURIComponent(id), { method: 'DELETE', headers: authHeaders() });
-    showToast('Bookmark removed', 'success');
-    if (ctxPanelOpen && ctxActiveTab === 'saved') refreshCtxPanel();
-    // Reset saved state on message buttons
-    document.querySelectorAll('.bm-hover-btn.saved[data-bm-id="' + id + '"]').forEach(b => {
-      b.classList.remove('saved');
-      b.removeAttribute('data-bm-id');
-    });
-  } catch (e) { showToast('Delete failed'); }
-}
-
-/* ===== Task 15: Bookmark UI ===== */
-
-var _bmSessionBookmarks = {}; // session_key -> Set of event indices with bookmarks
-var _bmIndexToId = {}; // session_key -> { eventIndex -> bookmark_id }
-
-async function loadSessionBookmarks() {
-  if (!selectedKey) return;
-  try {
-    const bms = await fetch('/api/bookmarks?session=' + encodeURIComponent(selectedKey), { headers: authHeaders() }).then(r => r.ok ? r.json() : []).catch(() => []);
-    const set = new Set();
-    const idMap = {};
-    (Array.isArray(bms) ? bms : []).forEach(b => { if (b.event_index >= 0) { set.add(b.event_index); if (b.id) idMap[b.event_index] = b.id; } });
-    _bmSessionBookmarks[selectedKey] = set;
-    _bmIndexToId[selectedKey] = idMap;
-  } catch (_) {}
-}
-
-function injectBookmarkButtons() {
-  const events = document.getElementById('events-scroll');
-  if (!events) return;
-  let idx = 0;
-  events.querySelectorAll('.event.text').forEach(ev => {
-    const content = ev.querySelector('.event-content');
-    if (!content || content.querySelector('.bm-hover-btn')) return;
-    const eventIdx = idx++;
-    const saved = _bmSessionBookmarks[selectedKey] && _bmSessionBookmarks[selectedKey].has(eventIdx);
-    const btn = document.createElement('button');
-    btn.className = 'bm-hover-btn' + (saved ? ' saved' : '');
-    btn.textContent = '\uD83D\uDD16';
-    btn.title = 'Save bookmark';
-    btn.setAttribute('data-event-idx', eventIdx);
-    btn.addEventListener('click', async function(e) {
-      e.stopPropagation();
-      if (this.classList.contains('saved')) {
-        // Toggle: delete existing bookmark
-        const bmId = (_bmIndexToId[selectedKey] || {})[eventIdx];
-        if (bmId) {
-          try {
-            await fetch('/api/bookmarks/' + encodeURIComponent(bmId), { method: 'DELETE', headers: authHeaders() });
-            this.classList.remove('saved');
-            this.removeAttribute('data-bm-id');
-            if (_bmSessionBookmarks[selectedKey]) _bmSessionBookmarks[selectedKey].delete(eventIdx);
-            if (_bmIndexToId[selectedKey]) delete _bmIndexToId[selectedKey][eventIdx];
-            showToast('Bookmark removed', 'success');
-            if (ctxPanelOpen && ctxActiveTab === 'saved') refreshCtxPanel();
-          } catch (err) { showToast('Delete failed'); }
-        }
-        return;
-      }
-      showBookmarkPopover(this, content.textContent || '', eventIdx);
-    });
-    content.appendChild(btn);
-  });
-}
-
-function showBookmarkPopover(anchor, text, eventIdx) {
-  // Remove any existing popover
-  document.querySelectorAll('.bm-popover').forEach(p => p.remove());
-  const preview = text.substring(0, 200) + (text.length > 200 ? '...' : '');
-  const pop = document.createElement('div');
-  pop.className = 'bm-popover';
-  pop.innerHTML =
-    '<textarea readonly>' + esc(preview) + '</textarea>' +
-    '<input type="text" placeholder="Tags (comma-separated, e.g. security, waf)" id="bmTagInput">' +
-    '<div class="bm-pop-btns">' +
-      '<button onclick="this.closest(\'.bm-popover\').remove()">Cancel</button>' +
-      '<button class="primary" id="bmSaveBtn">Save</button>' +
-    '</div>';
-  anchor.parentElement.appendChild(pop);
-  const tagInput = pop.querySelector('#bmTagInput');
-  tagInput.focus();
-  pop.querySelector('#bmSaveBtn').addEventListener('click', async function() {
-    const tags = tagInput.value.split(',').map(t => t.trim()).filter(Boolean);
-    try {
-      const r = await fetch('/api/bookmarks', {
-        method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_key: selectedKey || '',
-          source: 'dashboard',
-          content: text.substring(0, 2000),
-          tags: tags,
-          event_index: eventIdx
-        })
-      });
-      if (!r.ok) throw new Error('save failed');
-      const saved = await r.json().catch(() => ({}));
-      pop.remove();
-      anchor.classList.add('saved');
-      if (saved.id) { anchor.setAttribute('data-bm-id', saved.id); if (!_bmIndexToId[selectedKey]) _bmIndexToId[selectedKey] = {}; _bmIndexToId[selectedKey][eventIdx] = saved.id; }
-      showToast('Bookmarked', 'success');
-      if (!_bmSessionBookmarks[selectedKey]) _bmSessionBookmarks[selectedKey] = new Set();
-      _bmSessionBookmarks[selectedKey].add(eventIdx);
-      // Refresh context panel if open
-      if (ctxPanelOpen && ctxActiveTab === 'saved') refreshCtxPanel();
-    } catch (e) {
-      showToast('Bookmark failed: ' + e.message);
-    }
-  });
-  // Close on outside click
-  setTimeout(() => {
-    const handler = function(e) {
-      if (!pop.contains(e.target) && e.target !== anchor) {
-        pop.remove();
-        document.removeEventListener('click', handler);
-      }
-    };
-    document.addEventListener('click', handler);
-  }, 0);
-}
 
 function navigateSearchResult(source, pathOrKey) {
   closeSearch();
@@ -2537,118 +2221,6 @@ function shareReplaySession(sessionKey) {
   .catch(function() { alert('Failed to generate share link'); });
 }
 
-// ─── CTO Digital Twin UI ────────────────────────────────────────────────────
-var _twinConfig = null;
-
-function openTwinPanel() {
-  fetch('/api/twin/config')
-    .then(function(r) { return r.json(); })
-    .then(function(cfg) {
-      _twinConfig = cfg;
-      showTwinOverlay(cfg);
-    })
-    .catch(function() { alert('Failed to load Twin config'); });
-}
-
-function showTwinOverlay(cfg) {
-  var existing = document.getElementById('twinOverlay');
-  if (existing) existing.remove();
-  var ov = document.createElement('div');
-  ov.id = 'twinOverlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center';
-  ov.onclick = function(e) { if(e.target===ov) closeTwinOverlay(); };
-  ov.innerHTML =
-    '<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;width:520px;max-width:90vw;max-height:80vh;overflow-y:auto;color:#c9d1d9;font-family:monospace">' +
-      '<div style="padding:16px 20px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center">' +
-        '<h3 style="font-size:16px;color:#f0f6fc;margin:0">CTO Digital Twin</h3>' +
-        '<button onclick="closeTwinOverlay()" style="background:none;border:none;color:#8b949e;cursor:pointer;font-size:16px">&#x2715;</button>' +
-      '</div>' +
-      '<div style="padding:16px 20px">' +
-        '<div style="margin-bottom:16px">' +
-          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
-            '<input type="checkbox" id="twinEnabled" ' + (cfg.enabled ? 'checked' : '') + ' onchange="updateTwinField(\'enabled\',this.checked)" style="accent-color:#58a6ff">' +
-            '<span>Enable Digital Twin</span>' +
-          '</label>' +
-        '</div>' +
-        '<div style="margin-bottom:12px">' +
-          '<div style="font-size:12px;color:#8b949e;margin-bottom:4px">Name</div>' +
-          '<input id="twinName" value="' + esc(cfg.name || '') + '" style="width:100%;padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px;box-sizing:border-box" onchange="updateTwinField(\'name\',this.value)">' +
-        '</div>' +
-        '<div style="margin-bottom:12px">' +
-          '<div style="font-size:12px;color:#8b949e;margin-bottom:4px">Role</div>' +
-          '<input id="twinRole" value="' + esc(cfg.role || '') + '" style="width:100%;padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px;box-sizing:border-box" onchange="updateTwinField(\'role\',this.value)">' +
-        '</div>' +
-        '<div style="margin-bottom:16px">' +
-          '<div style="font-size:12px;color:#8b949e;margin-bottom:4px">Response Style</div>' +
-          '<select id="twinStyle" style="padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px" onchange="updateTwinField(\'style\',this.value)">' +
-            '<option value="formal"' + (cfg.style === 'formal' ? ' selected' : '') + '>Formal</option>' +
-            '<option value="casual"' + (cfg.style === 'casual' ? ' selected' : '') + '>Casual</option>' +
-          '</select>' +
-        '</div>' +
-        '<div style="border-top:1px solid #21262d;padding-top:16px;margin-bottom:12px">' +
-          '<div style="font-size:14px;color:#f0f6fc;margin-bottom:8px">Test Query</div>' +
-          '<div style="display:flex;gap:8px">' +
-            '<input id="twinTestInput" placeholder="Ask a question to test the Twin..." style="flex:1;padding:6px 10px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px" onkeydown="if(event.key===\'Enter\')testTwinQuery()">' +
-            '<button onclick="testTwinQuery()" style="background:#238636;border:none;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:13px">Test</button>' +
-          '</div>' +
-        '</div>' +
-        '<div id="twinTestResult" style="display:none;margin-top:12px;padding:12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:13px"></div>' +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(ov);
-}
-
-function closeTwinOverlay() {
-  var ov = document.getElementById('twinOverlay');
-  if (ov) ov.remove();
-}
-
-function updateTwinField(field, value) {
-  if (!_twinConfig) return;
-  _twinConfig[field] = value;
-  fetch('/api/twin/config', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(_twinConfig)
-  }).catch(function() {});
-}
-
-function testTwinQuery() {
-  var input = document.getElementById('twinTestInput');
-  var resultEl = document.getElementById('twinTestResult');
-  if (!input || !resultEl) return;
-  var query = input.value.trim();
-  if (!query) return;
-  resultEl.style.display = 'block';
-  resultEl.innerHTML = '<span style="color:#8b949e">Testing...</span>';
-  fetch('/api/twin/test', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: query })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    var conf = data.confidence || {};
-    var barColor = conf.overall >= 0.8 ? '#3fb950' : (conf.overall >= 0.3 ? '#d29922' : '#da3633');
-    resultEl.innerHTML =
-      '<div style="margin-bottom:8px"><b>Action:</b> <span style="color:#58a6ff">' + esc(data.action || 'N/A') + '</span></div>' +
-      (data.tag ? '<div style="margin-bottom:8px;color:#8b949e">' + esc(data.tag) + '</div>' : '') +
-      '<div style="margin-bottom:8px"><b>Confidence:</b> ' + (conf.overall != null ? conf.overall.toFixed(2) : 'N/A') + '</div>' +
-      '<div style="display:flex;gap:16px;margin-bottom:8px;font-size:12px">' +
-        '<span>Coverage: ' + (conf.coverage != null ? conf.coverage.toFixed(2) : '-') + '</span>' +
-        '<span>Recency: ' + (conf.recency != null ? conf.recency.toFixed(2) : '-') + '</span>' +
-        '<span>Specificity: ' + (conf.specificity != null ? conf.specificity.toFixed(2) : '-') + '</span>' +
-      '</div>' +
-      '<div style="height:6px;background:#21262d;border-radius:3px;overflow:hidden;margin-bottom:8px">' +
-        '<div style="height:100%;width:' + ((conf.overall||0)*100) + '%;background:' + barColor + ';border-radius:3px"></div>' +
-      '</div>' +
-      (data.draft ? '<div style="margin-top:8px;padding:8px;background:#161b22;border-radius:4px;white-space:pre-wrap;font-size:12px;color:#c9d1d9">' + esc(data.draft) + '</div>' : '') +
-      (data.error ? '<div style="color:#da3633;margin-top:8px">' + esc(data.error) + '</div>' : '') +
-      (data.note ? '<div style="color:#d29922;margin-top:4px;font-size:12px">' + esc(data.note) + '</div>' : '');
-  })
-  .catch(function() { resultEl.innerHTML = '<span style="color:#da3633">Request failed</span>'; });
-}
-
 // Keyboard shortcuts: Cmd+K search, Cmd+N new session, ESC close
 document.addEventListener('keydown', function(e) {
   // Cmd+N or Ctrl+N to open new session modal
@@ -2726,3 +2298,31 @@ document.addEventListener('keydown', function(e) {
 
 /* Phase 4A Knowledge Graph moved to js/views/graph.js (Plan Task 13.3). */
 
+// Lazy feature module shims
+const FEAT = (name) => window.__resolveAsset('js/features/' + name + '.js');
+
+window.openContextPanel = async (...a) =>
+  (await import(FEAT('context-panel'))).open(...a);
+
+window.setupPushNotifications = async (...a) =>
+  (await import(FEAT('notif-enhance'))).setup(...a);
+window.handleIncomingNotif = async (...a) =>
+  (await import(FEAT('notif-enhance'))).handle(...a);
+window.fetchNotifCount = async (...a) =>
+  (await import(FEAT('notif-enhance'))).fetchNotifCount(...a);
+
+window.loadSessionBookmarks = async (...a) =>
+  (await import(FEAT('bookmark'))).load(...a);
+window.injectBookmarkButtons = async (...a) =>
+  (await import(FEAT('bookmark'))).inject(...a);
+window.showBookmarkPopover = async (...a) =>
+  (await import(FEAT('bookmark'))).showPopover(...a);
+
+window.openTwinPanel = async (...a) =>
+  (await import(FEAT('twin'))).open(...a);
+window.closeTwinOverlay = async (...a) =>
+  (await import(FEAT('twin'))).closeOverlay(...a);
+window.updateTwinField = async (...a) =>
+  (await import(FEAT('twin'))).updateField(...a);
+window.testTwinQuery = async (...a) =>
+  (await import(FEAT('twin'))).testQuery(...a);
