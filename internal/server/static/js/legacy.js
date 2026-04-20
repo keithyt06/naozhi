@@ -920,7 +920,11 @@ function naozhiBootstrap() {
     window.renderHomeView();
   }
 }
-(function waitForModules(tries) {
+// Defer the first check so the rest of legacy.js (lazy feature shims
+// at the end of this file) finishes parsing before naozhiBootstrap
+// reads window.setupPushNotifications / window.fetchNotifCount /
+// window.injectBookmarkButtons etc.
+setTimeout(function waitForModules(tries) {
   // chat.js installs window.fetchSessions; ws.js installs window.wsm.
   if (typeof window.fetchSessions === 'function' && typeof window.wsm === 'object') {
     naozhiBootstrap();
@@ -931,7 +935,7 @@ function naozhiBootstrap() {
   } else {
     console.error('NAOZHI: module bridges not installed after 500ms');
   }
-})(50);
+}, 0, 50);
 (function(){
   const ov=document.createElement('div');ov.className='lightbox-overlay';
   ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','Image preview');
