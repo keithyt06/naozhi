@@ -876,6 +876,23 @@ renderNotifications();
 
 /* ===== Initialization ===== */
 
+// Badge-only cron fetch. Stays in legacy.js so the bootstrap + ws
+// cron_result handler don't pull the lazy cron module on every page
+// load (Phase 3 keeps the full panel in features/cron.js).
+async function fetchCronJobs() {
+  try {
+    var headers = {};
+    var t = getToken();
+    if (t) headers['Authorization'] = 'Bearer ' + t;
+    var r = await fetch('/api/cron', { headers });
+    if (!r.ok) return;
+    var data = await r.json();
+    var jobs = data.jobs || [];
+    var badge = document.getElementById('cron-badge');
+    if (badge) { badge.textContent = jobs.length; badge.style.display = jobs.length > 0 ? '' : 'none'; }
+  } catch (e) { console.error('fetch cron badge:', e); }
+}
+
 // Wait for deferred ES modules (js/app.js -> core/ws.js + views/chat.js +
 // views/home.js) to install their window bridges before calling
 // fetchSessions/wsm.connect/renderHomeView. The classic inline <script>
