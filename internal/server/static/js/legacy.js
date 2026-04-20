@@ -989,7 +989,7 @@ var patrolRefreshTimer = null;
 /* Patrols View (Task 17) moved to js/views/patrols.js. All entry
    points and the WS onPatrolEvent dispatcher bridged onto window.*;
    the shared patrolsCache/patrolsStatsCache/patrolRefreshTimer vars
-   remain declared above in the /* View Switching */ block. */
+   remain declared above in the "View Switching" block. */
 
 /* Approvals View (Task 18) moved to js/views/approvals.js. All entry
    points (fetchApprovals, updateApprovalsBadge, renderApprovalsView,
@@ -997,7 +997,7 @@ var patrolRefreshTimer = null;
    approvalAction, onApprovalCreated, onApprovalResolved,
    fetchApprovalsBadge) bridged onto window.*; the shared
    approvalsCache/approvalsStatsCache/approvalsFilter vars remain
-   declared above in the /* View Switching */ block. */
+   declared above in the "View Switching" block. */
 
 
 /* Task 20: Home Dashboard Integration moved to js/views/home.js
