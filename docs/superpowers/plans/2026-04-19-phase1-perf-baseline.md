@@ -104,3 +104,71 @@ To hit <50 KB JS first-paint, candidate work items:
 ## Acceptance vs plan target
 
 Per plan Task 16 guidance: "If over target: inspect legacy.js — the goal is to continue shrinking it in Phase 3." Phase 1 structural goal is met; the byte reduction is a Phase 3 task. Proceeding to Task 17 (EC2 deploy) with this baseline recorded.
+
+---
+
+## Phase 3 — legacy.js feature split (2026-04-19)
+
+Measurement method: walked static ES6 `import`/`export ... from` chains
+starting from `js/app.js`, plus `js/legacy.js` (included via plain
+`<script>`). Dynamic `import()` calls (the 19 lazy feature shims) are
+excluded — which is the whole point.
+
+### First-paint JS gzip
+
+| File | raw | gzip |
+|---|---:|---:|
+| js/app.js | 1,535 | 847 |
+| js/core/api.js | 1,379 | 681 |
+| js/core/html.js | 1,538 | 811 |
+| js/core/router.js | 5,859 | 2,197 |
+| js/core/state.js | 1,425 | 731 |
+| js/core/utils.js | 5,471 | 2,570 |
+| js/core/ws.js | 20,872 | 6,017 |
+| js/legacy.js | 45,173 | 13,164 |
+| js/views/chat.js | 94,885 | 25,177 |
+| js/views/home.js | 16,501 | 4,399 |
+| **Total** | **194,638** | **56,594 (55.3 KB)** |
+
+### Delta vs Phase 1 baseline (70.1 KB)
+
+- **Reduction: −14.8 KB gzip** (−21%).
+- `legacy.js` shrank from 27.9 KB → 13.2 KB gzip (−14.7 KB).
+- All 8 feature modules correctly absent from first-paint (`features/*.js`
+  gzip reachable only via dynamic `import()`).
+
+### Target status
+
+- **Target:** < 50 KB.
+- **Actual:** 55.3 KB.
+- **Gap:** 5.3 KB over target.
+
+### Why we missed
+
+`chat.js` at 25.2 KB gzip is now the dominant contributor (45% of
+first-paint bytes) — Phase 3 non-goal. A follow-up `chat.js` split
+(deferring Shiki highlighter + event-log virtualization) is the next
+lever; design spec §"Non-goals" explicitly deferred it.
+
+### Decision
+
+Phase 3 structural goal is met: legacy.js halved, all 8 features lazy.
+Byte budget overage (5.3 KB) is a `views/chat.js` problem, not a
+legacy.js problem. Accepting the result and proceeding to deploy.
+Followup tracked as a Phase 4 item.
+
+### Lazy chunks verified on disk (via manifest)
+
+| Feature | Hashed path |
+|---|---|
+| context-panel | `js/features/context-panel.524c7e20.js` |
+| notif-enhance | `js/features/notif-enhance.950bfac4.js` |
+| bookmark | `js/features/bookmark.edeee16e.js` |
+| twin | `js/features/twin.c7331f55.js` |
+| replay | `js/features/replay.3460f1b8.js` |
+| cron | `js/features/cron.af77f2ae.js` |
+| file-hub | `js/features/file-hub.0204eb85.js` |
+| search | `js/features/search.f48b0a19.js` |
+
+Served by `handleStatic` under `/static/dist/` prefix → 1-year immutable
+cache header (`public, max-age=31536000, immutable`), gzipped.
