@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -831,9 +832,44 @@ func (c *Connector) handleRequest(appCtx, connCtx context.Context, req node.Reve
 		// reject syntactic `..` traversal / control bytes / non-absolute paths
 		// up front to avoid depending on a single defense layer). Parallels the
 		// takeover-side check at line 520. R-close-discovered-cwd-validate.
+		//
+		// When defaultWorkspace is configured, additionally enforce the same
+		// EvalSymlinks + allowedRoot prefix check that takeover performs. This
+		// closes the gap called out in the 2026-05-08 security review: without
+		// it a primary could point close_discovered at a CWD outside the
+		// reverse node's configured root, and WaitAndCleanup would derive the
+		// lockDir from that path. When defaultWorkspace is empty we fall back
+		// to syntactic-only validation to preserve compatibility with single-
+		// node deployments that never configure an allowed root.
 		if p.CWD != "" {
 			if err := session.ValidateRemoteWorkspacePath(p.CWD); err != nil {
 				return nil, fmt.Errorf("close_discovered cwd invalid: %w", err)
+			}
+			if c.defaultWorkspace != "" {
+				// Unlike takeover (which expects the CWD to exist because
+				// the shim is still running inside it), close_discovered
+				// frequently runs AFTER the Claude CLI has exited and the
+				// working directory may already be gone. Treat ENOENT as
+				// "not a symlink attack, path just vanished" — fall back to
+				// the cleaned syntactic path and still enforce the allowed-
+				// root prefix check so a relocated-but-existed attacker
+				// payload like "/etc/passwd" cannot slip through.
+				cleaned := filepath.Clean(p.CWD)
+				cleanCWD, err := filepath.EvalSymlinks(cleaned)
+				if err != nil {
+					if !errors.Is(err, fs.ErrNotExist) {
+						return nil, fmt.Errorf("close_discovered cwd path invalid: %w", err)
+					}
+					cleanCWD = cleaned
+				}
+				if !filepath.IsAbs(cleanCWD) {
+					return nil, fmt.Errorf("close_discovered cwd must be absolute path")
+				}
+				if cleanCWD != c.defaultWorkspace &&
+					!strings.HasPrefix(cleanCWD, c.defaultWorkspace+string(filepath.Separator)) {
+					return nil, fmt.Errorf("close_discovered cwd %q outside allowed root %q", cleanCWD, c.defaultWorkspace)
+				}
+				p.CWD = cleanCWD
 			}
 		}
 		actual, err := discovery.ProcStartTime(p.PID)

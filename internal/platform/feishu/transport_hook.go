@@ -1,6 +1,7 @@
 package feishu
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"io"
@@ -73,7 +74,12 @@ func (f *Feishu) registerWebhook(mux *http.ServeMux, handler platform.MessageHan
 			if envelope.Header != nil && envelope.Header.Token != "" {
 				token = envelope.Header.Token
 			}
-			if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(f.cfg.VerificationToken)) != 1 {
+			// Hash both sides to a fixed-length digest before the constant-time
+			// compare so that pathologically short/long attacker tokens cannot
+			// leak the real token's length via timing on the length prefix
+			// check that ConstantTimeCompare does internally when operand sizes
+			// differ.
+			if token == "" || !constantTimeEqualString(token, f.cfg.VerificationToken) {
 				slog.Warn("feishu token mismatch")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
@@ -431,4 +437,16 @@ func (f *Feishu) registerWebhook(mux *http.ServeMux, handler platform.MessageHan
 			}()
 		}
 	})
+}
+
+// constantTimeEqualString compares two strings in constant time without leaking
+// their lengths. subtle.ConstantTimeCompare returns 0 immediately when operand
+// lengths differ, which allows an attacker to probe the configured token's
+// length via timing. Hashing both sides to a fixed-length SHA-256 digest first
+// equalises lengths before the constant-time compare, at the cost of two
+// extra hashes per request.
+func constantTimeEqualString(a, b string) bool {
+	ha := sha256.Sum256([]byte(a))
+	hb := sha256.Sum256([]byte(b))
+	return subtle.ConstantTimeCompare(ha[:], hb[:]) == 1
 }
