@@ -68,6 +68,12 @@ type SessionRouter interface {
 	// entry so the cron job shows up in the dashboard sidebar before its
 	// first run. Key is always "cron:<jobID>".
 	RegisterCronStub(key, workspace, lastPrompt string)
+	// RegisterCronStubWithChain 在 RegisterCronStub 的基础上额外注入
+	// 一个 session-ID 链，赋给 stub 的 prevSessionIDs。这样 fresh_context
+	// cron 每次 Reset 后新建的 stub 仍然能通过 historySource 查到上一次
+	// 成功运行留下的 JSONL 历史（~/.claude/projects/<cwd>/<id>.jsonl）。
+	// chainIDs 为空 / nil 时等同于 RegisterCronStub。
+	RegisterCronStubWithChain(key, workspace, lastPrompt string, chainIDs []string)
 	// Reset discards the session for the given key (used by fresh-mode
 	// cron jobs and by Delete/Rename flows).
 	Reset(key string)
@@ -352,7 +358,10 @@ func (s *Scheduler) Start() error {
 	// Snapshot the fields we pass to registerStub under lock so we don't
 	// dereference *Job after releasing s.mu — once cron.Start() fires, any
 	// future UpdateJob could race with a stub read via the map pointer.
-	type stubRow struct{ id, workDir, prompt string }
+	// lastSessionID 跟其它字段一起快照，这样重启后恢复的 cron stub 仍然
+	// 带上上次成功执行留下的 session_id，historySource 才能从 JSONL 把
+	// 历史读回来给 dashboard 显示。
+	type stubRow struct{ id, workDir, prompt, lastSessionID string }
 	var stubs []stubRow
 	for _, j := range restored {
 		// Reject persisted jobs whose WorkDir escapes the configured
@@ -366,7 +375,7 @@ func (s *Scheduler) Start() error {
 		}
 		if j.Paused {
 			s.jobs[j.ID] = j
-			stubs = append(stubs, stubRow{j.ID, j.WorkDir, j.Prompt})
+			stubs = append(stubs, stubRow{j.ID, j.WorkDir, j.Prompt, j.LastSessionID})
 			continue
 		}
 		if err := s.registerJob(j); err != nil {
@@ -374,7 +383,7 @@ func (s *Scheduler) Start() error {
 			continue
 		}
 		s.jobs[j.ID] = j
-		stubs = append(stubs, stubRow{j.ID, j.WorkDir, j.Prompt})
+		stubs = append(stubs, stubRow{j.ID, j.WorkDir, j.Prompt, j.LastSessionID})
 	}
 	jobCount := len(s.jobs)
 	s.mu.Unlock()
@@ -383,7 +392,7 @@ func (s *Scheduler) Start() error {
 	// values (not the *Job pointer) so a concurrent UpdateJob mutating the map
 	// entry cannot race with our reads.
 	for _, st := range stubs {
-		s.registerStubByValue(st.id, st.workDir, st.prompt)
+		s.registerStubByValue(st.id, st.workDir, st.prompt, st.lastSessionID)
 	}
 	s.cron.Start()
 	slog.Info("cron scheduler started", "jobs", jobCount)
@@ -392,21 +401,34 @@ func (s *Scheduler) Start() error {
 
 // registerStub creates (or refreshes) a router session entry for the job so it
 // appears in the dashboard workspace list. Safe to call without a router (tests).
-// Callers must not be holding s.mu — RegisterCronStub re-enters router state.
+// Callers must not be holding s.mu — RegisterCronStubWithChain re-enters router state.
+//
+// 当 job 存了 LastSessionID（最近一次成功执行的 session_id），会把它
+// 作为单元素 chain 传给 stub，这样 dashboard 点击 cron 侧边栏时能按
+// 该 ID 从 claude 项目目录找到 JSONL 历史。否则 fresh_context=true 的
+// 定时任务每次 Reset 都会把 stub 的 chain 清空，事件面板就永远是空白。
 func (s *Scheduler) registerStub(j *Job) {
 	if s.router == nil {
 		return
 	}
-	s.router.RegisterCronStub("cron:"+j.ID, j.WorkDir, j.Prompt)
+	var chain []string
+	if j.LastSessionID != "" {
+		chain = []string{j.LastSessionID}
+	}
+	s.router.RegisterCronStubWithChain("cron:"+j.ID, j.WorkDir, j.Prompt, chain)
 }
 
 // registerStubByValue is the pointer-free variant used from Start() where the
 // caller has already snapshotted mutable fields under s.mu.
-func (s *Scheduler) registerStubByValue(id, workDir, prompt string) {
+func (s *Scheduler) registerStubByValue(id, workDir, prompt, lastSessionID string) {
 	if s.router == nil {
 		return
 	}
-	s.router.RegisterCronStub("cron:"+id, workDir, prompt)
+	var chain []string
+	if lastSessionID != "" {
+		chain = []string{lastSessionID}
+	}
+	s.router.RegisterCronStubWithChain("cron:"+id, workDir, prompt, chain)
 }
 
 // EnsureStub lazily (re-)registers a dashboard stub session for the given
@@ -432,21 +454,22 @@ func (s *Scheduler) EnsureStub(key string) bool {
 		return false
 	}
 	// Snapshot workDir/prompt under RLock, release before reaching into
-	// router: RegisterCronStub calls notifyChange which fans out to hub
-	// broadcasters, and holding s.mu across that path risks lock-order
+	// router: RegisterCronStubWithChain calls notifyChange which fans out to
+	// hub broadcasters, and holding s.mu across that path risks lock-order
 	// inversion with the cron dispatcher (see ListAllJobsWithNextRun).
 	s.mu.RLock()
 	j, ok := s.jobs[id]
-	var workDir, prompt string
+	var workDir, prompt, lastSessionID string
 	if ok {
 		workDir = j.WorkDir
 		prompt = j.Prompt
+		lastSessionID = j.LastSessionID
 	}
 	s.mu.RUnlock()
 	if !ok {
 		return false
 	}
-	s.registerStubByValue(id, workDir, prompt)
+	s.registerStubByValue(id, workDir, prompt, lastSessionID)
 	return true
 }
 
@@ -820,6 +843,18 @@ func (s *Scheduler) UpdateJob(id string, upd JobUpdate) (*Job, error) {
 		j.Prompt = *upd.Prompt
 	}
 	if upd.WorkDir != nil {
+		// WorkDir 一换 LastSessionID 就失效：claude JSONL 按 cwd 归档，
+		// 用老 workspace 的 session_id 去新 cwd 下查 history 只会 Stat 落空。
+		// 清零后下次执行写入的新 SessionID 会自然属于新 workspace。
+		//
+		// 对比靠原生字符串相等，依赖 dashboard / AddJob 路径已对 WorkDir 做
+		// 归一化（filepath.Clean / validateWorkspace）。如果将来有新 caller
+		// 绕过归一化直接塞相对路径，会导致清零误判：合法但路径写法不同的
+		// 相同 workspace 会被判定为变更而清零，后果是用户需要重跑一次才
+		// 能恢复 chain，不致数据损坏。
+		if *upd.WorkDir != j.WorkDir {
+			j.LastSessionID = ""
+		}
 		j.WorkDir = *upd.WorkDir
 	}
 	if upd.Notify != nil {
@@ -1320,7 +1355,7 @@ func (s *Scheduler) executeOpt(j *Job, viaTriggerNow bool) {
 		if s.allowedRoot != "" && !workDirUnderRoot(workDir, s.allowedRoot) {
 			lg.Warn("cron job work_dir outside allowed_root; aborting run",
 				"work_dir", workDir)
-			s.recordResult(j, "", "work_dir outside allowed_root")
+			s.recordResult(j, "", "work_dir outside allowed_root", "")
 			return
 		}
 		opts.Workspace = filepath.Clean(workDir)
@@ -1359,7 +1394,7 @@ func (s *Scheduler) executeOpt(j *Job, viaTriggerNow bool) {
 		if !workDirReachable(workDir) {
 			lg.Warn("cron fresh spawn aborted: work_dir unreachable",
 				"work_dir", workDir)
-			s.recordResult(j, "", "work_dir unreachable")
+			s.recordResult(j, "", "work_dir unreachable", "")
 			s.deliverNotice(notifyTo, fmt.Sprintf("[Cron %s] 工作目录不可达，本次执行已跳过。", jobID))
 			return
 		}
@@ -1407,7 +1442,7 @@ func (s *Scheduler) executeOpt(j *Job, viaTriggerNow bool) {
 		} else {
 			lg.Error("cron session error", "err", err)
 		}
-		s.recordResult(j, "", "session error: "+err.Error())
+		s.recordResult(j, "", "session error: "+err.Error(), "")
 		s.deliverNotice(notifyTo, fmt.Sprintf("[Cron %s] 执行跳过，请稍后重试。", jobID))
 		stubRefresh()
 		return
@@ -1442,7 +1477,7 @@ func (s *Scheduler) executeOpt(j *Job, viaTriggerNow bool) {
 		} else {
 			lg.Error("cron send error", "err", err)
 		}
-		s.recordResult(j, "", "send error: "+err.Error())
+		s.recordResult(j, "", "send error: "+err.Error(), "")
 		s.deliverNotice(notifyTo, fmt.Sprintf("[Cron %s] 执行失败，请稍后重试。", jobID))
 		stubRefresh()
 		return
@@ -1451,7 +1486,12 @@ func (s *Scheduler) executeOpt(j *Job, viaTriggerNow bool) {
 	lg.Info("cron job completed",
 		"result_len", len(result.Text),
 		"elapsed_ms", time.Since(execStart).Milliseconds())
-	s.recordResult(j, result.Text, "")
+	// 把本次产生的 Claude session_id 也记下来：fresh_context=true 的
+	// 路径下一次 Reset 会清掉 stub 的 chain，不保留这个 ID 的话
+	// dashboard 点击 cron 侧边栏就看不到上一次的 JSONL 历史。
+	// Send 路径的 result 帧总会带 SessionID（process.go 成功分支会填），
+	// 传空只会出现在错误路径，recordResult 的 "" 分支自行短路。
+	s.recordResult(j, result.Text, "", result.SessionID)
 
 	replyText := fmt.Sprintf("[Cron %s] %s", jobID, result.Text)
 	s.deliverNotice(notifyTo, replyText)
@@ -1522,7 +1562,12 @@ func runeByteOffset(s string, maxRunes int) (int, bool) {
 }
 
 // recordResult persists the last execution result on the job and invokes the onExecute callback.
-func (s *Scheduler) recordResult(j *Job, result, errMsg string) {
+//
+// sessionID 是本次执行从 CLI 拿到的 Claude session_id。成功路径传非空值，
+// 错误路径（work_dir/session/send error）传空串：空值分支不会触碰
+// j.LastSessionID，保留上一次成功执行留下的 ID，这样 dashboard 点击
+// cron 侧边栏仍然能按历史 ID 拉到 JSONL 内容而不是空白面板。
+func (s *Scheduler) recordResult(j *Job, result, errMsg, sessionID string) {
 	const maxStoredRunes = 4 * 1024
 	// Byte-level rune decode: avoids the two O(n) rune-slice allocations that
 	// `string([]rune(result)[:maxStoredRunes])` performs on a 4KB-result path.
@@ -1564,6 +1609,9 @@ func (s *Scheduler) recordResult(j *Job, result, errMsg string) {
 	j.LastRunAt = time.Now()
 	j.LastResult = result
 	j.LastError = errMsg
+	if sessionID != "" {
+		j.LastSessionID = sessionID
+	}
 	save, perr := s.persistJobsLocked()
 	fn := s.onExecute
 	s.mu.Unlock()

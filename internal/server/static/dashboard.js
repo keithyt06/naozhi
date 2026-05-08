@@ -347,15 +347,18 @@ function renderSidebar(data) {
     const cronItems = [];
     const ungrouped = [];
     allItems.forEach(s => {
-      // Cron-scheduler sessions (key prefix "cron:") always belong in the
-      // dedicated "定时任务" section, regardless of whether the job has a
-      // WorkDir (which would otherwise bucket them under a project group)
-      // or not (which previously sent them to the "未分组" catch-all).
-      // Operators expect every scheduled task to live together so they can
-      // eyeball attention and trigger status without scanning 10 project
-      // headers for cron badges.
+      // Cron-scheduler sessions (key prefix "cron:"): if the job carries a
+      // WorkDir that the backend resolved to a real project name, let it
+      // flow into that project's group just like any other session — the
+      // cron badge (⏰) on the card already signals its nature. Only cron
+      // jobs without a project (no WorkDir, or WorkDir outside any
+      // registered project AND no workspace-basename fallback) fall into
+      // the dedicated "定时任务" bucket, so they don't drop into the generic
+      // "未分组" catch-all either. 这样定了 WorkDir 的定时任务会出现在
+      // 它实际运行的项目下，符合操作者的定位直觉；纯无归属的定时任务
+      // 才统一收进定时任务分组。
       const isCron = typeof s.key === 'string' && s.key.indexOf('cron:') === 0;
-      if (isCron) {
+      if (isCron && !s.project) {
         cronItems.push(s);
         return;
       }

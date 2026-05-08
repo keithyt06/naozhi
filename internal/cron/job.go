@@ -62,6 +62,14 @@ type Job struct {
 	LastRunAt  time.Time `json:"last_run_at"`
 	LastError  string    `json:"last_error,omitempty"`
 
+	// LastSessionID 是最近一次成功执行产生的 Claude session_id。持久化后
+	// 供 registerStub 注入到新创建的 cron stub 的 prevSessionIDs，让
+	// dashboard 点击 cron 侧边栏时 history.Source 能按这个 ID 从
+	// ~/.claude/projects 里加载 JSONL 历史。没有它的话 fresh_context=true
+	// 场景下每次 Reset 都会清掉 stub 的 chain IDs，stub 的事件面板
+	// 就永远是空的。仅 Send 成功路径写入；错误路径保留上一次的值。
+	LastSessionID string `json:"last_session_id,omitempty"`
+
 	entryID robfigcron.EntryID // runtime only, not persisted
 }
 

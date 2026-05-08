@@ -3180,7 +3180,25 @@ func (r *Router) RegisterForResume(key, sessionID, workspace, lastPrompt string)
 // lastPrompt are refreshed in place (to reflect edits via dashboard).
 // The stub has no process and no session ID; the first GetOrCreate call
 // (at cron execute time) will spawn a real CLI process and reuse this entry.
+//
+// 等价于 RegisterCronStubWithChain(key, workspace, lastPrompt, nil)，
+// 保留给不关心 history chain 的调用方（测试、旧集成）。
 func (r *Router) RegisterCronStub(key, workspace, lastPrompt string) {
+	r.RegisterCronStubWithChain(key, workspace, lastPrompt, nil)
+}
+
+// RegisterCronStubWithChain 在 RegisterCronStub 的基础上注入一个
+// session-ID 链：stub 没有自己的 sessionID（exempt=true，无进程），但
+// historySource 查 JSONL 时要用到 chain。对于 cron 任务，chain 就是
+// 上一次成功执行留下的 session_id（cron.Job.LastSessionID）。没有它，
+// fresh_context=true 场景每次 Reset 都会让 stub 的 chain 为空，dashboard
+// 点击定时任务只能看到一个空白的事件面板。
+//
+// chainIDs 空 / nil 时行为与 RegisterCronStub 相同。existing 分支下如果
+// 新 chain 与旧 chain 不同，会同步刷新 prevSessionIDs 并重挂
+// historySource，保证 cron 每次执行完 recordResult 后侧边栏立刻能查到
+// 最新一次的 JSONL（而不是等下次重启）。
+func (r *Router) RegisterCronStubWithChain(key, workspace, lastPrompt string, chainIDs []string) {
 	r.mu.Lock()
 	if existing, ok := r.sessions[key]; ok {
 		changed := false
@@ -3192,6 +3210,21 @@ func (r *Router) RegisterCronStub(key, workspace, lastPrompt string) {
 			}
 			if lastPrompt != "" && loadStringAtomic(&existing.lastPrompt) != lastPrompt {
 				storeStringAtomic(&existing.lastPrompt, lastPrompt)
+				changed = true
+			}
+			// prevSessionIDs 的所有历史写路径（spawnSession:1786 / RenameSession:2142
+			// / 本函数 new 分支:3259）都在 r.mu 下做，读路径（961 / 1722 / 3083
+			// 以及下一行）也全部在 r.mu 下。managed.go:snapshotChainIDs 虽然用
+			// historyMu.RLock，但因为写者不拿 historyMu，historyMu 对该字段
+			// 而言并不构成真正的同步——真正的 invariant 是"r.mu 写/r.mu 读"。
+			// 因此 chain 刷新直接在 r.mu 临界区内做，与其它写路径一致，不引入
+			// 混合锁协议；attachHistorySource 只读 r 的不可变字段 + 写 s 的
+			// atomic.Pointer，同样安全可以在 r.mu 下调。
+			if len(chainIDs) > 0 && !slices.Equal(existing.prevSessionIDs, chainIDs) {
+				existing.prevSessionIDs = slices.Clone(chainIDs)
+				// workspace 变了 historySource 里也要刷（cwd 变化会导致
+				// projDirName 命中不同的 claude 项目目录）；一并重装最省心。
+				r.attachHistorySource(existing)
 				changed = true
 			}
 			// R176-PERF-P1: only mark dirty + bump version when something
@@ -3217,6 +3250,9 @@ func (r *Router) RegisterCronStub(key, workspace, lastPrompt string) {
 	s := &ManagedSession{
 		key:    key,
 		exempt: true,
+	}
+	if len(chainIDs) > 0 {
+		s.prevSessionIDs = slices.Clone(chainIDs)
 	}
 	s.setWorkspace(workspace)
 	s.SetCLIName(r.CLIName())

@@ -177,6 +177,9 @@ type jitterStubRouter struct {
 func (r *jitterStubRouter) RegisterCronStub(key, workspace, lastPrompt string) {
 	_, _, _ = key, workspace, lastPrompt
 }
+func (r *jitterStubRouter) RegisterCronStubWithChain(key, workspace, lastPrompt string, chainIDs []string) {
+	_, _, _, _ = key, workspace, lastPrompt, chainIDs
+}
 func (r *jitterStubRouter) Reset(key string) { _ = key }
 func (r *jitterStubRouter) GetOrCreate(ctx context.Context, key string, opts session.AgentOpts) (*session.ManagedSession, session.SessionStatus, error) {
 	_ = ctx
