@@ -153,6 +153,12 @@ const (
 	// A crash losing up to this much session-ID tracking costs one
 	// discovery rescan cycle. Shared between Cleanup and saveIfDirty.
 	knownIDsSaveInterval = 5 * time.Minute
+
+	// sessionSaveInterval controls the cadence of the periodic
+	// sessions.json flush in StartCleanupLoop. Kept shorter than
+	// knownIDsSaveInterval so a crash loses at most this window of
+	// session-state updates, while still limiting fsync churn.
+	sessionSaveInterval = 30 * time.Second
 )
 
 // Router manages session key -> ManagedSession mapping.
@@ -334,6 +340,32 @@ func chatKeyFor(key string) string {
 		return key[:idx]
 	}
 	return key
+}
+
+// isENOENTErr reports whether err (or any error it wraps) ultimately
+// carries syscall.ENOENT. Go's errors.Is already walks the %w chain
+// transparently, but error paths like net.Dial → net.OpError → os.SyscallError
+// need the full chain to reach the syscall errno; this helper exists
+// primarily to make the intent explicit at call sites and to spell out
+// why we must NOT match the strerror text ("no such file or directory")
+// — it is locale-dependent (e.g. LANG=zh_CN.UTF-8 returns a Chinese
+// translation) and silently regresses under non-English containers.
+func isENOENTErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ENOENT) {
+		return true
+	}
+	var syscallErr *os.SyscallError
+	if errors.As(err, &syscallErr) && errors.Is(syscallErr.Err, syscall.ENOENT) {
+		return true
+	}
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) && errors.Is(pathErr.Err, syscall.ENOENT) {
+		return true
+	}
+	return false
 }
 
 // claudeProjectSlug maps a CWD to the directory name Claude CLI uses under
@@ -1092,13 +1124,11 @@ func (r *Router) reconnectShims(parentCtx context.Context) {
 			// next 30s tick, but that means 30s of WARN spam AND every
 			// dashboard retry in between also fails. Eagerly clean up so
 			// the next user message spawns a fresh shim instead of hitting
-			// the same dead path. errors.Is(err, syscall.ENOENT) is the
-			// canonical check, but the error wraps through fmt.Errorf("%w")
-			// layers in SpawnReconnect → Reconnect → net.Dial, so we also
-			// match the textual "no such file or directory" suffix as a
-			// belt-and-braces fallback.
-			if errors.Is(err, syscall.ENOENT) ||
-				strings.Contains(err.Error(), "no such file or directory") {
+			// the same dead path. isENOENTErr unwraps any wrapper layers
+			// (fmt.Errorf → net.OpError → os.SyscallError) and avoids
+			// matching against the strerror text — that string is locale-
+			// dependent and silently mismatches under LANG=zh_CN.UTF-8.
+			if isENOENTErr(err) {
 				slog.Warn("shim reconnect: socket missing, cleaning up zombie",
 					"key", state.Key, "pid", state.ShimPID, "err", err)
 				if mgr := r.managerFor(recBackendID); mgr != nil {
@@ -2497,9 +2527,9 @@ func (r *Router) StartCleanupLoop(ctx context.Context, interval time.Duration) {
 	go func() {
 		cleanupTicker := time.NewTicker(interval)
 		defer cleanupTicker.Stop()
-		// Save dirty state every 30s to reduce crash-recovery data loss
-		// from ~TTL/2 (~15min) to ~30s.
-		saveTicker := time.NewTicker(30 * time.Second)
+		// Save dirty state on sessionSaveInterval to reduce crash-recovery
+		// data loss from ~TTL/2 to one window.
+		saveTicker := time.NewTicker(sessionSaveInterval)
 		defer saveTicker.Stop()
 		for {
 			select {

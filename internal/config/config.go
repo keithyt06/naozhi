@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/naozhi/naozhi/internal/session"
 )
 
 type Config struct {
@@ -307,7 +309,7 @@ func applyDefaults(cfg *Config) {
 		cfg.Server.Addr = ":8080"
 	}
 	if cfg.Session.MaxProcs <= 0 {
-		cfg.Session.MaxProcs = 3
+		cfg.Session.MaxProcs = session.DefaultMaxProcs
 	}
 	if cfg.Session.TTL == "" {
 		cfg.Session.TTL = "30m"

@@ -237,6 +237,13 @@ func (s *Scheduler) SetOnExecute(fn OnExecuteFunc) {
 // scale, but higher values tend to indicate a config mistake.
 const maxJobsHardCap = 500
 
+// DefaultMaxJobsPerChat bounds how many cron jobs a single chat (platform+
+// chat_id pair) may own. Prevents one loud group from consuming the
+// global MaxJobs quota. Exported so tests and docs can reference the
+// value; config override is deliberately not wired up yet — if operators
+// need it tunable, promote it into SchedulerConfig as a follow-up.
+const DefaultMaxJobsPerChat = 10
+
 // workDirReachable reports whether workDir exists and resolves to a
 // directory right now. Used before fresh-mode Reset so a job whose
 // workspace has been deleted by an operator does not destroy the
@@ -582,17 +589,16 @@ func (s *Scheduler) AddJob(j *Job) error {
 		return fmt.Errorf("max cron jobs reached (%d)", s.maxJobs)
 	}
 
-	// Per-chat limit to prevent one chat from exhausting global quota
-	const maxJobsPerChat = 10
+	// Per-chat limit to prevent one chat from exhausting global quota.
 	chatCount := 0
 	for _, existing := range s.jobs {
 		if existing.Platform == j.Platform && existing.ChatID == j.ChatID {
 			chatCount++
 		}
 	}
-	if chatCount >= maxJobsPerChat {
+	if chatCount >= DefaultMaxJobsPerChat {
 		s.mu.Unlock()
-		return fmt.Errorf("per-chat cron limit reached (%d)", maxJobsPerChat)
+		return fmt.Errorf("per-chat cron limit reached (%d)", DefaultMaxJobsPerChat)
 	}
 
 	j.ID = generateID()
@@ -1249,7 +1255,7 @@ func (s *Scheduler) registerJob(j *Job) error {
 			slog.Debug("cron: tick fired for job paused concurrently, skipping", "id", jobID)
 			return
 		}
-		s.execute(cur)
+		s.executeOpt(cur, false)
 	})
 	if err != nil {
 		return fmt.Errorf("register cron: %w", err)
@@ -1271,15 +1277,16 @@ func (s *Scheduler) jobRunningGuard(id string) *atomic.Bool {
 	return actual.(*atomic.Bool)
 }
 
-// execute runs a cron job: send prompt to session, post result to chat.
+// execute runs a cron job with default scheduled-tick semantics. Retained
+// as a thin wrapper for test helpers that call execute(j) directly; the
+// scheduled-tick path in registerJob now calls executeOpt(j, false).
 func (s *Scheduler) execute(j *Job) {
 	s.executeOpt(j, false)
 }
 
-// executeOpt 是 execute 的全参数版本。viaTriggerNow=true 时跳过 jitter 的
-// 延迟等待（用户显式 "run now" 期望立即执行）；scheduled tick 路径传 false。
-// 保持 execute(j) 作为 back-compat 入口，既有调用点（cron closure 里间接
-// 入口）和少量测试辅助无需改签名。
+// executeOpt runs a cron job: send prompt to session, post result to chat.
+// viaTriggerNow=true skips jitter delay (explicit user "run now" expects
+// immediate execution); scheduled tick callers pass false.
 func (s *Scheduler) executeOpt(j *Job, viaTriggerNow bool) {
 	// Guard against concurrent execution of the same job. The cron chain's
 	// SkipIfStillRunning protects the scheduled-tick path, but TriggerNow
