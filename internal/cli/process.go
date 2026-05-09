@@ -1755,11 +1755,10 @@ func EventEntriesFromEventAt(ev Event, nowMS int64) []EventEntry {
 		if ev.Message == nil {
 			return nil
 		}
-		// Lazy-allocate out: most assistant events carry a single content block
-		// (pure text or a single tool_use). `make([]EventEntry, 0, 1)` would
-		// still force a heap alloc for the backing array; `nil` lets the
-		// first append pay 1 alloc only when we have real blocks to write.
-		var out []EventEntry
+		// Pre-size to the content block count: single-block events pay 1
+		// alloc (same as the old nil+append path), and multi-block events
+		// (thinking+tool_use+text) avoid 2-3 append-driven growth reallocs.
+		out := make([]EventEntry, 0, len(ev.Message.Content))
 		for _, block := range ev.Message.Content {
 			entry := base
 			switch block.Type {
@@ -1884,18 +1883,6 @@ func formatToolDetail(block ContentBlock) string {
 		return block.Name
 	}
 	return FormatToolInput(block.Name, block.Input)
-}
-
-func getStr(m map[string]json.RawMessage, key string) string {
-	raw, ok := m[key]
-	if !ok || len(raw) == 0 {
-		return ""
-	}
-	var s string
-	if json.Unmarshal(raw, &s) == nil {
-		return s
-	}
-	return ""
 }
 
 func shortPath(p string) string {

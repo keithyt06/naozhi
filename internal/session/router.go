@@ -343,29 +343,15 @@ func chatKeyFor(key string) string {
 }
 
 // isENOENTErr reports whether err (or any error it wraps) ultimately
-// carries syscall.ENOENT. Go's errors.Is already walks the %w chain
-// transparently, but error paths like net.Dial → net.OpError → os.SyscallError
-// need the full chain to reach the syscall errno; this helper exists
-// primarily to make the intent explicit at call sites and to spell out
-// why we must NOT match the strerror text ("no such file or directory")
-// — it is locale-dependent (e.g. LANG=zh_CN.UTF-8 returns a Chinese
-// translation) and silently regresses under non-English containers.
+// carries syscall.ENOENT. The helper exists primarily to make the intent
+// explicit at call sites and to spell out why we must NOT match the
+// strerror text ("no such file or directory") — it is locale-dependent
+// (e.g. LANG=zh_CN.UTF-8 returns a Chinese translation) and silently
+// regresses under non-English containers. errors.Is already walks the
+// %w chain through *os.PathError / *os.SyscallError transparently, so
+// a single call suffices.
 func isENOENTErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, syscall.ENOENT) {
-		return true
-	}
-	var syscallErr *os.SyscallError
-	if errors.As(err, &syscallErr) && errors.Is(syscallErr.Err, syscall.ENOENT) {
-		return true
-	}
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) && errors.Is(pathErr.Err, syscall.ENOENT) {
-		return true
-	}
-	return false
+	return err != nil && errors.Is(err, syscall.ENOENT)
 }
 
 // claudeProjectSlug maps a CWD to the directory name Claude CLI uses under
