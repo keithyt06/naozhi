@@ -693,15 +693,30 @@ func (d *Dispatcher) SendSplitReply(ctx context.Context, p platform.Platform, ch
 }
 
 // formatChineseDuration formats a duration into a short Chinese string.
+// Mixed durations (90m → "1 小时 30 分钟", 90s → "1 分钟 30 秒") are
+// rendered with the largest meaningful unit pair; pure-round durations
+// collapse to a single unit for readability.
 func formatChineseDuration(d time.Duration) string {
 	if d <= 0 {
 		return "未知"
 	}
-	if d >= time.Hour && d%time.Hour == 0 {
-		return fmt.Sprintf("%d 小时", int(d.Hours()))
+	if d >= time.Hour {
+		h := int(d / time.Hour)
+		rem := d - time.Duration(h)*time.Hour
+		m := int(rem / time.Minute)
+		if m == 0 {
+			return fmt.Sprintf("%d 小时", h)
+		}
+		return fmt.Sprintf("%d 小时 %d 分钟", h, m)
 	}
-	if d >= time.Minute && d%time.Minute == 0 {
-		return fmt.Sprintf("%d 分钟", int(d.Minutes()))
+	if d >= time.Minute {
+		m := int(d / time.Minute)
+		rem := d - time.Duration(m)*time.Minute
+		s := int(rem / time.Second)
+		if s == 0 {
+			return fmt.Sprintf("%d 分钟", m)
+		}
+		return fmt.Sprintf("%d 分钟 %d 秒", m, s)
 	}
 	return fmt.Sprintf("%d 秒", int(d.Seconds()))
 }
