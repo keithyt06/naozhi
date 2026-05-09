@@ -57,6 +57,13 @@ var circuitBreakerThreshold = 6
 // 30s ceiling.
 var circuitBreakerBackoff = 5 * time.Minute
 
+// reasonSessionReset is the Reason value emitted for the terminal
+// session_state message in streamEvents when the router has already dropped
+// the session (Reset raced ahead of the notify-close path). Centralised so
+// downstream consumers (reverseconn.go, dashboard.js) have one literal to
+// match on, not a scatter of stringly-typed tokens. RNEW-005.
+const reasonSessionReset = "session_reset"
+
 // Connector dials a primary naozhi and serves it as a reverse-connected node.
 // Run on machines behind NAT that cannot be reached by the primary directly.
 type Connector struct {
@@ -1076,11 +1083,23 @@ func (c *Connector) streamEvents(ctx context.Context, writeJSON func(any) error,
 				// Session was reset/replaced; the notify channel is closed.
 				// Send final state so the hub knows the process died and can
 				// trigger a re-subscribe when the next send arrives.
-				if s := c.router.GetSession(key); s != nil {
+				//
+				// RNEW-005: if Reset removed the session from the router
+				// between the notify close and our GetSession below, the
+				// previous code returned silently — leaving the primary
+				// unaware that the key no longer has a live stream. Always
+				// emit a terminal session_state so reverseconn.go's
+				// session_state handler can propagate it downstream and the
+				// primary can re-subscribe on the next send.
+				s := c.router.GetSession(key)
+				msg := node.ReverseMsg{Type: "session_state", Key: key, State: "dead", Reason: reasonSessionReset}
+				if s != nil {
 					snap := s.Snapshot()
-					if err := writeJSON(node.ReverseMsg{Type: "session_state", Key: key, State: snap.State, Reason: snap.DeathReason}); err != nil {
-						slog.Debug("connector write final session_state", "key", key, "err", err)
-					}
+					msg.State = snap.State
+					msg.Reason = snap.DeathReason
+				}
+				if err := writeJSON(msg); err != nil {
+					slog.Debug("connector write final session_state", "key", key, "err", err)
 				}
 				return
 			}
