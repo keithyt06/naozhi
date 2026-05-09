@@ -109,6 +109,14 @@ func ValidateConfig(cfg ProjectConfig) error {
 	// chatID) triple and silently reroute messages; a NUL byte truncates
 	// argv/YAML parsers unpredictably. Size caps prevent an attacker-crafted
 	// config from stuffing multi-KB strings into the in-memory index.
+	// NOTE: ProjectConfig fields Favorite, GitSync, GitRemote, and
+	// MemoryFile currently have no validator. Favorite/GitSync are bools
+	// (no injection surface). GitRemote and MemoryFile are strings with
+	// no downstream consumers today, so path-traversal / argv-injection
+	// concerns do not yet apply — but the moment a caller wires either
+	// to exec or file-open, extend ValidateConfig to cap byte length +
+	// reject C0/C1/bidi/LS-PS via IsLogInjectionRune, mirroring the
+	// PlannerPrompt policy above.
 	for i, b := range cfg.ChatBindings {
 		// R185-SEC-M2: empty required fields pollute bindingIndex with
 		// nonsense keys like ":group:oc_xxx" or "feishu:group:" that can
