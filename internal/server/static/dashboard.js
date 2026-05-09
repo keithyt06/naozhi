@@ -5320,8 +5320,11 @@ function localizeAPIError(status, raw) {
   if (status === 0 || status === undefined || status === null) {
     return '网络错误' + withTail;
   }
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return '鉴权失败，请重新登录' + withTail;
+  }
+  if (status === 403) {
+    return '无权限或参数越界' + withTail;
   }
   if (status === 404) {
     return '资源不存在' + withTail;

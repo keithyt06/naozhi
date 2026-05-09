@@ -947,9 +947,14 @@ func TestDashboardJS_UX1_UnifiedErrorHelpers(t *testing.T) {
 	// Arm 2: localizeAPIError must classify the critical status classes
 	// with Chinese copy. Each literal is a substring inside the helper's
 	// switch/if cascade; the test catches accidental deletions.
+	//
+	// 401 和 403 拆成两档：401 = 未登录 / token 失效；403 = 后端边界校验拒
+	// 绝（invalid work_dir / forbidden path 等）。历史合并成一条导致用户
+	// 看到「鉴权失败，请重新登录」但真因是 work_dir 越界，无法自助修复。
 	for _, want := range []string{
 		"'网络错误'",          // status 0 / connection-refused
-		"'鉴权失败，请重新登录'",    // 401 / 403
+		"'鉴权失败，请重新登录'",    // 401
+		"'无权限或参数越界'",      // 403
 		"'资源不存在'",         // 404
 		"'请求过于频繁，请稍后重试'",  // 429
 		"'服务暂时不可用，请稍后重试'", // 502/503/504
