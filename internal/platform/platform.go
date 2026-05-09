@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"math/rand/v2"
 	"net/http"
 	"runtime/debug"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/naozhi/naozhi/internal/osutil"
 )
 
 // MessageHandler is the callback invoked when a platform receives a message.
@@ -224,15 +225,10 @@ func ReplyWithRetry(ctx context.Context, p Platform, msg OutgoingMessage, maxAtt
 	return "", lastErr
 }
 
-// jitterBackoff returns d scaled by a random factor in [0.75, 1.25). Exposed
-// at package scope so other reconnect loops (relay, upstream connector) can
-// share the same shape. math/rand/v2 uses a per-goroutine source so
-// concurrent callers do not contend on a global lock.
+// jitterBackoff is a thin wrapper kept for historical callers inside this
+// package (and the existing backoff_test.go). The single source of truth
+// now lives in osutil.JitterBackoff so node/upstream reconnect loops can
+// share the exact same shape without three divergent copies.
 func jitterBackoff(d time.Duration) time.Duration {
-	if d <= 0 {
-		return d
-	}
-	// Float64 returns [0,1); remap to [0.75, 1.25).
-	factor := 0.75 + rand.Float64()*0.5
-	return time.Duration(float64(d) * factor)
+	return osutil.JitterBackoff(d)
 }

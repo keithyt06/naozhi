@@ -167,6 +167,11 @@ var scanUserPromptBufPool = sync.Pool{
 	},
 }
 
+// userTypeMarker is the JSONL quick-filter prefix used by scanUserPrompt.
+// Hoisted to package scope so the `[]byte(...)` literal does not allocate
+// on every line of the hot JSONL scan loop.
+var userTypeMarker = []byte(`"type":"user"`)
+
 func DefaultScanner() *Scanner {
 	defaultScannerOnce.Do(func() {
 		defaultScannerInst = NewScanner()
@@ -679,7 +684,7 @@ func scanUserPrompt(f *os.File) string {
 			continue
 		}
 		// Quick check before full parse
-		if !bytes.Contains(line, []byte(`"type":"user"`)) {
+		if !bytes.Contains(line, userTypeMarker) {
 			continue
 		}
 		var hl struct {
@@ -861,7 +866,11 @@ func (s *Scanner) LookupSummaries(claudeDir string, sessions map[string]string) 
 	}
 
 	// Group session IDs by project directory to read each index file once.
-	byProjDir := make(map[string][]string) // indexPath → []sessionID
+	// Preallocate upper bound len(sessions): worst case each session is in
+	// its own project dir. Actual entry count is typically ≤ number of
+	// distinct workspaces, so some headroom is acceptable vs. map rehash
+	// cost on the growing path.
+	byProjDir := make(map[string][]string, len(sessions)) // indexPath → []sessionID
 	for sid, workspace := range sessions {
 		if workspace == "" {
 			continue
