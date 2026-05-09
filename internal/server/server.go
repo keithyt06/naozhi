@@ -701,6 +701,14 @@ func (s *Server) Start(ctx context.Context) error {
 			"addr", s.addr,
 			"trusted_proxy", s.auth.trustedProxy,
 		)
+	} else if s.dashboardToken == "" {
+		// Loopback + no token is the "local dev" happy path, but if a systemd
+		// unit or orchestration layer accidentally clears the token the
+		// operator gets no signal that auth is off. Log once at startup so
+		// journalctl shows the state regardless of reachability. R23-SEC-M5.
+		slog.Warn("dashboard token not configured; all API callers accepted without authentication",
+			"addr", s.addr,
+		)
 	}
 	// /ws-node reverse-node channel sends node tokens and session payloads in
 	// plaintext when the primary binds to a public HTTP address with no TLS

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -166,12 +167,28 @@ func writeOK(w http.ResponseWriter) {
 // 413 responses from MaxBytesReader must still check errors.As against
 // *http.MaxBytesError; they already do today.
 func decodeJSONBody(r *http.Request, dst any) error {
+	// net/http closes the body after the handler returns, but closing here
+	// is still correct for future non-HTTP callers (test mocks, potential
+	// reverse-RPC adapters) and keeps the body-lifecycle contract local to
+	// this helper.
+	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return err
 	}
+	if len(body) == 0 {
+		// Distinguishing empty-body from malformed-JSON lets handlers emit
+		// a more actionable 400 than the default "unexpected end of JSON
+		// input" that json.Unmarshal would otherwise produce.
+		return errEmptyJSONBody
+	}
 	return json.Unmarshal(body, dst)
 }
+
+// errEmptyJSONBody is returned by decodeJSONBody when the request has a zero-
+// length body. Callers can errors.Is against it to emit a specific message
+// instead of the generic JSON parse error.
+var errEmptyJSONBody = errors.New("empty request body")
 
 // writeJSONStatus is like writeJSON but writes a non-200 HTTP status code.
 // Content-Type must be set before WriteHeader, so this helper ensures
