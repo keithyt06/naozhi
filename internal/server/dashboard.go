@@ -353,6 +353,12 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	// but defence in depth — if the CDN is ever compromised, the hostile
 	// replacement still cannot silently invoke getUserMedia etc.
 	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+	// COOP isolates the dashboard browsing context from cross-origin popups so
+	// `window.opener` leaks (Spectre / XS-Leak) cannot reach naozhi state.
+	// CORP blocks other origins from embedding this HTML via <img>/<script>/
+	// <iframe> no-cors fetches — complements the existing X-Frame-Options.
+	w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 	if _, err := w.Write(data); err != nil {
 		slog.Debug("dashboard write", "err", err)
 	}
