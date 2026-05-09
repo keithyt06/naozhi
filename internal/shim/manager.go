@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/naozhi/naozhi/internal/metrics"
+	"github.com/naozhi/naozhi/internal/osutil"
 )
 
 // validateKeyForShim rejects keys that would leak control bytes into the
@@ -928,13 +929,14 @@ func moveToShimsCgroup(parentCtx context.Context, shimPID, cliPID int) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sudo", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		// Truncate busctl's combined stdout+stderr so repeated failures
-		// can't flood the journal with D-Bus diagnostic payloads.
-		if len(out) > 512 {
-			out = append(out[:512:512], []byte("...(truncated)")...)
-		}
+		// Sanitize + truncate busctl's combined stdout+stderr: D-Bus
+		// diagnostics can carry bidi / C1 control bytes that would
+		// otherwise corrupt journalctl rendering. 512 bytes matches the
+		// existing truncation budget and aligns with R183-SEC-H1 /
+		// R190-SEC-M3 precedent elsewhere in this codebase.
+		sanitized := osutil.SanitizeForLog(string(out), 512)
 		slog.Warn("moveToShimsCgroup: systemd scope failed, trying direct cgroup — zero-downtime restart may not survive service restart",
-			"pid", shimPID, "err", err, "output", string(out))
+			"pid", shimPID, "err", err, "output", sanitized)
 		moveToShimsCgroupDirect(parentCtx, shimPID)
 		if cliPID > 0 {
 			moveToShimsCgroupDirect(parentCtx, cliPID)

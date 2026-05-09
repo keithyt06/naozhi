@@ -218,7 +218,15 @@ func (f *Feishu) registerWebhook(mux *http.ServeMux, handler platform.MessageHan
 				}
 			}
 			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(map[string]string{"challenge": envelope.Challenge}); err != nil {
+			// SetEscapeHTML(false) mirrors feishu.go buildMarkdownCardJSON:
+			// Feishu's verification endpoint compares our response against
+			// the raw challenge it sent, and default HTML-entity escaping
+			// of `<`, `>`, `&` could make a challenge containing those
+			// characters fail to match. Challenges already went through
+			// the control/bidi sweep above so no injection risk.
+			enc := json.NewEncoder(w)
+			enc.SetEscapeHTML(false)
+			if err := enc.Encode(map[string]string{"challenge": envelope.Challenge}); err != nil {
 				slog.Warn("feishu challenge encode failed", "err", err)
 			}
 			return
