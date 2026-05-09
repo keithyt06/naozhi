@@ -31,6 +31,54 @@ import (
 // to every dashboard client on each /api/sessions poll.
 const maxResumeLastPromptBytes = 2 * 1024
 
+// sanitizeResumeLastPrompt strips injection-prone bytes from a resume
+// last_prompt before it reaches slog attrs or /api/sessions broadcasts,
+// while preserving tab (operators paste tab-delimited snippets and slog
+// JSONHandler escapes tab safely).
+//
+// Mirrors osutil.SanitizeForLog except for the tab carve-out. Inlined here
+// because the tab allowance is a dashboard-specific relaxation — ordinary
+// log attrs should keep the stricter rule.
+func sanitizeResumeLastPrompt(s string, maxLen int) string {
+	if s == "" {
+		return s
+	}
+	clean := true
+	if maxLen > 0 && len(s) > maxLen {
+		clean = false
+	} else {
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			if c == '\t' {
+				continue
+			}
+			if c < 0x20 || c == 0x7f || c >= 0x80 {
+				clean = false
+				break
+			}
+		}
+	}
+	if clean {
+		return s
+	}
+	mapped := strings.Map(func(r rune) rune {
+		if r == '\t' {
+			return r
+		}
+		if r < 0x20 || r == 0x7f {
+			return '_'
+		}
+		if osutil.IsLogInjectionRune(r) {
+			return '_'
+		}
+		return r
+	}, s)
+	if maxLen > 0 && len(mapped) > maxLen {
+		mapped = mapped[:maxLen]
+	}
+	return mapped
+}
+
 // Note: user-label validation lives in the session package
 // (session.ValidateUserLabel / session.MaxUserLabelBytes) so the dashboard
 // HTTP path and the reverse-RPC worker (internal/upstream) share one
@@ -847,23 +895,23 @@ func (h *SessionHandlers) handleResume(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "last_prompt too long", http.StatusBadRequest)
 		return
 	}
-	// Rune-level scan: a byte-only gate missed C1 control points (U+0080..
-	// U+009F), which arrive as valid UTF-8 continuation bytes in the 0x80..
-	// 0x9F range and slipped past a `< 0x20` byte check. C1 bytes in
-	// last_prompt are broadcast on every /api/sessions poll and flow into
-	// slog attrs, so they corrupt structured logs and terminal viewers.
-	// `\t` is intentionally still allowed (prompts may contain tab) as
-	// before — slog escapes tab in JSONHandler output. R65-SEC-M-3.
+	// Invalid UTF-8 is still rejected — a bad encoding usually indicates a
+	// buggy client and carries no safe sanitization.
 	if !utf8.ValidString(req.LastPrompt) {
 		http.Error(w, "last_prompt is not valid utf-8", http.StatusBadRequest)
 		return
 	}
-	for _, r := range req.LastPrompt {
-		if r == 0 || (r < 0x20 && r != '\t') || (r >= 0x7F && r <= 0x9F) {
-			http.Error(w, "last_prompt contains invalid control characters", http.StatusBadRequest)
-			return
-		}
-	}
+	// Control / bidi / LS-PS bytes are sanitized instead of rejected. The
+	// prior policy (R65-SEC-M-3) returned 400 to block slog-injection via
+	// `/api/sessions` broadcasts. sanitizeResumeLastPrompt replaces the
+	// dangerous class with "_" — the injection surface still closed,
+	// and unlike a hard reject, sanitization lets sessions whose CLI
+	// JSONL contains CLI-injected control bytes (e.g. PDF upload
+	// notifications emitting U+0085 NEL) still resume from the history
+	// pane. Tab is preserved (operators paste tab-delimited snippets
+	// and slog JSONHandler escapes tab). last_prompt is display/log-only,
+	// so lossy mapping on the rest of the class is acceptable.
+	req.LastPrompt = sanitizeResumeLastPrompt(req.LastPrompt, maxResumeLastPromptBytes)
 
 	workspace := req.Workspace
 	if workspace != "" {
