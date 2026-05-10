@@ -446,7 +446,11 @@ func (h *Hub) handleOwnerLoopPanic(key string, onAsyncError func(string), r any)
 	}
 	if onAsyncError != nil {
 		func() {
-			defer func() { _ = recover() }()
+			defer func() {
+				if rr := recover(); rr != nil {
+					slog.Error("ownerLoop onAsyncError panic recovered", "key", key, "panic", rr)
+				}
+			}()
 			onAsyncError("处理异常，请稍后重试。")
 		}()
 	}
@@ -547,9 +551,10 @@ func (h *Hub) runTurnPassthrough(key, text string, images []cli.ImageData, prior
 	slog.Debug("passthrough: turn complete", "key", key, "elapsed_ms", time.Since(sendStart).Milliseconds())
 }
 
-// sessionSendLegacy keeps the pre-queue guard/interrupt behavior for code paths
-// that don't wire a MessageQueue (primarily tests). Production always configures
-// a queue via Server.New.
+// Deprecated: sessionSend with a configured MessageQueue handles all production
+// paths. sessionSendLegacy keeps the pre-queue guard/interrupt behaviour only
+// for test code paths that do not wire a MessageQueue. New call sites should
+// use sessionSend.
 func (h *Hub) sessionSendLegacy(p sendParams, onAsyncError func(string)) (bool, sendAckStatus, error) {
 	key := p.Key
 

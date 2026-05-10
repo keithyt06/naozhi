@@ -472,7 +472,11 @@ func (d *Dispatcher) handleOwnerLoopPanic(key string, msg platform.IncomingMessa
 		d.queue.Discard(key)
 	}
 	func() {
-		defer func() { _ = recover() }()
+		defer func() {
+			if rr := recover(); rr != nil {
+				slog.Error("ownerLoop reply panic recovered", "key", key, "panic", rr)
+			}
+		}()
 		notifyCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		d.replyText(notifyCtx, msg, "处理异常，请稍后重试。", nil)
@@ -605,6 +609,12 @@ func (d *Dispatcher) sendAndReply(
 			// Surface this distinctly so users don't get the generic /new reset
 			// hint for what is actually a transient "wait for current turn".
 			errMsg = "当前会话正在处理上一条消息，请稍候再发。"
+		case errors.Is(err, cli.ErrMessageTooLarge):
+			// Distinct from the generic "/new" hint — a reset won't help, the
+			// only remedy is to shorten the message or downscale attachments.
+			errMsg = "消息内容过大，请缩短后重试。"
+		case errors.Is(err, cli.ErrOrphanedSlot):
+			errMsg = "处理超时，请稍后重试。"
 		case errors.Is(err, session.ErrNoActiveProcess):
 			// Session has no attached process (paused / reclaimed). A fresh
 			// send will re-spawn via GetOrCreate; the user just needs to retry.
