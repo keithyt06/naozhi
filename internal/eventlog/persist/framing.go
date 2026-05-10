@@ -87,23 +87,54 @@ func WriteRecordRaw(w io.Writer, body []byte) (int64, error) {
 	return writeFramedBody(w, body)
 }
 
-// writeFramedBody writes the <length>\n<body>\n envelope. The intent
-// is for every framed record to land as one logical write whenever the
-// OS permits; a pre-sized buffer avoids the two Write calls that would
-// otherwise risk interleaving with concurrent writers (though Persister
-// is single-writer and this is belt-and-suspenders).
+// writeFramedBody writes the <length>\n<body>\n envelope as four
+// small Writes: digits, '\n', body, '\n'. Callers MUST pass a writer
+// that buffers (Persister wraps logFile in *bufio.Writer) so these
+// land as a single syscall whenever the bufio buffer has room. The
+// single-writer invariant from Persister (one goroutine per key)
+// means no interleaving is possible regardless of how many Writes
+// the envelope takes.
+//
+// The earlier implementation allocated a temporary []byte sized to
+// the full frame (`make([]byte, 0, total)` + four appends), burning
+// ~10 MB/s of heap at 1000 evt/s × 10 KiB records. Because the
+// writer is guaranteed single-threaded per key, the "single Write"
+// atomicity guarantee the old comment worried about was never
+// actually needed — the bufio buffer serializes us just fine, and
+// the four tiny Writes coalesce inside bufio at zero cost.
 func writeFramedBody(w io.Writer, body []byte) (int64, error) {
 	lenStr := strconv.Itoa(len(body))
-	// Prefix + '\n' + body + '\n'.
-	total := len(lenStr) + 1 + len(body) + 1
-	buf := make([]byte, 0, total)
-	buf = append(buf, lenStr...)
-	buf = append(buf, '\n')
-	buf = append(buf, body...)
-	buf = append(buf, '\n')
-	n, err := w.Write(buf)
-	return int64(n), err
+	var total int64
+
+	// Four Writes, not one: bufio.Writer absorbs them into its
+	// internal buffer. A non-bufio writer would still see the frame
+	// in order, just as four separate syscalls — but Persister owns
+	// the only path here and provides the bufio.
+	n, err := io.WriteString(w, lenStr)
+	total += int64(n)
+	if err != nil {
+		return total, err
+	}
+	n, err = w.Write(newline[:])
+	total += int64(n)
+	if err != nil {
+		return total, err
+	}
+	n, err = w.Write(body)
+	total += int64(n)
+	if err != nil {
+		return total, err
+	}
+	n, err = w.Write(newline[:])
+	total += int64(n)
+	return total, err
 }
+
+// newline is a shared single-byte array whose Write into bufio is
+// effectively zero-cost (bufio compares the slice against its own
+// buffer head — no escape, no alloc). Defined at package scope so
+// writeFramedBody doesn't take the address of a local each call.
+var newline = [1]byte{'\n'}
 
 // FrameSize computes the on-disk length of a framed record given the
 // JSON body length. Used by idx entries' Len field — we never write a

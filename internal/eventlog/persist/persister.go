@@ -1,6 +1,7 @@
 package persist
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,15 @@ import (
 	"github.com/naozhi/naozhi/internal/eventlog/schema"
 	"github.com/naozhi/naozhi/internal/osutil"
 )
+
+// logWriteBufSize is the capacity of the bufio.Writer wrapped around
+// each perKeyWriter.logFile. 64 KiB matches ReadFramedBody's reader
+// buffer and comfortably absorbs typical EventEntry records (1-20
+// KiB JSON) plus the length-prefix framing without spilling to a
+// syscall mid-frame. The buffer is owned by exactly one goroutine
+// so sizing up has no contention cost, only a one-time 64 KiB alloc
+// per active session.
+const logWriteBufSize = 64 * 1024
 
 // Observer receives real-time counter increments from the Persister.
 // Implementations typically forward to expvar / Prometheus; the
@@ -628,7 +638,12 @@ func (p *Persister) handleBatch(job batchJob) {
 				"key", job.Key, "seq", w.nextSeq, "err", err)
 			continue
 		}
-		n, err := WriteRecordRaw(w.logFile, body)
+		// logBuf wraps logFile; flush() Flushes it before Sync().
+		// Never call WriteRecordRaw(logFile, ...) directly here —
+		// bytes written straight to the fd would bypass logBuf and
+		// land out of order relative to anything still pending in
+		// the bufio buffer.
+		n, err := WriteRecordRaw(w.logBuf, body)
 		if err != nil {
 			// Write failures on individual records are treated as
 			// "drop the record" — the whole file state is preserved
@@ -707,6 +722,7 @@ func (p *Persister) writerFor(key, stem string) (*perKeyWriter, error) {
 		key:          key,
 		stem:         stem,
 		logFile:      logFile,
+		logBuf:       bufio.NewWriterSize(logFile, logWriteBufSize),
 		idxWriter:    idxW,
 		logPath:      logPath,
 		idxPath:      idxPath,
@@ -760,6 +776,7 @@ type perKeyWriter struct {
 	key       string
 	stem      string
 	logFile   *os.File
+	logBuf    *bufio.Writer // wraps logFile; flushed before Sync()
 	idxWriter *IdxWriter
 	logPath   string
 	idxPath   string
@@ -781,10 +798,15 @@ func (w *perKeyWriter) flush(p *Persister) error {
 	if !w.dirty {
 		return nil
 	}
-	// Phase 1: fsync the log. This MUST complete before any idx
-	// write touches disk (see recovery.go's idx-ahead-of-log
-	// reasoning). A sync failure aborts the flush; dirty stays true
-	// so the next tick retries.
+	// Phase 1: drain the bufio buffer, then fsync the backing fd.
+	// Both must complete before any idx write touches disk (see
+	// recovery.go's idx-ahead-of-log reasoning). A failure at either
+	// step aborts the flush; dirty stays true so the next tick
+	// retries. The bufio.Flush error surfaces the original Write
+	// failure that got stashed in bufio's internal err field.
+	if err := w.logBuf.Flush(); err != nil {
+		return fmt.Errorf("flush log buffer: %w", err)
+	}
 	if err := w.logFile.Sync(); err != nil {
 		return fmt.Errorf("sync log: %w", err)
 	}
@@ -819,8 +841,23 @@ func (w *perKeyWriter) flush(p *Persister) error {
 
 // close flushes then releases fds. After close the writer is not
 // reusable — callers discard the instance.
+//
+// Flush semantics: a clean close drains logBuf via flush(); rotate
+// calls close() AFTER its own flush() has already drained the bufio
+// (see handleBatch's pre-rotate flush). The explicit Flush here
+// covers callers that invoke close() without a preceding flush —
+// notably shutdownAll's per-writer iteration where a flush error
+// would still leave us wanting to release fds. We ignore the Flush
+// error because Close() is already about best-effort cleanup; the
+// preceding flush() path is where errors should have surfaced.
 func (w *perKeyWriter) close() error {
 	var firstErr error
+	if w.logBuf != nil {
+		if err := w.logBuf.Flush(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		w.logBuf = nil
+	}
 	if w.logFile != nil {
 		if err := w.logFile.Close(); err != nil && firstErr == nil {
 			firstErr = err

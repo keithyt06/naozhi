@@ -138,6 +138,11 @@ func (p *Persister) rotate(key, stem string, w *perKeyWriter) error {
 		return fmt.Errorf("reopen idx post-rotate: %w", err)
 	}
 	w.logFile = logFile
+	// Rebuild the bufio wrapper against the freshly-opened fd.
+	// close() nilled w.logBuf; if we skipped this the next
+	// handleBatch would panic on WriteRecordRaw(w.logBuf, ...)
+	// dereferencing a nil *bufio.Writer.
+	w.logBuf = bufio.NewWriterSize(logFile, logWriteBufSize)
 	w.idxWriter = idxWriter
 	w.bytes = newLogSize
 	// nextSeq keeps increasing; rotate does NOT recycle seq numbers.

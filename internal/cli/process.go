@@ -47,11 +47,18 @@ const (
 
 	// lineBufShrinkThreshold caps how much capacity readLoop's lineBuf is
 	// allowed to retain across iterations before being shrunk back to the
-	// 4 KiB starting size. A rare large legitimate event (e.g. a 50 KiB
-	// assistant-text chunk) would otherwise pin the backing array for the
-	// process lifetime; at 50 live sessions that is ~2.5 MiB of silent
-	// resident overhead. Legit large events re-grow on demand.
-	lineBufShrinkThreshold = 64 * 1024
+	// 4 KiB starting size.
+	//
+	// Sizing rationale: tool_result payloads and assistant text chunks in
+	// the wild commonly hit 50-200 KiB; the prior 64 KiB threshold fired
+	// on nearly every one of them, forcing the next large event in the
+	// same session to re-grow through 4→8→16→32→64→128 KiB doublings
+	// (~5 reallocs + copies). 256 KiB covers the realistic upper edge of
+	// legitimate events while still rejecting runaway growth from a buggy
+	// or adversarial shim. The tradeoff at 50 concurrent sessions is
+	// 50 × +192 KiB = +~10 MiB idle RSS in exchange for eliminating the
+	// reallocation churn from the common large-event path.
+	lineBufShrinkThreshold = 256 * 1024
 )
 
 // ErrMessageTooLarge is returned when a user message (after JSON encoding)
@@ -689,12 +696,14 @@ func (p *Process) readLoop() {
 		// shim message grew us there is a silent memory hog.
 		//
 		// Exception 2: if a single legitimate large event pushed capacity
-		// past lineBufShrinkThreshold (64 KiB), reset too. Most stream-json
-		// events are <4 KiB; one 50 KB assistant text event per session
-		// would otherwise pin ~50 KB of backing memory on the readLoop
-		// goroutine for the process lifetime (50 sessions × 50 KB ≈ 2.5 MB
-		// of quiet resident overhead). A legit large event paying the
-		// re-grow cost again is cheaper than the permanent footprint.
+		// past lineBufShrinkThreshold (256 KiB), reset too. Most
+		// stream-json events are <4 KiB; common tool_result / assistant
+		// text chunks run 50-200 KiB and we want to RETAIN that capacity
+		// (pay the realloc once per session, not once per event). Only
+		// truly exceptional events (>256 KiB) trigger the shrink, so the
+		// permanent RSS footprint is bounded by 50 sessions × 256 KiB
+		// ≈ 12.8 MiB worst case, an acceptable ceiling relative to the
+		// realloc churn the lower threshold caused on every common event.
 		// Decide lineBuf in a single step. The capExceeded branch previously
 		// did `lineBuf = line` then immediately `lineBuf = make(...)`, which
 		// pinned a transient second reference to `line`'s large backing
