@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -576,7 +578,11 @@ func (h *ProjectHandlers) handleFileGet(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	etag := fmt.Sprintf(`"%d-%d"`, info.Size(), info.ModTime().UnixNano())
+	// ETag hashes (size, mtime-ns) so the header does not leak exact byte
+	// count or nanosecond modification timestamp to authenticated clients.
+	// Matches the attachment endpoint convention — see handleAttachment.
+	etagSum := sha256.Sum256([]byte(fmt.Sprintf("%d|%d", info.Size(), info.ModTime().UnixNano())))
+	etag := `"` + hex.EncodeToString(etagSum[:8]) + `"`
 	if inm := r.Header.Get("If-None-Match"); inm != "" && inm == etag {
 		w.Header().Set("ETag", etag)
 		w.WriteHeader(http.StatusNotModified)

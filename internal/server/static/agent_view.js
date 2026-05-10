@@ -7,7 +7,8 @@
 // Loaded AFTER dashboard.js via <script> tag ordering (dashboard.html).
 // Depends on globals already defined by dashboard.js: esc, escAttr,
 // fmtDuration, sessionsData, sid, selectedKey, selectedNode, turnState,
-// sessionScrollPos, wsm, showToast, eventsUrl, renderEvent, toolVerb.
+// sessionScrollPos, wsm, showToast, eventsUrl, eventHtml,
+// renderEventsWithDividers, toolVerb.
 
 (function () {
   'use strict';
@@ -243,27 +244,33 @@
       }
       return;
     }
-    // Re-use dashboard.js's renderEvent when available; otherwise fall back
-    // to a minimal inline rendering.
-    var hasRenderEvent = typeof window.renderEvent === 'function';
-    for (var i = 0; i < events.length; i++) {
-      var ev = events[i];
-      if (!ev) continue;
-      if (hasRenderEvent) {
-        var html = window.renderEvent(ev);
-        if (html) {
-          var tmp = document.createElement('div');
-          tmp.innerHTML = html;
-          while (tmp.firstChild) el.appendChild(tmp.firstChild);
-        }
-        continue;
+    // Delegate to dashboard.js's shared renderer so the sub-agent panel and
+    // parent view stay visually identical (markdown, tool_result folding,
+    // image thumbnails, time dividers). window.renderEventsWithDividers /
+    // window.eventHtml are exported by dashboard.js right next to their
+    // definitions; fall back to a plain-text stub only if both are somehow
+    // missing (unexpected — contract is enforced by dashboard.html script
+    // ordering).
+    var renderAll = typeof window.renderEventsWithDividers === 'function'
+      ? window.renderEventsWithDividers : null;
+    var renderOne = typeof window.eventHtml === 'function'
+      ? window.eventHtml : null;
+    if (renderAll) {
+      el.insertAdjacentHTML('beforeend', renderAll(events, 0));
+    } else if (renderOne) {
+      for (var i = 0; i < events.length; i++) {
+        var html = renderOne(events[i]);
+        if (html) el.insertAdjacentHTML('beforeend', html);
       }
-      // Fallback — shouldn't hit in production; keeps the panel alive if
-      // renderEvent is renamed/removed without also updating this file.
-      var div = document.createElement('div');
-      div.className = 'event event-' + (ev.type || 'unknown');
-      div.textContent = '[' + (ev.type || '?') + '] ' + (ev.summary || '');
-      el.appendChild(div);
+    } else {
+      for (var j = 0; j < events.length; j++) {
+        var ev = events[j];
+        if (!ev) continue;
+        var div = document.createElement('div');
+        div.className = 'event event-' + (ev.type || 'unknown');
+        div.textContent = '[' + (ev.type || '?') + '] ' + (ev.summary || '');
+        el.appendChild(div);
+      }
     }
     // Track scroll position for sessionScrollPos restore on next switch.
     var k = sid(selectedKey, selectedNode || 'local') + '|' + state.activeTaskID;
@@ -278,13 +285,12 @@
   function appendAgentEvent(ev) {
     var el = document.getElementById('events-scroll');
     if (!el || !ev) return;
-    var hasRenderEvent = typeof window.renderEvent === 'function';
-    if (hasRenderEvent) {
-      var html = window.renderEvent(ev);
+    var renderOne = typeof window.eventHtml === 'function'
+      ? window.eventHtml : null;
+    if (renderOne) {
+      var html = renderOne(ev);
       if (!html) return;
-      var tmp = document.createElement('div');
-      tmp.innerHTML = html;
-      while (tmp.firstChild) el.appendChild(tmp.firstChild);
+      el.insertAdjacentHTML('beforeend', html);
     } else {
       var div = document.createElement('div');
       div.className = 'event event-' + (ev.type || 'unknown');

@@ -1804,11 +1804,20 @@ func (s *Scheduler) findByPrefix(idPrefix, plat, chatID string) (*Job, error) {
 	}
 }
 
-// marshalJobs is the JSON serializer used by marshalJobsLocked. It is a
-// package-level var (not a direct json.Marshal call) so tests can inject a
-// failure path to exercise ErrPersistFailed without needing to construct a
-// cyclic graph in Job. Production always uses json.Marshal.
-var marshalJobs = json.Marshal
+// marshalJobsFn is the signature of the JSON serializer used by
+// marshalJobsLocked. It is swapped via atomic.Pointer in tests (see
+// withFailingMarshal) to exercise persist-failure paths without constructing
+// a cyclic graph in Job. Kept behind an atomic.Pointer because other cron
+// tests in the same package run with t.Parallel(); a naked var swap races
+// with concurrent marshalJobsLocked readers under -race.
+type marshalJobsFn func(any) ([]byte, error)
+
+var marshalJobs atomic.Pointer[marshalJobsFn]
+
+func init() {
+	fn := marshalJobsFn(json.Marshal)
+	marshalJobs.Store(&fn)
+}
 
 // marshalJobsLocked serialises the current jobs map to JSON while the caller
 // still holds s.mu. Round 47: replaces the map clone on every mutation. Safe
@@ -1826,7 +1835,7 @@ func (s *Scheduler) marshalJobsLocked() ([]byte, error) {
 	// breaking git audit of backed-up cron_jobs.json and making post-incident
 	// diffs much harder to read.
 	slices.SortFunc(entries, func(a, b *Job) int { return cmp.Compare(a.ID, b.ID) })
-	return marshalJobs(entries)
+	return (*marshalJobs.Load())(entries)
 }
 
 // persistJobsLocked marshals under the caller's s.mu and writes asynchronously.
@@ -1907,8 +1916,8 @@ func applyJitter(ctx context.Context, schedule string, jitterMax time.Duration) 
 	}
 	window := jitterMax
 	if period := schedulePeriod(schedule, time.Now()); period > 0 {
-		if cap := period / 4; cap < window {
-			window = cap
+		if quarter := period / 4; quarter < window {
+			window = quarter
 		}
 	}
 	if window <= 0 {

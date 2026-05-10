@@ -179,12 +179,18 @@ func NewHeader(key string, createdAtMS int64, generator string) *Record {
 // payload. `seq` must be > 0 (seq=0 is the header slot). `entryJSON` is
 // the raw JSON of an EventEntry (or compatible payload); schema does not
 // validate its shape beyond "non-empty".
+//
+// Ownership: entryJSON is assumed freshly allocated by the caller (e.g.
+// json.Marshal output in invokePersistSink) and is taken over by the
+// returned Record. Callers must not retain or mutate entryJSON after this
+// call. Skipping the defensive copy halves per-entry alloc on the persist
+// hot path.
 func NewEntry(seq uint64, entryJSON []byte) *Record {
 	return &Record{
 		V:     WireVersion,
 		Seq:   seq,
 		Type:  TypeEntry,
-		Entry: append(json.RawMessage(nil), entryJSON...),
+		Entry: json.RawMessage(entryJSON),
 	}
 }
 

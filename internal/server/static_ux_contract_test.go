@@ -5370,6 +5370,184 @@ func TestDashboardJS_RNEW_UX002_GlobalErrorHandler(t *testing.T) {
 // stripJSComments removes //... line comments and /*...*/ block comments
 // from a JS source window so contract-string checks don't false-positive
 // on documentation that mentions forbidden tokens. Intentionally simple —
+// TestServiceWorker_RNEW_UX005_Contract pins the RNEW-UX-005 rewrite of
+// sw.js: the minimal PWA service worker must expose a versioned SW_VERSION
+// constant, immediately activate new versions via skipWaiting +
+// clients.claim, and retain a fetch listener so browsers still mark the
+// SW as controlling (required for installability).
+func TestServiceWorker_RNEW_UX005_Contract(t *testing.T) {
+	t.Parallel()
+	data, err := swJS.ReadFile("static/sw.js")
+	if err != nil {
+		t.Fatalf("read sw.js: %v", err)
+	}
+	src := string(data)
+	for _, want := range []string{
+		"SW_VERSION",
+		"skipWaiting",
+		"clients.claim",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("sw.js missing required token %q (RNEW-UX-005)", want)
+		}
+	}
+	// A fetch event listener must still be registered so browsers treat
+	// the SW as controlling — without it, "Add to Home Screen" breaks.
+	if !regexp.MustCompile(`addEventListener\(\s*['"]fetch['"]`).MatchString(src) {
+		t.Error("sw.js missing fetch event listener (required for PWA installability)")
+	}
+}
+
+// TestDashboardJS_RNEW_UX004_LSHelper pins the RNEW-UX-004 fix that
+// introduced a unified localStorage helper (LS_PREFIX/lsSet/lsGet/lsRemove)
+// to replace the historical mix of 'nz_' and 'naozhi_' raw-key call sites.
+// The contract is intentionally loose: legacy raw localStorage.* call sites
+// must keep working (persisted user state across upgrades), so we only
+// assert the helper exists and is exercised by at least one call site.
+func TestDashboardJS_RNEW_UX004_LSHelper(t *testing.T) {
+	t.Parallel()
+	data, err := dashboardJS.ReadFile("static/dashboard.js")
+	if err != nil {
+		t.Fatalf("read dashboard.js: %v", err)
+	}
+	js := string(data)
+	for _, want := range []string{
+		"const LS_PREFIX = 'nz:'",
+		"function lsSet(",
+		"function lsGet(",
+		"function lsRemove(",
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("dashboard.js missing RNEW-UX-004 helper token %q", want)
+		}
+	}
+	// At least one call site must actually use the helper (a write or a
+	// read), otherwise the helper is dead code. Count occurrences that
+	// look like invocations rather than the definition itself.
+	callSites := strings.Count(js, "lsSet(") + strings.Count(js, "lsGet(") + strings.Count(js, "lsRemove(")
+	// Subtract the definition lines (one per helper) to count real calls.
+	if callSites-3 < 1 {
+		t.Errorf("dashboard.js: expected >=1 call site of lsSet/lsGet/lsRemove, got %d (after subtracting 3 definitions)", callSites-3)
+	}
+}
+
+// TestDashboardJS_RNEW_SEC008_DataRawAlwaysEscAttr pins the RNEW-SEC-008
+// contract: every `data-raw="..."` attribute emission in dashboard.js must
+// route user content through `escAttr(` — never through `renderMd(` or any
+// other helper. The invariant matters because attribute escaping and HTML
+// escaping differ: escAttr() encodes quote/&/< for attribute context, while
+// renderMd() emits raw HTML (intended for innerHTML). Routing markdown-
+// rendered HTML into an attribute would let a crafted message close the
+// attribute and inject a new handler — a stored-XSS pathway. Today only the
+// copy-button and ask-button in renderEvent use data-raw; this test is a
+// regression gate so any future data-raw site inherits the same escaping.
+func TestDashboardJS_RNEW_SEC008_DataRawAlwaysEscAttr(t *testing.T) {
+	t.Parallel()
+	data, err := dashboardJS.ReadFile("static/dashboard.js")
+	if err != nil {
+		t.Fatalf("read dashboard.js: %v", err)
+	}
+	// Operate on raw source: stripJSComments is naive about `//` inside JS
+	// string literals and would eat real code. `data-raw=` is a specific
+	// enough token that false positives from code comments are unlikely,
+	// and even if one appeared the shape-based classification below would
+	// skip pure literals rather than misfire.
+	js := string(data)
+
+	// Locate every `data-raw=` occurrence. We classify the value expression
+	// that follows each match.
+	locs := regexp.MustCompile(`data-raw=`).FindAllStringIndex(js, -1)
+	if len(locs) == 0 {
+		t.Fatal("RNEW-SEC-008: no data-raw= occurrences found — test anchor is stale, verify dashboard.js still uses this attribute or remove the contract")
+	}
+	// Require at least the 2 currently-known sites (copy + ask). If the
+	// count drops below, the audit anchor moved and the test should be
+	// re-evaluated rather than silently passing zero assertions.
+	if len(locs) < 2 {
+		t.Errorf("RNEW-SEC-008: expected >=2 data-raw= sites (copy + ask), found %d — verify the audit is still complete", len(locs))
+	}
+
+	// Pure-literal attribute values contain no interpolation markers
+	// (`$` for template literals, `` ` `` for nested template-literal
+	// fragments). Those are always safe.
+	literalRe := regexp.MustCompile("^data-raw=\"[^\"$`]*\"")
+	// Template-literal style: `data-raw="${EXPR}"`. EXPR's first call
+	// must be escAttr(.
+	tmplRe := regexp.MustCompile(`^data-raw="\$\{([^}]*)\}`)
+	// String-concat style inside a single-quoted or backtick-delimited
+	// outer literal: `data-raw="' + ESCAPER(...)`. ESCAPER must be escAttr.
+	concatRe := regexp.MustCompile("^data-raw=\"['`]\\s*\\+\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\(")
+
+	enforced := 0
+	for _, loc := range locs {
+		// 200 chars is >2x the longest current occurrence and keeps the
+		// regex anchors cheap.
+		end := loc[0] + 200
+		if end > len(js) {
+			end = len(js)
+		}
+		window := js[loc[0]:end]
+
+		// Hard forbid: renderMd anywhere before the attribute's closing
+		// quote. renderMd emits HTML — using it in attribute context
+		// would be stored-XSS.
+		if cq := findDataRawAttrValueEnd(window); cq > 0 {
+			if strings.Contains(window[:cq], "renderMd(") {
+				t.Errorf("RNEW-SEC-008: data-raw= value must not call renderMd() — it emits HTML, not attribute-safe text. Window: %q", window[:cq])
+				continue
+			}
+		}
+
+		// Case 1: pure literal — no interpolation, safe.
+		if literalRe.MatchString(window) {
+			enforced++
+			continue
+		}
+		// Case 2: template literal — first ${...} must call escAttr(.
+		if m := tmplRe.FindStringSubmatch(window); m != nil {
+			expr := strings.TrimSpace(m[1])
+			if !strings.HasPrefix(expr, "escAttr(") {
+				t.Errorf("RNEW-SEC-008: data-raw=\"${...}\" must open with escAttr(, got %q", expr)
+			}
+			enforced++
+			continue
+		}
+		// Case 3: string concat — first call after `' +` must be escAttr.
+		if m := concatRe.FindStringSubmatch(window); m != nil {
+			if m[1] != "escAttr" {
+				t.Errorf("RNEW-SEC-008: data-raw=\"' + X(...) — first call must be escAttr, got %q", m[1])
+			}
+			enforced++
+			continue
+		}
+		// Unknown shape: reject so a new emission pattern has to extend
+		// this contract explicitly.
+		t.Errorf("RNEW-SEC-008: unrecognized data-raw= value shape — extend the contract to cover it. Window: %q", window)
+	}
+	if enforced == 0 {
+		t.Error("RNEW-SEC-008: found data-raw= sites but none were classifiable — the contract matched zero patterns, which is a test bug")
+	}
+}
+
+// findDataRawAttrValueEnd returns the index of the closing `"` of a
+// data-raw= attribute value that begins at offset 0 of `window`. Returns
+// -1 if no closing quote is found. The scan is naive — it treats the
+// first `"` after the opening one as the terminator, which is correct
+// for the current emission shapes (escAttr() never produces a literal `"`,
+// and the outer string literals use single quotes or backticks).
+func findDataRawAttrValueEnd(window string) int {
+	const prefix = `data-raw="`
+	if !strings.HasPrefix(window, prefix) {
+		return -1
+	}
+	for i := len(prefix); i < len(window); i++ {
+		if window[i] == '"' {
+			return i
+		}
+	}
+	return -1
+}
+
 // it does not track string literals, so a comment-like sequence inside a
 // string would still be stripped; for the narrow windows this test works
 // with, that's an acceptable trade. If the window starts INSIDE a block

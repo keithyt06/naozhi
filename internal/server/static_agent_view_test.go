@@ -80,4 +80,23 @@ func TestDashboardJS_AgentViewModuleLoaded(t *testing.T) {
 	if !strings.Contains(avStr, "window.AgentView") {
 		t.Error("agent_view.js missing window.AgentView namespace export")
 	}
+
+	// agent_view.js must consume the shared bubble renderers via their
+	// actual global names. A previous revision referenced window.renderEvent
+	// which dashboard.js never defined, silently falling back to a plain-
+	// text stub and dropping markdown / tool_result folding / images in the
+	// sub-agent panel. Pin the contract at both ends.
+	for _, sym := range []string{"window.eventHtml", "window.renderEventsWithDividers"} {
+		if !strings.Contains(djsStr, sym+" = ") {
+			t.Errorf("dashboard.js missing export %s — agent_view.js depends on it", sym)
+		}
+		if !strings.Contains(avStr, sym) {
+			t.Errorf("agent_view.js must reference %s (shared bubble renderer)", sym)
+		}
+	}
+	// Reject bare `window.renderEvent(` (the old stub name) but allow
+	// `window.renderEventsWithDividers(` which is a legitimate successor.
+	if strings.Contains(avStr, "window.renderEvent(") {
+		t.Error("agent_view.js still calls window.renderEvent() — use window.eventHtml() instead")
+	}
 }

@@ -21,13 +21,16 @@ import (
 // withFailingMarshal swaps marshalJobs to a stub that always errors, then
 // restores the original on test cleanup. Centralised so each mutation case
 // stays focused on its assertion and new callers inherit the same cleanup.
+//
+// Uses atomic.Pointer.Swap so parallel tests in the same package do not race
+// on the function-value word.
 func withFailingMarshal(t *testing.T) {
 	t.Helper()
-	orig := marshalJobs
-	marshalJobs = func(any) ([]byte, error) {
+	failing := marshalJobsFn(func(any) ([]byte, error) {
 		return nil, fmt.Errorf("injected marshal failure")
-	}
-	t.Cleanup(func() { marshalJobs = orig })
+	})
+	orig := marshalJobs.Swap(&failing)
+	t.Cleanup(func() { marshalJobs.Store(orig) })
 }
 
 // newTestSchedulerForPersist sets up a Scheduler + one pre-registered job

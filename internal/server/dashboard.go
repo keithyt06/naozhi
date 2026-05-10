@@ -356,7 +356,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	// 隐式覆盖（浏览器按页面 scheme 自动选）。显式写 `ws: wss:` 会放宽到
 	// **任何**跨源 WebSocket 端点，为潜在 XSS/XS-Leak 外泄数据留口。
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; img-src 'self' data: blob:")
-	w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	// HSTS is only meaningful over TLS (RFC 6797 §7.2). Sending it on plain
+	// HTTP would still be honoured by browsers and can brick local HTTP
+	// loopback access for a year. Gate on the same isSecure() helper the
+	// auth cookie Secure flag uses, so behaviour is consistent.
+	if s.auth.isSecure(r) {
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	}
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "same-origin")

@@ -159,7 +159,6 @@ log:
 
 transcribe:
   enabled: true
-  provider: "aws"
   region: "ap-northeast-1"
   language: "zh-CN,en-US"
 

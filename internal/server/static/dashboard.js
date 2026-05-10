@@ -101,6 +101,20 @@ const sessionOptimisticRunning = {};
 const sessionLastSent = {};
 let historySessionsData = []; // from API history_sessions (all filesystem sessions)
 
+// RNEW-UX-004: unified localStorage helper. Use these for NEW keys only —
+// legacy 'nz_' / 'naozhi_' call sites are intentionally left alone to
+// preserve persisted user state across upgrades. LS_SCHEMA is reserved for
+// future breaking changes (bump + migrate on read). All three helpers
+// swallow quota/disabled errors so callers never need their own try/catch.
+const LS_PREFIX = 'nz:';
+const LS_SCHEMA = 1; // bump when structure breaks
+function lsSet(key, value) { try { localStorage.setItem(LS_PREFIX + key, JSON.stringify(value)); } catch (e) { /* quota / disabled */ } }
+function lsGet(key, fallback) { try { const v = localStorage.getItem(LS_PREFIX + key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; } }
+function lsRemove(key) { try { localStorage.removeItem(LS_PREFIX + key); } catch (e) {} }
+// Migration of existing 'nz_'/'naozhi_' keys is deferred — touching live
+// persisted state across 17 call sites is riskier than the double-prefix
+// quirk it would fix. Revisit when LS_SCHEMA is bumped.
+
 function getToken() { return ''; }
 function setToken(t) { /* token stored in HttpOnly cookie only */ }
 
@@ -2596,6 +2610,14 @@ function eventHtml(e) {
     '<div class="event-content">' + content + imgHtml + copyBtn + askBtn + '</div></div>';
 }
 
+// Expose the bubble renderer for agent_view.js (RFC v4 agent-team-ui §3.6).
+// The sub-agent transcript panel must use the same layout as the parent view —
+// tool_result folding, markdown, image thumbnails, copy/ask buttons — so one
+// eventHtml is the source of truth. Exporting here prevents silent drift when
+// agent_view.js was referencing a non-existent window.renderEvent (which
+// always fell through to a plain-text fallback, losing the entire bubble UI).
+window.eventHtml = eventHtml;
+
 // Walk a list of events and produce an HTML string with time dividers inserted
 // whenever the gap between adjacent VISIBLE (non-null) bubbles exceeds
 // EVENT_DIVIDER_GAP_MS. `prevTime` seeds the comparison against whatever is
@@ -2616,6 +2638,8 @@ function renderEventsWithDividers(events, prevTime) {
   }
   return out;
 }
+// Shared with agent_view.js — see window.eventHtml comment above.
+window.renderEventsWithDividers = renderEventsWithDividers;
 
 // Read the data-time of the last event-time-divider in the scroll container so
 // incremental appenders can decide whether a new divider is needed.
@@ -8859,10 +8883,11 @@ let cronFilterStatus = 'all';
 // cronSortOrder 控制 cron 面板列表的排序模式。保存在 localStorage 里，
 // 切回页面保留用户偏好。四种模式见 cronSortComparators。cron-v2-polish §3.4。
 let cronSortOrder = (function() {
-  try {
-    const saved = localStorage.getItem('nz_cron_sort');
-    if (saved && cronSortComparatorsHasKey(saved)) return saved;
-  } catch (_) {}
+  // RNEW-UX-004 demo: migrated to unified lsGet helper. Keyspace changed
+  // from 'nz_cron_sort' to 'nz:cron_sort' — one-time loss of the saved
+  // preference is acceptable (falls back to 'created_desc').
+  const saved = lsGet('cron_sort', '');
+  if (saved && cronSortComparatorsHasKey(saved)) return saved;
   return 'created_desc';
 })();
 
@@ -8894,7 +8919,7 @@ function cronSortComparatorsHasKey(k) {
 function setCronSortOrder(order) {
   if (!cronSortComparatorsHasKey(order)) return;
   cronSortOrder = order;
-  try { localStorage.setItem('nz_cron_sort', order); } catch (_) {}
+  lsSet('cron_sort', order); // RNEW-UX-004 demo: unified helper (see top-of-file lsSet)
   renderCronList();
 }
 
@@ -10607,8 +10632,11 @@ async function doEditCronJob(id) {
 (function(){
   const resizer = document.getElementById('resizer');
   const sidebar = document.querySelector('.sidebar');
-  const LS_KEY = 'naozhi_sidebar_w';
-  const saved = parseFloat(localStorage.getItem(LS_KEY));
+  // RNEW-UX-004 demo: migrated 'naozhi_sidebar_w' -> 'nz:sidebar_w' via
+  // unified helper. One-time loss of saved width acceptable (defaults to
+  // CSS width).
+  const LS_SIDEBAR_W = 'sidebar_w';
+  const saved = parseFloat(lsGet(LS_SIDEBAR_W, 0));
   if (saved >= 200) sidebar.style.width = saved + 'px';
 
   let startX, startW;
@@ -10632,11 +10660,11 @@ async function doEditCronJob(id) {
     document.body.style.userSelect = '';
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
-    localStorage.setItem(LS_KEY, Math.round(sidebar.getBoundingClientRect().width));
+    lsSet(LS_SIDEBAR_W, Math.round(sidebar.getBoundingClientRect().width));
   }
   resizer.addEventListener('dblclick', function() {
     sidebar.style.width = '360px';
-    localStorage.removeItem(LS_KEY);
+    lsRemove(LS_SIDEBAR_W);
   });
 })();
 
@@ -10722,10 +10750,21 @@ wsm.connect();
 // change so the first thing a returning user sees is fresh state.
 // WS event delivery is not affected — the socket stays open in hidden
 // tabs and delivers live updates instantly when the user returns.
+//
+// Extended gate also covers:
+//   - eventTimer (1s polling fallback when WS isn't connected) — stopped
+//     when hidden; resumed only if a session is selected AND WS is not
+//     already delivering live events, to avoid double-fetching.
+//   - _statusTickTimer (1s repaint of "已断开 N 秒" label) — stopped
+//     when hidden; resumed via _updateStatusTick only if WS state still
+//     != CONNECTED. When hidden there is no user to read the label, so
+//     suppressing the tick is free.
 (function () {
   const stopPollers = () => {
     if (sessionPollTimer) { clearInterval(sessionPollTimer); sessionPollTimer = null; }
     if (discoveredPollTimer) { clearInterval(discoveredPollTimer); discoveredPollTimer = null; }
+    if (eventTimer) { clearInterval(eventTimer); eventTimer = null; }
+    if (_statusTickTimer) { clearInterval(_statusTickTimer); _statusTickTimer = null; }
   };
   const startPollers = () => {
     if (!sessionPollTimer) {
@@ -10735,6 +10774,17 @@ wsm.connect();
     if (!discoveredPollTimer) {
       discoveredPollTimer = setInterval(scanDiscovered, 30000);
     }
+    // eventTimer is a WS-outage fallback. If WS is live, events already
+    // arrive via the socket and the timer is redundant; let the normal
+    // WS state transitions re-arm it if the socket drops.
+    if (!eventTimer && selectedKey && wsm && wsm.state !== WS_STATES.CONNECTED) {
+      fetchEvents(false);
+      eventTimer = setInterval(() => fetchEvents(false), 1000);
+    }
+    // _statusTickTimer: only re-arm if WS is still not connected. The
+    // existing _updateStatusTick(state) helper owns the lifecycle; calling
+    // it with current wsm state is idempotent.
+    if (wsm) { _updateStatusTick(wsm.state); }
   };
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stopPollers();

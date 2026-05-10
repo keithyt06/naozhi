@@ -211,7 +211,6 @@ type CronNotifyTarget struct {
 type LogConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"` // "json" (default) | "text"
-	File   string `yaml:"file"`
 }
 
 type SlackConfig struct {
@@ -233,7 +232,6 @@ type WeixinConfig struct {
 
 type TranscribeConfig struct {
 	Enabled  bool   `yaml:"enabled"`
-	Provider string `yaml:"provider"` // "aws" (default)
 	Region   string `yaml:"region"`
 	Language string `yaml:"language"` // BCP-47, default: zh-CN
 }
