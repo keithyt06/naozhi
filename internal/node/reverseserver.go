@@ -1,6 +1,7 @@
 package node
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
@@ -177,9 +178,26 @@ func (s *ReverseServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate token — constant-time comparison to prevent timing oracle.
-	// Generic error to avoid node_id enumeration.
+	// Generic error to avoid node_id enumeration. When the node_id is unknown
+	// we still run a fixed-length compare so the reject path does not leak (via
+	// response latency) whether the node_id exists at all. Pre-hashing both
+	// sides with SHA-256 normalises the compare length to 32 bytes regardless
+	// of the submitted token length — ConstantTimeCompare short-circuits on
+	// length mismatch, so comparing raw bytes would still leak "my stored
+	// expected is (or isn't) the same length as the probe token".
 	expected, ok := s.auth[msg.NodeID]
-	if !ok || expected == "" || subtle.ConstantTimeCompare([]byte(expected), []byte(msg.Token)) != 1 {
+	if !ok || expected == "" {
+		var dummy [32]byte
+		probe := sha256.Sum256([]byte(msg.Token))
+		_ = subtle.ConstantTimeCompare(dummy[:], probe[:])
+	}
+	var matched bool
+	if ok && expected != "" {
+		expectedHash := sha256.Sum256([]byte(expected))
+		probeHash := sha256.Sum256([]byte(msg.Token))
+		matched = subtle.ConstantTimeCompare(expectedHash[:], probeHash[:]) == 1
+	}
+	if !matched {
 		// R180-SEC-H2 / R181-GO-P2-1: msg.NodeID comes from an unauthenticated
 		// 4 KB frame on the public /ws-node endpoint. Anyone can probe with
 		// arbitrary bytes. SanitizeForLog keeps attr values machine-readable

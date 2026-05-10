@@ -31,7 +31,7 @@ func TestUploadOwner_AnonCookieFallback(t *testing.T) {
 		t.Fatalf("owner = %q; anon-cookie path skipped", o)
 	}
 	got := findAnon(w1)
-	if got == nil || !got.HttpOnly || got.SameSite != http.SameSiteLaxMode || len(got.Value) != 32 {
+	if got == nil || !got.HttpOnly || got.SameSite != http.SameSiteStrictMode || len(got.Value) != 32 {
 		t.Fatalf("nz_anon Set-Cookie missing/malformed: %+v", got)
 	}
 	// Co-NAT browsers must get distinct owners.

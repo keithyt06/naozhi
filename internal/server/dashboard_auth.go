@@ -274,7 +274,12 @@ func (a *AuthHandlers) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// short-circuits on length mismatch. Aligns both auth entry points.
 	gotLogin := sha256.Sum256([]byte(req.Token))
 	wantLogin := sha256.Sum256([]byte(a.dashboardToken))
-	if a.dashboardToken == "" || subtle.ConstantTimeCompare(gotLogin[:], wantLogin[:]) != 1 {
+	// Always execute the constant-time compare first so a timing probe cannot
+	// distinguish "no token configured" from "configured but wrong" via
+	// response latency. Gate the final auth decision on the short-circuit
+	// afterwards.
+	matched := subtle.ConstantTimeCompare(gotLogin[:], wantLogin[:]) == 1
+	if a.dashboardToken == "" || !matched {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		if _, err := w.Write([]byte(`{"error":"invalid token"}`)); err != nil {

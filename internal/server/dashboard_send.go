@@ -30,7 +30,10 @@ import (
 const anonCookieName = "nz_anon"
 
 // mintAnonCookie writes a freshly-random nz_anon cookie and returns its value.
-// HttpOnly, SameSite=Lax, Secure gated by auth.isSecure(r), 30-day MaxAge.
+// HttpOnly, SameSite=Strict (matches the auth cookie; nz_anon is only read by
+// same-origin XHR so Lax offered no value and left a cross-site-GET window
+// open for any future GET handler that reads it), Secure gated by
+// auth.isSecure(r), 30-day MaxAge.
 func mintAnonCookie(w http.ResponseWriter, r *http.Request, auth *AuthHandlers) (string, error) {
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {
@@ -40,7 +43,7 @@ func mintAnonCookie(w http.ResponseWriter, r *http.Request, auth *AuthHandlers) 
 	secure := auth != nil && auth.isSecure(r)
 	http.SetCookie(w, &http.Cookie{
 		Name: anonCookieName, Value: val, Path: "/",
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, SameSite: http.SameSiteStrictMode,
 		Secure: secure, MaxAge: 30 * 24 * 3600,
 	})
 	return val, nil

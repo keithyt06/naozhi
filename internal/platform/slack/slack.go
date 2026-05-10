@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/naozhi/naozhi/internal/osutil"
 	"github.com/naozhi/naozhi/internal/platform"
 
 	"github.com/slack-go/slack"
@@ -114,7 +115,9 @@ func (s *Slack) Start(handler platform.MessageHandler) error {
 		slog.Warn("slack auth test failed — all channel messages will be processed (no mention filtering)", "err", err)
 	} else {
 		s.botID = authResp.UserID
-		slog.Info("slack bot identity", "user_id", s.botID, "team", authResp.Team)
+		slog.Info("slack bot identity",
+			"user_id", s.botID,
+			"team", osutil.SanitizeForLog(authResp.Team, 128))
 	}
 
 	client := socketmode.New(s.api)
