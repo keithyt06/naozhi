@@ -332,18 +332,34 @@ func (t *Tracker) Stats() Stats {
 	}
 }
 
-// WriterAlive mirrors persist.Persister.WriterAlive — last drain
-// within 5s AND channel depth under 80% cap. Production /health uses
-// this directly. "Never drained" (Stats.LastDrainMs == -1) returns
-// false so /health shows a non-ready tracker on cold start until the
-// first bump lands.
+// WriterAlive reports whether the worker goroutine can still accept
+// and drain work. A healthy tracker is NOT required to have seen a
+// recent drain — an idle session with no image events is still alive,
+// just quiet. The liveness signal is:
+//
+//	not closed AND (channel is empty-and-not-full OR recent drain)
+//
+// The empty-channel shortcut covers cold-start (never drained) and
+// long idle periods (no image events in hours). The recent-drain
+// branch catches the "channel has work and worker is making progress"
+// case. The failure mode we want to flag is "channel has work but
+// worker stalled" — i.e. queue non-empty AND no drain in 5s.
+//
+// Production /health consumes this directly. See the mirroring
+// implementation in persist.Persister.WriterAlive.
 func (t *Tracker) WriterAlive() bool {
 	if t == nil || t.closed.Load() {
 		return false
 	}
 	s := t.Stats()
+	if s.ChannelCap == 0 {
+		return false
+	}
+	notFull := s.ChannelDepth*5 < s.ChannelCap*4
+	if s.ChannelDepth == 0 {
+		return notFull
+	}
 	drainedRecently := s.LastDrainMs >= 0 && s.LastDrainMs < 5000
-	notFull := s.ChannelCap > 0 && s.ChannelDepth*5 < s.ChannelCap*4
 	return drainedRecently && notFull
 }
 

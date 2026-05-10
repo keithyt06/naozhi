@@ -378,16 +378,31 @@ func (p *Persister) Stats() Stats {
 }
 
 // WriterAlive is the /health.writer_alive signal. See RFC §6.3.
+//
+// Healthy persister = worker accepting and draining work. An idle
+// persister (no sessions producing events) is NOT unhealthy, so the
+// signal is:
+//
+//	not closed AND (channel is empty-and-not-full OR recent drain)
+//
+// The empty-channel shortcut covers cold-start + long idle windows
+// (naozhi can legitimately see zero events for hours). The recent-
+// drain branch catches "queue has work and worker is progressing".
+// The failure mode we actually want to surface is "queue non-empty
+// AND no drain in 5s" — i.e. a stalled writer.
 func (p *Persister) WriterAlive() bool {
 	if p.closed.Load() {
 		return false
 	}
 	s := p.Stats()
-	// First ever call: LastDrainAgo is 0 but the goroutine might not
-	// have processed anything yet. Treat "never drained" as not-yet-alive
-	// rather than unhealthy.
+	if s.ChannelCap == 0 {
+		return false
+	}
+	notFull := s.ChannelDepth*5 < s.ChannelCap*4
+	if s.ChannelDepth == 0 {
+		return notFull
+	}
 	drainedRecently := s.LastDrainAgo > 0 && s.LastDrainAgo < 5*time.Second
-	notFull := s.ChannelCap > 0 && s.ChannelDepth*5 < s.ChannelCap*4
 	return drainedRecently && notFull
 }
 

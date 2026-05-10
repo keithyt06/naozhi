@@ -432,17 +432,19 @@ func TestOnPersistedEntry_AfterStop_NoOp(t *testing.T) {
 	tr.OnPersistedEntry("s", []string{"x"}, 1)
 }
 
-// TestWriterAlive_Lifecycle: initially false (never drained); true
-// after draining a bump; false after Stop.
+// TestWriterAlive_Lifecycle: idle tracker is alive (empty channel);
+// still alive after draining a bump; false after Stop. "Never drained"
+// is NOT unhealthy — quiet idle is a legitimate steady state.
 func TestWriterAlive_Lifecycle(t *testing.T) {
 	ws := t.TempDir()
 	date := time.Now().Format("2006-01-02")
 	rel, _ := writeAttachment(t, ws, date, "alive",
 		attachment.Meta{UploadedAt: time.Now()})
 	tr := newTracker(t, ws, nil)
-	// Pre-drain: alive should be false (never pushed).
-	if tr.WriterAlive() {
-		t.Errorf("WriterAlive=true before any drain")
+	// Idle (never drained, channel empty) must be alive — a fresh
+	// tracker with no image events is still healthy.
+	if !tr.WriterAlive() {
+		t.Errorf("WriterAlive=false when idle (cold start)")
 	}
 	tr.OnPersistedEntry("s", []string{rel}, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
