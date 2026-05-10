@@ -414,6 +414,22 @@ func (q *MessageQueue) ShouldSendWait(key string) bool {
 // until the next Enqueue re-entered the queue. Callers that can process the
 // drained batch should use ReleaseWithDrain instead.
 func (q *MessageQueue) Release(key string) {
+	// Peek depth under the lock so we can warn callers about stranded messages
+	// without changing Release's no-drain contract. Without this log the only
+	// signal is a silent "queue appears to lose messages" user report.
+	q.mu.Lock()
+	depth := 0
+	if sq := q.queues[key]; sq != nil {
+		depth = len(sq.msgs)
+	}
+	q.mu.Unlock()
+	if depth > 0 {
+		// `pending` is a lock-release snapshot — Enqueue callers racing this
+		// unlock can shift the real depth. Accurate enough for "a caller
+		// stranded N+ messages" triage.
+		slog.Warn("msgqueue release with pending messages, use ReleaseWithDrain to avoid strand",
+			"key", key, "pending_snapshot", depth)
+	}
 	q.ReleaseWithDrain(key, nil)
 }
 

@@ -1229,6 +1229,9 @@ func (h *Hub) BroadcastSessionsUpdate() {
 		debounceInterval = 50 * time.Millisecond
 		maxDebounceDelay = 500 * time.Millisecond
 	)
+	// Capture wall clock outside the critical section so the vDSO call
+	// does not extend the mutex window.
+	now := time.Now()
 	h.debounceMu.Lock()
 	defer h.debounceMu.Unlock()
 	// Shutdown already drained the debounce WG slot; any new scheduling here
@@ -1236,7 +1239,6 @@ func (h *Hub) BroadcastSessionsUpdate() {
 	if h.debounceClosed {
 		return
 	}
-	now := time.Now()
 	if h.debounceTimer != nil {
 		if now.Sub(h.debounceFirst) >= maxDebounceDelay {
 			// Hard cap reached — let the pending timer fire without resetting.

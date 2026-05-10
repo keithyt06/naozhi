@@ -9,8 +9,8 @@ package persist
 // Why not pass cli.EventEntry directly: persist must not import cli
 // (cli imports schema; cli and persist are peers, both downstream of
 // schema). The session / router layer owns the adapter that marshals
-// cli.EventEntry into Entry and calls PersistSink; see
-// internal/session/eventlog_bridge.go when Phase 2 lands.
+// cli.EventEntry into Entry and calls PersistSink; the adapter lives
+// in internal/session/eventlog_bridge.go.
 //
 // Lifecycle of Entry.JSON:
 //   - Owned by the producer before the PersistSink call.
