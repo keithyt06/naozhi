@@ -564,7 +564,7 @@ func (d *Dispatcher) sendAndReply(
 		}
 	}
 
-	tracker := newIMEventTracker(ctx, p, msg.ChatID, key)
+	tracker := newIMEventTracker(ctx, p, msg.ChatID)
 	defer tracker.stop()
 
 	result, err := d.sendFn(ctx, key, sess, text, images, tracker.onEvent)
@@ -758,14 +758,9 @@ func formatChineseDuration(d time.Duration) string {
 // to the read path so we don't waste allocations on events that are coalesced
 // away by the 1-per-second rate limit.
 type replyTracker struct {
-	ctx context.Context
-	p   platform.Platform
-	// sessionKey is the naozhi session key this turn belongs to; embedded in
-	// AskUserQuestion card action payloads so upstream card-click callbacks
-	// can route the synthesised answer back to the correct session without
-	// re-deriving chat → session mapping.
-	sessionKey string
-	chatID     string
+	ctx    context.Context
+	p      platform.Platform
+	chatID string
 	// thinkingMsgID is written by the Reply goroutine spawned in onEvent and
 	// read by editLoop + by sendAndReply (via waitReady→ctx.Done fallback).
 	// When ctx cancels, waitReady can return before msgIDReady is closed,
@@ -840,11 +835,10 @@ func (t *replyTracker) getThinkingMsgID() string {
 	return ""
 }
 
-func newIMEventTracker(ctx context.Context, p platform.Platform, chatID, sessionKey string) *replyTracker {
+func newIMEventTracker(ctx context.Context, p platform.Platform, chatID string) *replyTracker {
 	t := &replyTracker{
 		ctx:         ctx,
 		p:           p,
-		sessionKey:  sessionKey,
 		chatID:      chatID,
 		statusLines: make([]string, 0, maxStatusLines),
 		msgIDReady:  make(chan struct{}),
@@ -898,42 +892,58 @@ func (t *replyTracker) todoLoop() {
 	}
 }
 
-// sendAskQuestionCard surfaces an AskUserQuestion prompt to the IM channel.
-// Platforms that implement QuestionCardSender render a native interactive
-// card; others fall back to a plain-text reply enumerating the options so
-// the user can still reply free-form. Best-effort: any error is logged but
-// does not abort the turn.
+// sendAskQuestionCard posts the AskUserQuestion card on a detached goroutine.
+// onEvent runs on the readLoop path; a synchronous Feishu Open API call
+// could park there for up to 15s on flaky networks, stalling every event
+// for every session multiplexed through this process. The handler returns
+// immediately while the card post completes in the background, bounded by
+// its own 15s ctx. Any error falls back to a plain-text fallback post.
+//
+// Safety: snapshot (p, chatID, turnCtx) so later mutations to t don't
+// race with the goroutine; the turn context drives cancellation so a
+// session tear-down stops the post cleanly.
 func (t *replyTracker) sendAskQuestionCard(aq *cli.AskQuestion) {
 	if aq == nil || len(aq.Items) == 0 {
 		return
 	}
-	rctx, cancel := context.WithTimeout(t.ctx, 15*time.Second)
-	defer cancel()
+	p := t.p
+	chatID := t.chatID
+	turnCtx := t.ctx
 
-	if sender, ok := platform.AsQuestionCardSender(t.p); ok {
-		card := platform.QuestionCard{
-			ToolUseID:  aq.ToolUseID,
-			SessionKey: t.sessionKey,
-			Items:      make([]platform.QuestionItem, 0, len(aq.Items)),
-		}
-		for _, q := range aq.Items {
-			opts := make([]platform.QuestionOption, 0, len(q.Options))
-			for _, o := range q.Options {
-				opts = append(opts, platform.QuestionOption{Label: o.Label, Description: o.Description})
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Warn("ask_question: card send panic recovered",
+					"chat_id", chatID, "tool_use_id", aq.ToolUseID, "panic", r)
 			}
-			card.Items = append(card.Items, platform.QuestionItem{
-				Question: q.Question, Header: q.Header,
-				MultiSelect: q.MultiSelect, Options: opts,
-			})
+		}()
+		rctx, cancel := context.WithTimeout(turnCtx, 15*time.Second)
+		defer cancel()
+
+		if sender, ok := platform.AsQuestionCardSender(p); ok {
+			card := platform.QuestionCard{
+				ToolUseID: aq.ToolUseID,
+				Items:     make([]platform.QuestionItem, 0, len(aq.Items)),
+			}
+			for _, q := range aq.Items {
+				opts := make([]platform.QuestionOption, 0, len(q.Options))
+				for _, o := range q.Options {
+					opts = append(opts, platform.QuestionOption{Label: o.Label, Description: o.Description})
+				}
+				card.Items = append(card.Items, platform.QuestionItem{
+					Question: q.Question, Header: q.Header,
+					MultiSelect: q.MultiSelect, Options: opts,
+				})
+			}
+			if _, err := sender.SendQuestionCard(rctx, chatID, card); err != nil {
+				slog.Warn("ask_question card send failed, falling back to text",
+					"chat_id", chatID, "tool_use_id", aq.ToolUseID, "err", err)
+				t.sendAskQuestionFallback(rctx, aq)
+			}
+			return
 		}
-		if _, err := sender.SendQuestionCard(rctx, t.chatID, card); err != nil {
-			slog.Warn("ask_question card send failed, falling back to text",
-				"chat_id", t.chatID, "tool_use_id", aq.ToolUseID, "err", err)
-			t.sendAskQuestionFallback(rctx, aq)
-		}
-		return
-	}
-	t.sendAskQuestionFallback(rctx, aq)
+		t.sendAskQuestionFallback(rctx, aq)
+	}()
 }
 
 // sendAskQuestionFallback posts a plain-text message listing the questions +

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/naozhi/naozhi/internal/platform"
 )
@@ -13,8 +14,7 @@ import (
 func TestBuildQuestionCardJSON_Shape(t *testing.T) {
 	t.Parallel()
 	card := platform.QuestionCard{
-		ToolUseID:  "toolu_abc",
-		SessionKey: "feishu:direct:oc_xyz:general",
+		ToolUseID: "toolu_abc",
 		Items: []platform.QuestionItem{{
 			Question: "Which approach?",
 			Header:   "Error style",
@@ -41,8 +41,10 @@ func TestBuildQuestionCardJSON_Shape(t *testing.T) {
 	if !strings.Contains(s, `"tool_use_id":"toolu_abc"`) {
 		t.Error("value.tool_use_id not embedded in card")
 	}
-	if !strings.Contains(s, `"session_key":"feishu:direct:oc_xyz:general"`) {
-		t.Error("value.session_key not embedded in card")
+	// session_key was intentionally removed (security-review: dead field
+	// widened attack surface). The card payload must NOT embed it.
+	if strings.Contains(s, `"session_key"`) {
+		t.Error("value.session_key should not be embedded — was removed for security")
 	}
 	if !strings.Contains(s, `"kind":"ask_answer"`) {
 		t.Error("value.kind not embedded in card")
@@ -157,15 +159,18 @@ func TestBuildQuestionCardJSON_LongLabelTrimmed(t *testing.T) {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("unmarshal err=%v", err)
 	}
-	maxContentLen := 0
+	maxRuneLen := 0
 	var walk func(v any)
 	walk = func(v any) {
 		switch t := v.(type) {
 		case map[string]any:
 			if tag, _ := t["tag"].(string); tag == "button" {
 				if textMap, ok := t["text"].(map[string]any); ok {
-					if c, _ := textMap["content"].(string); len(c) > maxContentLen {
-						maxContentLen = len(c)
+					// Rune count is what matters — truncateRunes clips by rune,
+					// and a byte-length assertion would spuriously fail on
+					// multi-byte em dashes present in the "Label — Desc" join.
+					if c, _ := textMap["content"].(string); utf8.RuneCountInString(c) > maxRuneLen {
+						maxRuneLen = utf8.RuneCountInString(c)
 					}
 				}
 			}
@@ -179,11 +184,11 @@ func TestBuildQuestionCardJSON_LongLabelTrimmed(t *testing.T) {
 		}
 	}
 	walk(parsed)
-	if maxContentLen == 0 {
+	if maxRuneLen == 0 {
 		t.Fatal("could not find any button text content")
 	}
-	if maxContentLen > 100 {
-		t.Errorf("button text length = %d, want <=100", maxContentLen)
+	if maxRuneLen > 100 {
+		t.Errorf("button text rune count = %d, want <=100", maxRuneLen)
 	}
 }
 
@@ -216,11 +221,10 @@ func TestDispatchCardAction_RoutesAsMessage(t *testing.T) {
 		got = m
 	}
 	payload := cardActionPayload{
-		Kind:       "ask_answer",
-		ToolUseID:  "toolu_xyz",
-		SessionKey: "feishu:group:oc_123:general",
-		Header:     "Error style",
-		Label:      "Return an error",
+		Kind:      "ask_answer",
+		ToolUseID: "toolu_xyz",
+		Header:    "Error style",
+		Label:     "Return an error",
 	}
 	// messageID is left empty intentionally — populating it would trigger the
 	// background EditMessage call, which requires a configured Feishu client

@@ -101,16 +101,16 @@ func AsReactor(p Platform) (Reactor, bool) {
 // QuestionCard is the platform-agnostic payload for an AskUserQuestion prompt.
 // Adapters turn this into a native interactive card (Feishu interactive
 // card, Slack block actions, etc.). See docs/rfc/askuser-question.md.
+//
+// SessionKey is intentionally absent — routing of card-click replies is
+// re-derived from the operator's own chat context, not carried in the
+// card payload. Embedding it would widen the attack surface without any
+// benefit on the inbound path.
 type QuestionCard struct {
 	// ToolUseID is the correlation id from the assistant tool_use block —
 	// carried into card action callbacks so the handler knows which
 	// question the user answered.
 	ToolUseID string
-	// SessionKey is the naozhi session key the reply should land on.
-	// Embedded in the card's action payload so card-click callbacks can
-	// route the synthesised answer to the right session without looking up
-	// chat → session mapping separately.
-	SessionKey string
 	// Items is one or more questions. Adapters render each as its own
 	// labelled block.
 	Items []QuestionItem

@@ -2266,7 +2266,33 @@ function renderTodoList(detail, summary) {
 // never sees a partial answer. _askAnswered stores tool_use_ids that have
 // already been submitted so a re-render (e.g. late history replay) can't
 // resurrect an actionable card.
+//
+// Persistence note: the Set is in-memory only. History replay after a page
+// reload rebuilds it in hydrateAskAnsweredFromHistory() by scanning for any
+// user event that arrived AFTER a given ask_question — a later user message
+// means the question was answered on some surface, so re-actioning must be
+// disabled to prevent duplicate answers to CC.
 const _askAnswered = new Set();
+
+// hydrateAskAnsweredFromHistory walks a time-sorted event list and marks
+// every ask_question whose tool_use_id is followed by at least one user
+// event as already-answered. Called from onHistory before rendering.
+function hydrateAskAnsweredFromHistory(events) {
+  if (!Array.isArray(events)) return;
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+    if (!e || e.type !== 'ask_question') continue;
+    const tuid = (e.ask_question && e.ask_question.tool_use_id) || e.tool_use_id || '';
+    if (!tuid) continue;
+    // Any later user event → this question was answered by some surface.
+    for (let j = i + 1; j < events.length; j++) {
+      if (events[j] && events[j].type === 'user') {
+        _askAnswered.add(tuid);
+        break;
+      }
+    }
+  }
+}
 
 function renderAskQuestionCard(e) {
   const aq = e.ask_question;
@@ -2274,6 +2300,16 @@ function renderAskQuestionCard(e) {
     // Defensive: if payload missing, fall back to a plain status bubble.
     return '<div class="event ask_question"><span class="event-icon">?</span>' +
       '<div class="event-content">' + esc(e.summary || 'AskUserQuestion') + '</div></div>';
+  }
+  // A question with zero options would deadlock the submit button
+  // (updateAskSubmitState requires every group to have a .selected option,
+  // and a group with no .ask-opt can never satisfy that). Rather than
+  // render a broken card, fall back to a simple label and log at debug so
+  // the malformed payload surfaces in dev tools.
+  const hasDegenerateItem = aq.items.some(it => !it || !Array.isArray(it.options) || it.options.length === 0);
+  if (hasDegenerateItem) {
+    return '<div class="event ask_question"><span class="event-icon">?</span>' +
+      '<div class="event-content">' + esc(e.summary || 'AskUserQuestion (malformed: empty options)') + '</div></div>';
   }
   const tuid = aq.tool_use_id || '';
   const locked = _askAnswered.has(tuid);
@@ -2306,12 +2342,14 @@ function renderAskQuestionCard(e) {
       '<div class="ask-opts">' + opts + '</div>' +
       '</div>';
   }).join('');
-  // Single bottom submit: disabled until every question has ≥1 selection.
-  // updateAskSubmitState toggles the disabled attribute on every toggle.
+  // Single bottom submit: always starts disabled (no selection yet); either
+  // unlocked dynamically by updateAskSubmitState when every group has ≥1
+  // selected option, or permanently disabled if the card is locked
+  // (replayed after a prior answer).
   const submitBtn =
     '<button class="ask-submit" type="button"' +
     ' data-tuid="' + escAttr(tuid) + '"' +
-    (locked ? ' disabled' : ' disabled') +
+    ' disabled' +
     ' onclick="onAskSubmit(this)">提交全部回答</button>';
   const status = locked
     ? '<div class="ask-status">已回答</div>'
@@ -6485,6 +6523,21 @@ async function openFilePreview(wrapEl) {
     body.appendChild(frame);
     return;
   }
+  // HTML / XHTML: render via blob URL inside a sandboxed iframe.
+  //
+  // Why blob + sandbox instead of `iframe.src = fileApiUrl(...render)`:
+  // Firefox ignores the HTTP `Content-Security-Policy: sandbox` directive
+  // on top-level navigation, so a direct-URL open would run workspace HTML
+  // same-origin to the dashboard → stored-XSS via the Claude CLI Write tool.
+  // The server returns the bytes as `application/octet-stream + attachment`
+  // specifically so that a direct URL hit DOWNLOADS instead of renders.
+  // Client-side we fetch, wrap bytes in a Blob({type:'text/html'}), and
+  // feed the blob: URL into the iframe — blob origins are opaque, so even
+  // if sandbox is stripped the document cannot read dashboard cookies.
+  if (mime.startsWith('text/html') || mime.startsWith('application/xhtml')) {
+    renderHtmlInSandbox(project, node, path, body);
+    return;
+  }
 
   // Text / unknown: go through preview endpoint which returns structured JSON.
   try {
@@ -6498,7 +6551,16 @@ async function openFilePreview(wrapEl) {
     }
     const data = await r.json();
     if (data.binary) {
-      body.innerHTML = '<div class="fv-binary">Binary file — click <strong>download</strong> to save.<span class="fv-mime">' + esc(data.mime || '') + '</span></div>';
+      const binMime = String(data.mime || '');
+      // HTML / XHTML land in `binary:true` by design (R176-SEC-H3: html
+      // bytes never flow through the preview JSON content field). Upgrade
+      // to the sandboxed blob render instead of showing a "please download"
+      // placeholder — that's the whole point of render mode.
+      if (binMime.startsWith('text/html') || binMime.startsWith('application/xhtml')) {
+        renderHtmlInSandbox(project, node, path, body);
+        return;
+      }
+      body.innerHTML = '<div class="fv-binary">Binary file — click <strong>download</strong> to save.<span class="fv-mime">' + esc(binMime) + '</span></div>';
       return;
     }
     const parts = [];
@@ -6517,6 +6579,66 @@ async function openFilePreview(wrapEl) {
     }
     body.innerHTML = parts.join('');
     if (line) scrollToPreviewLine(body, parseInt(line, 10));
+  } catch (e) {
+    body.innerHTML = '<div class="fv-error">' + esc(String(e && e.message || e)) + '</div>';
+  }
+}
+
+// _pendingHtmlBlobUrl holds the most recent blob URL fed into the preview
+// iframe so closeFilePreview can revoke it. Blob URLs pin their backing
+// bytes in memory until revoked, and a 50 MB coverage report left open
+// across many file clicks would leak hard. Single-slot is enough because
+// the drawer only ever shows one file at a time.
+let _pendingHtmlBlobUrl = null;
+
+// renderHtmlInSandbox fetches workspace HTML, wraps it in a Blob, and
+// points a sandboxed iframe at the resulting blob URL.
+//
+// Three defense layers stack here:
+//   (1) Server returns application/octet-stream + attachment, so a direct
+//       URL hit downloads rather than renders (covers Firefox's CSP-sandbox
+//       top-level-nav gap).
+//   (2) Blob URL origin is opaque — even with allow-same-origin in the
+//       sandbox (we don't grant it), the document can't read dashboard
+//       cookies or same-origin fetch.
+//   (3) sandbox='' on the iframe grants zero capabilities — no scripts,
+//       no forms, no top-level navigation, no popups, no fetch.
+// Any one of these would be sufficient; stacking all three is belt-and-
+// braces so a future change to any single layer does not regress security.
+async function renderHtmlInSandbox(project, node, path, body) {
+  body.innerHTML = '<div class="fv-loading">loading…</div>';
+  // Revoke any prior blob URL before overwriting. Missing this leaked a
+  // ~50 MB report across every re-open of the drawer in manual testing.
+  if (_pendingHtmlBlobUrl) {
+    try { URL.revokeObjectURL(_pendingHtmlBlobUrl); } catch (_) { /* ignore */ }
+    _pendingHtmlBlobUrl = null;
+  }
+  try {
+    const headers = {};
+    const t = getToken();
+    if (t) headers['Authorization'] = 'Bearer ' + t;
+    const r = await fetch(fileApiUrl(project, node, path, 'render'), { headers });
+    if (!r.ok) {
+      body.innerHTML = '<div class="fv-error">render failed (' + r.status + ')</div>';
+      return;
+    }
+    const bytes = await r.arrayBuffer();
+    // Force type=text/html on the Blob — the server intentionally returned
+    // application/octet-stream so direct-URL hits don't render. The browser
+    // only interprets the bytes as HTML because we ask it to here.
+    const blob = new Blob([bytes], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    _pendingHtmlBlobUrl = url;
+
+    body.innerHTML = '';
+    const frame = document.createElement('iframe');
+    frame.src = url;
+    frame.title = path;
+    // Empty sandbox = no capabilities at all. Any allow-* token here would
+    // re-grant the capability; callers must never add one.
+    frame.setAttribute('sandbox', '');
+    frame.referrerPolicy = 'no-referrer';
+    body.appendChild(frame);
   } catch (e) {
     body.innerHTML = '<div class="fv-error">' + esc(String(e && e.message || e)) + '</div>';
   }
@@ -6556,6 +6678,13 @@ function closeFilePreview() {
   delete drawer.dataset.snippetMode;
   delete drawer.dataset.snippetName;
   _pendingSnippet = null;
+  // Release the HTML preview blob URL so the browser can GC the underlying
+  // bytes. Without this a 50 MB coverage report held its memory until the
+  // whole tab reloaded.
+  if (_pendingHtmlBlobUrl) {
+    try { URL.revokeObjectURL(_pendingHtmlBlobUrl); } catch (_) { /* ignore */ }
+    _pendingHtmlBlobUrl = null;
+  }
   const body = document.getElementById('fv-body');
   if (body) body.innerHTML = '';
 }
@@ -7354,6 +7483,12 @@ const wsm = {
     const events = msg.events || [];
     const isInitial = this._initialSubscribe;
     this._initialSubscribe = false;
+
+    // Rebuild the answered-set from history BEFORE rendering so card
+    // re-renders show the correct locked state. The Set is in-memory so
+    // a page reload or session switch would otherwise make an already-
+    // answered card re-actionable and invite duplicate answers to CC.
+    hydrateAskAnsweredFromHistory(events);
 
     const display = processEventsForDisplay(events);
 

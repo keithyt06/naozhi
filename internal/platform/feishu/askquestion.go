@@ -7,9 +7,24 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/naozhi/naozhi/internal/osutil"
 	"github.com/naozhi/naozhi/internal/platform"
+)
+
+// Length caps for card-action value fields. Labels and headers ride in the
+// button `value` object round-trip; without caps, a crafted Feishu relay
+// (or a replay of a signed mutated envelope) could stuff 60 KB strings into
+// CC stdin — the webhook body limit is 64 KiB and there's no per-field cap.
+// Match ~4 KiB worth of runes so card-sourced user messages can't exceed
+// the normal IM text budget.
+const (
+	cardValueLabelMaxRunes  = 512 // labels may include descriptions
+	cardValueHeaderMaxRunes = 128 // short prose
+	cardValueIDMaxRunes     = 128 // tool_use_id etc
+	cardButtonTextMaxRunes  = 100 // Feishu truncates anyway; stay safe
 )
 
 // SendQuestionCard posts an AskUserQuestion prompt to the Feishu chat.
@@ -95,10 +110,10 @@ func buildMultiQuestionMarkdownCardJSON(card platform.QuestionCard) ([]byte, err
 		}
 		h := item.Header
 		if h == "" {
-			h = item.Question
-			if len(h) > 20 {
-				h = h[:20]
-			}
+			// Rune-aware truncation — byte-slicing [:20] would split multi-byte
+			// CJK codepoints and emit invalid UTF-8 into the card body, making
+			// json.Encoder.Encode fail and aborting the whole card send.
+			h = truncateRunes(item.Question, 20)
 		}
 		parts = append(parts, h+"："+item.Options[0].Label)
 	}
@@ -186,20 +201,22 @@ func buildQuestionCardJSON(card platform.QuestionCard) ([]byte, error) {
 				// use a simple dash separator.
 				btnText = opt.Label + " — " + opt.Description
 			}
-			// Clip button labels — Feishu truncates anyway, and an overly
-			// long label breaks card layout on narrow clients.
-			if len(btnText) > 100 {
-				btnText = btnText[:100]
-			}
+			// Clip button label at rune boundary — byte-level [:100] could
+			// split a multi-byte CJK sequence into invalid UTF-8 that
+			// Feishu's relay would reject or render as mojibake.
+			btnText = truncateRunes(btnText, cardButtonTextMaxRunes)
 			a := action{Tag: "button", Type: "default"}
 			a.Text.Tag = "plain_text"
 			a.Text.Content = btnText
+			// session_key is no longer embedded — the inbound path never read
+			// it (routing re-derives from chat context) and keeping it
+			// widened the attack surface. Values are rune-capped so an
+			// inbound replay can't bounce 60 KB into CC stdin.
 			a.Value = map[string]any{
 				"kind":        "ask_answer",
-				"tool_use_id": card.ToolUseID,
-				"session_key": card.SessionKey,
-				"header":      item.Header,
-				"label":       opt.Label,
+				"tool_use_id": truncateRunes(card.ToolUseID, cardValueIDMaxRunes),
+				"header":      truncateRunes(item.Header, cardValueHeaderMaxRunes),
+				"label":       truncateRunes(opt.Label, cardValueLabelMaxRunes),
 			}
 			acts = append(acts, a)
 		}
@@ -222,30 +239,58 @@ func buildQuestionCardJSON(card platform.QuestionCard) ([]byte, error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
+// markdownEscaper is reused across every escapeMarkdown call. NewReplacer
+// builds an internal trie per invocation; a multi-question card hits
+// escapeMarkdown O(questions × options) times and each call would otherwise
+// allocate a fresh replacer during the send hot path.
+var markdownEscaper = strings.NewReplacer(
+	"\\", "\\\\",
+	"`", "\\`",
+	"*", "\\*",
+	"_", "\\_",
+)
+
 // escapeMarkdown escapes the minimal set of markdown metacharacters that
 // could break the card body rendering if they appear literally in a user-
 // facing string. Feishu markdown is GitHub-flavoured; we only guard against
 // accidental emphasis / code-span triggers — real code blocks from CC
 // output are not expected here (headers and questions are short prose).
 func escapeMarkdown(s string) string {
-	// Keep the set small to avoid over-escaping common punctuation.
-	r := strings.NewReplacer(
-		"\\", "\\\\",
-		"`", "\\`",
-		"*", "\\*",
-		"_", "\\_",
-	)
-	return r.Replace(s)
+	return markdownEscaper.Replace(s)
+}
+
+// truncateRunes clips s to at most n runes, preserving UTF-8 boundaries.
+// Byte-level [:n] would split multi-byte sequences and leave Feishu's relay
+// with invalid UTF-8 that either rejects or mojibakes the button text.
+// No ellipsis is appended — button labels read cleaner without one.
+func truncateRunes(s string, n int) string {
+	if n <= 0 || utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	i, count := 0, 0
+	for i < len(s) {
+		if count == n {
+			return s[:i]
+		}
+		_, size := utf8.DecodeRuneInString(s[i:])
+		i += size
+		count++
+	}
+	return s
 }
 
 // cardActionPayload is the value object our SendQuestionCard emits and the
 // webhook handler expects. Kept package-private; dispatcher never reaches in.
+//
+// Fields are deliberately minimal — session routing is re-derived from the
+// click's chat context, not anything embedded here. A previous SessionKey
+// field was removed after security review: it was dead on the inbound path
+// but widened the attacker-controlled surface.
 type cardActionPayload struct {
-	Kind       string `json:"kind"`
-	ToolUseID  string `json:"tool_use_id"`
-	SessionKey string `json:"session_key"`
-	Header     string `json:"header"`
-	Label      string `json:"label"`
+	Kind      string `json:"kind"`
+	ToolUseID string `json:"tool_use_id"`
+	Header    string `json:"header"`
+	Label     string `json:"label"`
 }
 
 // handleCardActionWebhook parses an im.card.action.v1_trigger envelope and
@@ -305,9 +350,19 @@ func (f *Feishu) dispatchCardAction(
 	if chatType == "group" {
 		ct = "group"
 	}
+	// Stable-ish dedup key. Lark SDK can re-deliver the same card_action on
+	// WS reconnect; without this, a click gets forwarded twice. Derive the
+	// id from (open_message_id, operator, tool_use_id) — same card + same
+	// clicker + same question collapses to one key, so replays dedup.
+	// "card_action:" prefix guards against collision with message event IDs
+	// in the same Dedup bucket.
+	eventID := ""
+	if messageID != "" {
+		eventID = "card_action:" + messageID + ":" + operatorID + ":" + val.ToolUseID
+	}
 	msg := platform.IncomingMessage{
 		Platform:  "feishu",
-		EventID:   "",
+		EventID:   osutil.SanitizeForLog(eventID, 256),
 		MessageID: messageID,
 		UserID:    operatorID,
 		ChatID:    chatID,
@@ -322,6 +377,10 @@ func (f *Feishu) dispatchCardAction(
 	// and buttons go away. Failures don't stop dispatching the answer —
 	// the conversation continuation matters more than UI polish.
 	if messageID != "" && f.cfg.AppID != "" {
+		// Strip control / bidi before interpolating into the edit markdown —
+		// escapeMarkdown only handles emphasis metacharacters, not C1 / bidi
+		// overrides / LS / PS that could corrupt Feishu's rendering.
+		safeText := osutil.SanitizeForLog(text, 1024)
 		go func() {
 			defer func() {
 				// A mid-goroutine panic (e.g. uninitialised client in tests)
@@ -332,7 +391,15 @@ func (f *Feishu) dispatchCardAction(
 						"msg_id", osutil.SanitizeForLog(messageID, 64), "panic", r)
 				}
 			}()
-			if err := f.EditMessage(ctx, messageID, "✅ 已回答：**"+escapeMarkdown(text)+"**"); err != nil {
+			// Detach from the webhook/WS callback ctx — that ctx can be
+			// cancelled the moment the transport layer's outer handler
+			// returns, even though the message dispatch continues in its
+			// own goroutine. A 10s independent budget matches the Feishu
+			// EditMessage call timeout and keeps the "card visual update"
+			// best-effort semantics intact.
+			editCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := f.EditMessage(editCtx, messageID, "✅ 已回答：**"+escapeMarkdown(safeText)+"**"); err != nil {
 				slog.Debug("feishu card_action: edit original card failed",
 					"msg_id", osutil.SanitizeForLog(messageID, 64), "err", err)
 			}
@@ -345,9 +412,14 @@ func (f *Feishu) dispatchCardAction(
 // that gets injected as a new user message. Mirrors the dashboard's
 // composeAskAnswer format ("Header: Label.") so CC sees a stable reply shape
 // regardless of which surface the user answered from.
+//
+// Both header and label are rune-capped and control-character-stripped
+// before composition. A hostile Feishu relay or replayed mutation could
+// otherwise land 60 KB / bidi-injected strings on CC stdin. The caps match
+// send-time policy so round-trip drift stays bounded.
 func composeAskAnswerText(p cardActionPayload) string {
-	h := strings.TrimSpace(p.Header)
-	l := strings.TrimSpace(p.Label)
+	h := strings.TrimSpace(truncateRunes(osutil.SanitizeForLog(p.Header, 0), cardValueHeaderMaxRunes))
+	l := strings.TrimSpace(truncateRunes(osutil.SanitizeForLog(p.Label, 0), cardValueLabelMaxRunes))
 	if l == "" {
 		return ""
 	}

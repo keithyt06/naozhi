@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"regexp"
 )
 
@@ -171,7 +172,17 @@ func extractAskQuestion(blocks []ContentBlock) *AskQuestion {
 			continue
 		}
 		var inp askUserQuestionInput
-		if err := json.Unmarshal(b.Input, &inp); err != nil || len(inp.Questions) == 0 {
+		if err := json.Unmarshal(b.Input, &inp); err != nil {
+			// Log at Debug so a CC schema drift (shape evolving away from
+			// what test/e2e/askuser validated) is traceable instead of
+			// silently producing zero cards. Only log input_len — the raw
+			// payload may contain user prompt fragments that don't belong
+			// in structured logs.
+			slog.Debug("extractAskQuestion: input unmarshal failed",
+				"err", err, "input_len", len(b.Input))
+			return nil
+		}
+		if len(inp.Questions) == 0 {
 			return nil
 		}
 		items := make([]AskQuestionItem, 0, len(inp.Questions))
