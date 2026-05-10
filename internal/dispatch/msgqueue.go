@@ -409,13 +409,50 @@ func (q *MessageQueue) ShouldSendWait(key string) bool {
 }
 
 // Release implements SessionGuard. Releases ownership without draining.
+// R37-REL1: if messages landed during the busy window (concurrent Enqueue
+// while Dashboard/WS Guard held the session), they would otherwise be stuck
+// until the next Enqueue re-entered the queue. Callers that can process the
+// drained batch should use ReleaseWithDrain instead.
 func (q *MessageQueue) Release(key string) {
+	q.ReleaseWithDrain(key, nil)
+}
+
+// ReleaseWithDrain is the drain-aware variant of Release. If messages are
+// queued when ownership is released, onDrain is invoked once per message in
+// FIFO order while the internal queue state has already been cleared and the
+// session marked idle — so the callback can safely re-enter Enqueue or
+// otherwise process each message without re-acquiring q.mu re-entrantly.
+//
+// onDrain may be nil; in that case behaviour matches the legacy Release
+// (messages stay in sq.msgs waiting for a future Enqueue owner to sweep
+// them via DoneOrDrain).
+//
+// Callback invocation happens AFTER the queue state is cleared and the lock
+// released, mirroring DoneOrDrain's out-of-lock delivery contract.
+func (q *MessageQueue) ReleaseWithDrain(key string, onDrain func(QueuedMsg)) {
 	q.mu.Lock()
-	defer q.mu.Unlock()
+	var drained []QueuedMsg
 	if sq := q.queues[key]; sq != nil {
 		sq.busy = false
 		if len(sq.msgs) == 0 {
 			delete(q.queues, key)
+		} else if onDrain != nil {
+			// Transfer the queued batch to the caller and clear the internal
+			// slice so a later Enqueue starts fresh. Ownership is released
+			// (busy=false) so the next Enqueue becomes owner; if we kept the
+			// msgs in place, that owner would still receive them via
+			// DoneOrDrain — but nothing guarantees a next Enqueue arrives.
+			// Draining here ensures progress even on a quiet session.
+			drained = sq.msgs
+			sq.msgs = nil
+			// Entry becomes eligible for deletion now that it carries no
+			// queued state; mirroring the empty branch above keeps the map
+			// from accumulating idle sessionQueue instances.
+			delete(q.queues, key)
 		}
+	}
+	q.mu.Unlock()
+	for _, m := range drained {
+		onDrain(m)
 	}
 }

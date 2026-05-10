@@ -37,7 +37,7 @@ func newSlotUUID() string {
 func (p *Process) SendPassthrough(ctx context.Context, text string, images []ImageData,
 	onEvent EventCallback, priority string) (*SendResult, error) {
 
-	if !p.protocol.SupportsReplay() {
+	if !ProtocolCaps(p.protocol).Replay {
 		return nil, fmt.Errorf("passthrough: protocol %s does not support replay", p.protocol.Name())
 	}
 
@@ -560,8 +560,8 @@ func (p *Process) PassthroughDepth() int {
 }
 
 // SupportsPassthrough reports whether this Process's backing protocol can run
-// in passthrough mode. Currently equivalent to Protocol.SupportsReplay()
+// in passthrough mode. Currently equivalent to ProtocolCaps(...).Replay
 // because replay events are required for naozhi ↔ CLI slot matching.
 func (p *Process) SupportsPassthrough() bool {
-	return p.protocol.SupportsReplay()
+	return ProtocolCaps(p.protocol).Replay
 }

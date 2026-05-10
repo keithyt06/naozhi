@@ -1116,6 +1116,47 @@ func (r *Router) ReconnectShimsCtx(ctx context.Context) {
 	r.reconnectShims(ctx)
 }
 
+// shimState classifies how reconnectShims should dispatch a discovered shim.
+// The zero value (shimStateSkip) is the safe no-op, so adding a new bool
+// flag that defaults false will not silently reroute an existing case.
+// R70-ARCH-H4.
+type shimState int
+
+const (
+	shimStateSkip      shimState = iota // spawn in flight or session already has a live process
+	shimStateOrphan                     // session missing; shim must be killed
+	shimStateNoWrapper                  // no CLI wrapper registered for the shim's backend
+	shimStateDrift                      // stored CLI args differ from current config
+	shimStateReconnect                  // ready for Reattach
+)
+
+// classifyShimState is a pure boolean decision tree over the five inputs
+// reconnectShims observes per discovered shim. Extracted so the branch
+// matrix can be table-tested without standing up processes or wrappers.
+//
+// Order matters: spawning > orphan > hasLiveProc > wrapperNil > argsDrift.
+// A spawn in flight always wins because the new shim's state file may race
+// ahead of ManagedSession registration — skipping avoids a false-orphan
+// shutdown of the fresh shim.
+func classifyShimState(spawning, sessFound, hasLiveProc, wrapperNil, argsDrift bool) shimState {
+	if spawning {
+		return shimStateSkip
+	}
+	if !sessFound {
+		return shimStateOrphan
+	}
+	if hasLiveProc {
+		return shimStateSkip
+	}
+	if wrapperNil {
+		return shimStateNoWrapper
+	}
+	if argsDrift {
+		return shimStateDrift
+	}
+	return shimStateReconnect
+}
+
 func (r *Router) reconnectShims(parentCtx context.Context) {
 	managers := r.shimManagers()
 	if len(managers) == 0 {
@@ -1161,21 +1202,40 @@ func (r *Router) reconnectShims(parentCtx context.Context) {
 		_, spawning := r.spawningKeys[state.Key]
 		r.mu.Unlock()
 
-		// A spawnSession is in flight for this key: the new shim may have
-		// already written its state file while ManagedSession is not yet
-		// installed in r.sessions. Skip this round — the next tick will
-		// find either a live session or a real orphan.
-		if spawning {
-			continue
-		}
-
 		// Resolve the wrapper recorded at shim startup so reconnect uses
 		// the matching Protocol and binary. An empty Backend in the state
 		// file predates multi-backend support and falls back to the
 		// router default.
 		recWrapper, recBackendID := r.wrapperFor(state.Backend)
 
-		if !ok {
+		// Compute args drift up-front (only meaningful when we have a wrapper);
+		// classifyShimState picks the branch. Strip --resume <id> from stored
+		// args since it's session-specific, not config.
+		var argsDrift bool
+		var storedBase, currentArgs []string
+		if recWrapper != nil {
+			storedBase = stripResumeArgs(state.CLIArgs)
+			driftModel := r.model
+			if m, ok := r.backendModels[recBackendID]; ok && m != "" {
+				driftModel = m
+			}
+			driftArgs := r.extraArgs
+			if a, ok := r.backendExtraArgs[recBackendID]; ok && len(a) > 0 {
+				driftArgs = a
+			}
+			currentArgs = recWrapper.Protocol.BuildArgs(cli.SpawnOptions{
+				Model:     driftModel,
+				ExtraArgs: driftArgs,
+			})
+			argsDrift = len(storedBase) > 0 && !slices.Equal(storedBase, currentArgs)
+		}
+
+		switch classifyShimState(spawning, ok, hasLiveProcess, recWrapper == nil, argsDrift) {
+		case shimStateSkip:
+			// spawnSession in flight, or session already has a live process.
+			// Next tick will re-evaluate if anything changed.
+			continue
+		case shimStateOrphan:
 			slog.Info("orphan shim found, shutting down", "key", state.Key)
 			// Connect briefly to send shutdown. Bound the reconnect so a
 			// hung shim socket cannot stall NewRouter startup — we fall
@@ -1201,36 +1261,11 @@ func (r *Router) reconnectShims(parentCtx context.Context) {
 				}
 			}()
 			continue
-		}
-
-		// Skip if session already has a live process
-		if hasLiveProcess {
-			continue
-		}
-
-		if recWrapper == nil {
+		case shimStateNoWrapper:
 			slog.Warn("shim reconnect skipped: no wrapper for backend",
 				"key", state.Key, "backend", state.Backend)
 			continue
-		}
-
-		// CLI args drift check: if config changed (model, args), shut down old shim
-		// and let the next message create a new session with updated config.
-		// Strip --resume <id> from stored args since it's session-specific, not config.
-		storedBase := stripResumeArgs(state.CLIArgs)
-		driftModel := r.model
-		if m, ok := r.backendModels[recBackendID]; ok && m != "" {
-			driftModel = m
-		}
-		driftArgs := r.extraArgs
-		if a, ok := r.backendExtraArgs[recBackendID]; ok && len(a) > 0 {
-			driftArgs = a
-		}
-		currentArgs := recWrapper.Protocol.BuildArgs(cli.SpawnOptions{
-			Model:     driftModel,
-			ExtraArgs: driftArgs,
-		})
-		if len(storedBase) > 0 && !slices.Equal(storedBase, currentArgs) {
+		case shimStateDrift:
 			slog.Info("shim config drifted, shutting down old shim",
 				"key", state.Key,
 				"old_args_len", len(storedBase),
@@ -1269,6 +1304,9 @@ func (r *Router) reconnectShims(parentCtx context.Context) {
 			}
 			continue
 		}
+		// shimStateReconnect falls through here; the reconnect path is too
+		// long to nest inside the switch, so we exit on every other case and
+		// let the reconnect body run at the loop's natural indent level.
 
 		// Reconnect. Timeout-bounded so a stuck shim handshake cannot stall
 		// NewRouter indefinitely; on timeout we log and keep iterating.
@@ -1810,6 +1848,99 @@ func (r *Router) GetOrCreate(ctx context.Context, key string, opts AgentOpts) (*
 	return s, SessionNew, nil
 }
 
+// spawnParams carries the pure-computation output of resolveSpawnParamsLocked:
+// the merged backend, model, args, workspace, and (possibly downgraded)
+// resumeID that spawnSession feeds into cli.SpawnOptions. Extracting this
+// struct keeps spawnSession's branching narrow and lets the merge rules be
+// table-tested in isolation (R70-ARCH-H2).
+type spawnParams struct {
+	Backend   string
+	BackendID string // resolved backend ID reported by wrapperFor
+	Wrapper   *cli.Wrapper
+	Model     string
+	Args      []string
+	Workspace string
+	// ResumeID after workspace/jsonl guard. Empty means "spawn fresh".
+	ResumeID string
+}
+
+// resolveSpawnParamsLocked computes the merged spawn parameters for a new
+// session. The caller MUST hold r.mu (write lock) because this reads
+// r.backendOverrides, r.workspaceOverrides, r.sessions and mutates
+// r.backendOverrides (consuming the one-shot dashboard pick).
+//
+// Pure-ish: no I/O except resolveResumeID's jsonl stat. No log output, no
+// process spawn — a test can exercise the merge rules without standing up
+// wrappers or filesystems beyond what resolveResumeID already needs.
+func (r *Router) resolveSpawnParamsLocked(key, resumeID string, opts AgentOpts) spawnParams {
+	// Backend pick: opts wins, then one-shot dashboard override, then default.
+	// The override is consumed so a later Reset→spawn for the same key does
+	// not silently carry the old pick.
+	reqBackend := opts.Backend
+	if len(r.backendOverrides) > 0 {
+		if reqBackend == "" {
+			reqBackend = r.backendOverrides[key]
+		}
+		delete(r.backendOverrides, key)
+	}
+	wrapper, backendID := r.wrapperFor(reqBackend)
+
+	// Model merge: router default ← backend override ← per-request opts.
+	model := r.model
+	if bm, ok := r.backendModels[backendID]; ok && bm != "" {
+		model = bm
+	}
+	if opts.Model != "" {
+		model = opts.Model
+	}
+
+	// Args: backend-scoped replacement wins over router-wide extraArgs, then
+	// per-request ExtraArgs is appended. REPLACE (not append) semantics for the
+	// backend level matches RouterConfig.BackendExtraArgs godoc (R53-ARCH-002).
+	baseArgs := r.extraArgs
+	if ba, ok := r.backendExtraArgs[backendID]; ok && len(ba) > 0 {
+		baseArgs = ba
+	}
+	args := make([]string, len(baseArgs))
+	copy(args, baseArgs)
+	args = append(args, opts.ExtraArgs...)
+
+	// Workspace: opts override > per-chat override > old session workspace > default.
+	workspace := r.workspace
+	workspaceOverridden := false
+	if opts.Workspace != "" {
+		workspace = opts.Workspace
+		workspaceOverridden = true
+	} else if chatKey := chatKeyFor(key); chatKey != key {
+		if ws, ok := r.workspaceOverrides[chatKey]; ok {
+			workspace = ws
+			workspaceOverridden = true
+		}
+	}
+	if !workspaceOverridden && resumeID != "" {
+		if old := r.sessions[key]; old != nil {
+			if ws := old.Workspace(); ws != "" {
+				workspace = ws
+			}
+		}
+	}
+
+	// ResumeID guard: drop when the jsonl Claude CLI would read is missing so
+	// the spawn falls through to a fresh session instead of exit-1'ing on
+	// "No conversation found". See resolveResumeID for rationale.
+	resumeID = resolveResumeID(r.claudeDir, workspace, key, resumeID)
+
+	return spawnParams{
+		Backend:   reqBackend,
+		BackendID: backendID,
+		Wrapper:   wrapper,
+		Model:     model,
+		Args:      args,
+		Workspace: workspace,
+		ResumeID:  resumeID,
+	}
+}
+
 // spawnSession creates a new process, optionally resuming an existing session.
 // Caller must hold r.mu. Releases r.mu during Spawn() to avoid blocking other
 // goroutines during potentially slow protocol init (e.g., ACP handshake).
@@ -1862,81 +1993,20 @@ func (r *Router) spawnSession(ctx context.Context, key string, resumeID string, 
 		}
 	}
 
-	// Pick the wrapper for the requested backend. AgentOpts.Backend wins
-	// over the stored per-key override (set by the dashboard when the user
-	// picked a backend during new-session). Unknown IDs fall back silently
-	// to the router default; callers that need strict validation should
-	// pre-check via BackendIDs().
-	//
-	// The override is consumed on first spawn so a later Reset→spawn for
-	// the same key doesn't silently carry the old backend pick. The map
-	// is also wiped in Reset/Remove; deleting here as well guards the
-	// spawn path even when those callers missed cleanup.
-	reqBackend := opts.Backend
-	// Skip map ops entirely when no overrides are registered — the common
-	// single-backend case. The `delete` is a no-op but still hashes the
-	// key, so gating reduces the per-spawn hot path to a single len() call.
-	if len(r.backendOverrides) > 0 {
-		if reqBackend == "" {
-			reqBackend = r.backendOverrides[key]
-		}
-		delete(r.backendOverrides, key)
-	}
-	wrapper, backendID := r.wrapperFor(reqBackend)
-
-	// Merge agent opts with router defaults. Backend-scoped values
-	// (backendModels / backendExtraArgs) take precedence over the global
-	// fallbacks so operators can set a Kiro-specific model without
-	// affecting Claude sessions.
-	model := r.model
-	if bm, ok := r.backendModels[backendID]; ok && bm != "" {
-		model = bm
-	}
-	if opts.Model != "" {
-		model = opts.Model
-	}
-	baseArgs := r.extraArgs
-	if ba, ok := r.backendExtraArgs[backendID]; ok && len(ba) > 0 {
-		baseArgs = ba
-	}
-	args := make([]string, len(baseArgs))
-	copy(args, baseArgs)
-	args = append(args, opts.ExtraArgs...)
-
-	// Determine workspace: opts override > per-chat override > old session workspace > default
-	workspace := r.workspace
-	workspaceOverridden := false
-	if opts.Workspace != "" {
-		workspace = opts.Workspace
-		workspaceOverridden = true
-	} else if chatKey := chatKeyFor(key); chatKey != key {
-		if ws, ok := r.workspaceOverrides[chatKey]; ok {
-			workspace = ws
-			workspaceOverridden = true
-		}
-	}
-	// When resuming after restart and no workspace override exists, fall back to
-	// the old session's stored workspace so --resume finds the session in the
-	// correct project directory (Claude stores sessions under ~/.claude/projects/<sha256(cwd)>/).
-	if !workspaceOverridden && resumeID != "" {
-		if old := r.sessions[key]; old != nil {
-			if ws := old.Workspace(); ws != "" {
-				workspace = ws
-			}
-		}
-	}
-
-	// Guard against "resume target missing": drop resumeID when the jsonl
-	// Claude CLI would try to read does not exist, so the spawn falls
-	// through to a fresh session instead of exit-1'ing on "No conversation
-	// found". See resolveResumeID for rationale and edge-cases.
-	resumeID = resolveResumeID(r.claudeDir, workspace, key, resumeID)
+	// Merge backend / model / args / workspace / resumeID into a single
+	// struct so the branching below stays linear. Under r.mu; consumes the
+	// one-shot backendOverrides entry for `key`. R70-ARCH-H2.
+	sp := r.resolveSpawnParamsLocked(key, resumeID, opts)
+	wrapper := sp.Wrapper
+	backendID := sp.BackendID
+	workspace := sp.Workspace
+	resumeID = sp.ResumeID
 
 	spawnOpts := cli.SpawnOptions{
 		Key:             key,
-		Model:           model,
+		Model:           sp.Model,
 		ResumeID:        resumeID,
-		ExtraArgs:       args,
+		ExtraArgs:       sp.Args,
 		WorkingDir:      workspace,
 		NoOutputTimeout: r.noOutputTimeout,
 		TotalTimeout:    r.totalTimeout,
@@ -2374,6 +2444,21 @@ func waitSocketGoneForKey(key string, maxWait time.Duration) {
 // ResetAndRecreate atomically resets a session and spawns a new one for the same key.
 // This avoids the race window between Reset and GetOrCreate where a concurrent
 // message could create a session with wrong opts.
+//
+// NOTE (R62-GO-3): ResetAndRecreate releases r.mu between session
+// teardown and respawn so proc.Close() can run without holding the
+// router mutex. A concurrent GetOrCreate arriving in that window
+// can win the race and spawn a fresh session with its own opts,
+// which may not match what the caller of ResetAndRecreate expected.
+//
+// Mitigation: callers whose behavior depends on opts.Backend being
+// honored MUST treat ResetAndRecreate's returned session as a
+// best-effort — it guarantees "a fresh session exists" but not
+// "a fresh session with MY opts". The TOCTOU guard in spawnSession
+// returns existing sessions rather than stacking dup spawns, so the
+// invariant "exactly one live session per key" holds. Round 209's
+// SM1 (ResetAndDiscardOverride) is the atomic alternative when
+// opts fidelity matters.
 func (r *Router) ResetAndRecreate(ctx context.Context, key string, opts AgentOpts) (*ManagedSession, error) {
 	r.mu.Lock()
 

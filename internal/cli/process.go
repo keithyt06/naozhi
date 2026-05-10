@@ -804,7 +804,7 @@ func (p *Process) readLoop() {
 			// tracking and watchdog baseline. Keeping this unconditional is
 			// harmless — onSystemInit only matters when pendingSlots is
 			// non-empty and a replay arrives later.
-			if ev.Type == "system" && ev.SubType == "init" && p.protocol.SupportsReplay() {
+			if ev.Type == "system" && ev.SubType == "init" && ProtocolCaps(p.protocol).Replay {
 				p.onSystemInit()
 			}
 
@@ -821,7 +821,7 @@ func (p *Process) readLoop() {
 			// result under passthrough: fan-out to claimed slots and skip
 			// legacy eventCh delivery. We still log to EventLog so dashboard
 			// sees the turn-complete event.
-			if ev.Type == "result" && p.protocol.SupportsReplay() {
+			if ev.Type == "result" && ProtocolCaps(p.protocol).Replay {
 				// error_during_execution signals the CLI aborted the turn —
 				// e.g. a priority:"now" preempted it. Any older pending slot
 				// written before `now` that was never replayed was dropped

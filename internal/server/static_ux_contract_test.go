@@ -5750,7 +5750,7 @@ func TestDashboardJS_RNEW_UX015_HexBaseline(t *testing.T) {
 	// and avoids matching 3-char shorthand (no current call sites use it).
 	hexPattern := regexp.MustCompile(`#[0-9a-fA-F]{6}`)
 	hits := hexPattern.FindAllIndex(jsBytes, -1)
-	const ceiling = 28
+	const ceiling = 23
 	if got := len(hits); got > ceiling {
 		t.Errorf("RNEW-UX-015: inline 6-char hex literals in dashboard.js grew to %d, ceiling is %d. "+
 			"Prefer var(--nz-*) tokens from dashboard.html — if a new color is truly needed, "+

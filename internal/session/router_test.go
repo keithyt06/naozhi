@@ -2009,3 +2009,164 @@ func TestResolveResumeID(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// resolveSpawnParamsLocked — R70-ARCH-H2
+// ---------------------------------------------------------------------------
+
+func TestResolveSpawnParamsLocked(t *testing.T) {
+	// Router with one default backend "claude" plus a secondary "kiro" so
+	// backend-override cases have a real target.
+	mkRouter := func() *Router {
+		return &Router{
+			sessions: make(map[string]*ManagedSession),
+			wrappers: map[string]*cli.Wrapper{
+				"claude": cli.NewWrapper("/bin/false", &cli.ClaudeProtocol{}, "claude"),
+				"kiro":   cli.NewWrapper("/bin/false", &cli.ClaudeProtocol{}, "kiro"),
+			},
+			defaultBackend:     "claude",
+			model:              "sonnet-default",
+			extraArgs:          []string{"--flag-a"},
+			backendModels:      map[string]string{"kiro": "kiro-model"},
+			backendExtraArgs:   map[string][]string{"kiro": {"--kiro-arg"}},
+			workspace:          "/default/ws",
+			workspaceOverrides: make(map[string]string),
+			backendOverrides:   make(map[string]string),
+		}
+	}
+
+	t.Run("backendOverride wins when opts.Backend empty", func(t *testing.T) {
+		r := mkRouter()
+		r.backendOverrides["feishu:user:bob:agent1"] = "kiro"
+		sp := r.resolveSpawnParamsLocked("feishu:user:bob:agent1", "", AgentOpts{})
+		if sp.BackendID != "kiro" {
+			t.Errorf("BackendID = %q, want kiro", sp.BackendID)
+		}
+		if sp.Model != "kiro-model" {
+			t.Errorf("Model = %q, want kiro-model", sp.Model)
+		}
+		if len(sp.Args) != 1 || sp.Args[0] != "--kiro-arg" {
+			t.Errorf("Args = %v, want [--kiro-arg]", sp.Args)
+		}
+		// Override is consumed (one-shot).
+		if _, still := r.backendOverrides["feishu:user:bob:agent1"]; still {
+			t.Error("backendOverride was not consumed")
+		}
+	})
+
+	t.Run("opts.Backend beats backendOverride", func(t *testing.T) {
+		r := mkRouter()
+		r.backendOverrides["feishu:user:bob:agent1"] = "kiro"
+		sp := r.resolveSpawnParamsLocked("feishu:user:bob:agent1", "",
+			AgentOpts{Backend: "claude"})
+		if sp.BackendID != "claude" {
+			t.Errorf("BackendID = %q, want claude", sp.BackendID)
+		}
+	})
+
+	t.Run("workspaceOverride (chatKey) wins when opts.Workspace empty", func(t *testing.T) {
+		r := mkRouter()
+		r.workspaceOverrides["feishu:user:alice"] = "/override/ws"
+		sp := r.resolveSpawnParamsLocked("feishu:user:alice:agent1", "", AgentOpts{})
+		if sp.Workspace != "/override/ws" {
+			t.Errorf("Workspace = %q, want /override/ws", sp.Workspace)
+		}
+	})
+
+	t.Run("opts.Workspace beats workspaceOverride", func(t *testing.T) {
+		r := mkRouter()
+		r.workspaceOverrides["feishu:user:alice"] = "/override/ws"
+		sp := r.resolveSpawnParamsLocked("feishu:user:alice:agent1", "",
+			AgentOpts{Workspace: "/opts/ws"})
+		if sp.Workspace != "/opts/ws" {
+			t.Errorf("Workspace = %q, want /opts/ws", sp.Workspace)
+		}
+	})
+
+	t.Run("invalid resumeID downgrades to empty", func(t *testing.T) {
+		// claudeDir + workspace set, jsonl missing → resolveResumeID returns "".
+		r := mkRouter()
+		r.claudeDir = t.TempDir()
+		sp := r.resolveSpawnParamsLocked("feishu:user:bob:agent1",
+			"00000000-0000-0000-0000-000000000000", AgentOpts{Workspace: "/some/ws"})
+		if sp.ResumeID != "" {
+			t.Errorf("ResumeID = %q, want \"\" (downgraded)", sp.ResumeID)
+		}
+	})
+
+	t.Run("all defaults when opts empty and no overrides", func(t *testing.T) {
+		r := mkRouter()
+		sp := r.resolveSpawnParamsLocked("feishu:user:bob:agent1", "", AgentOpts{})
+		if sp.BackendID != "claude" {
+			t.Errorf("BackendID = %q, want claude", sp.BackendID)
+		}
+		if sp.Model != "sonnet-default" {
+			t.Errorf("Model = %q, want sonnet-default", sp.Model)
+		}
+		if len(sp.Args) != 1 || sp.Args[0] != "--flag-a" {
+			t.Errorf("Args = %v, want [--flag-a]", sp.Args)
+		}
+		if sp.Workspace != "/default/ws" {
+			t.Errorf("Workspace = %q, want /default/ws", sp.Workspace)
+		}
+		if sp.ResumeID != "" {
+			t.Errorf("ResumeID = %q, want empty", sp.ResumeID)
+		}
+	})
+
+	t.Run("opts.ExtraArgs appended after backend args", func(t *testing.T) {
+		r := mkRouter()
+		sp := r.resolveSpawnParamsLocked("k", "",
+			AgentOpts{Backend: "kiro", ExtraArgs: []string{"--extra"}})
+		want := []string{"--kiro-arg", "--extra"}
+		if len(sp.Args) != 2 || sp.Args[0] != want[0] || sp.Args[1] != want[1] {
+			t.Errorf("Args = %v, want %v", sp.Args, want)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// classifyShimState — R70-ARCH-H4
+// ---------------------------------------------------------------------------
+
+func TestClassifyShimState(t *testing.T) {
+	cases := []struct {
+		name                                            string
+		spawning, sessFound, hasLive, wrapperNil, drift bool
+		want                                            shimState
+	}{
+		// spawning wins against every other signal
+		{"spawning+everything", true, true, true, true, true, shimStateSkip},
+		{"spawning alone", true, false, false, false, false, shimStateSkip},
+
+		// no session → orphan (regardless of wrapper/drift)
+		{"orphan clean", false, false, false, false, false, shimStateOrphan},
+		{"orphan with wrapper nil", false, false, false, true, false, shimStateOrphan},
+		{"orphan with drift flag", false, false, false, false, true, shimStateOrphan},
+
+		// session exists with live process → skip
+		{"live process", false, true, true, false, false, shimStateSkip},
+		{"live process with drift", false, true, true, false, true, shimStateSkip},
+		{"live process with wrapperNil", false, true, true, true, false, shimStateSkip},
+
+		// session exists, no live process, no wrapper → noWrapper
+		{"no wrapper", false, true, false, true, false, shimStateNoWrapper},
+		{"no wrapper with drift", false, true, false, true, true, shimStateNoWrapper},
+
+		// session exists, wrapper, drift → drift
+		{"drift", false, true, false, false, true, shimStateDrift},
+
+		// happy path → reconnect
+		{"reconnect", false, true, false, false, false, shimStateReconnect},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyShimState(tc.spawning, tc.sessFound, tc.hasLive,
+				tc.wrapperNil, tc.drift)
+			if got != tc.want {
+				t.Errorf("classifyShimState(spawning=%v, sessFound=%v, hasLive=%v, wrapperNil=%v, drift=%v) = %v, want %v",
+					tc.spawning, tc.sessFound, tc.hasLive, tc.wrapperNil, tc.drift, got, tc.want)
+			}
+		})
+	}
+}

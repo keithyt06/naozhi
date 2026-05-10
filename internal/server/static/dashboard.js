@@ -128,9 +128,10 @@ function setToken(t) { /* token stored in HttpOnly cookie only */ }
 // for minutes with no visible signal — fetchJSON guarantees the Promise
 // resolves/rejects within `timeoutMs` (default 10s) so spinners and
 // error paths fire deterministically. Returns parsed JSON on 2xx, throws
-// with the response body on non-2xx. Partial migration: only the 3
-// highest-risk polling sites (sessions, cli/backends, events) use this
-// helper today; the remaining 35 fetch() sites are the next round's work.
+// with the response body on non-2xx. Partial migration: the highest-risk
+// polling + scan sites (sessions, cli/backends, events, cron, discovered,
+// discovered/preview, projects/files/exists) use this helper today; the
+// remaining fetch() sites migrate in later rounds.
 async function fetchJSON(url, opts = {}) {
   const { timeoutMs = 10000, signal: parentSignal, ...rest } = opts;
   const ctrl = new AbortController();
@@ -1265,10 +1266,16 @@ async function previewRecentSession(expectedKey, sessionId) {
     const headers = {};
     const token = getToken();
     if (token) headers['Authorization'] = 'Bearer ' + token;
-    const r = await fetch('/api/discovered/preview?session_id=' + encodeURIComponent(sessionId), { headers });
-    if (!r.ok) return;
+    // RNEW-UX-003: 5s timeout — this is a best-effort snapshot after
+    // resume; if the backend stalls, drop the preview rather than hang.
+    let entries;
+    try {
+      entries = await fetchJSON('/api/discovered/preview?session_id=' + encodeURIComponent(sessionId), { headers, timeoutMs: 5000 });
+    } catch (err) {
+      if (err.status) return;
+      throw err;
+    }
     if (selectedKey !== expectedKey) return; // user navigated away
-    const entries = await r.json();
     if (!entries || entries.length === 0) return;
     renderEvents(entries);
   } catch (e) {
@@ -3527,7 +3534,7 @@ function navShowList() {
     const summary = txt.length > 50 ? txt.slice(0, 50) + '...' : txt;
     const active = i === navIdx ? ' style="color:var(--nz-accent);font-weight:600"' : '';
     return '<div class="nav-list-item" data-idx="' + i + '"' + active + '>' +
-      '<span style="color:#484f58;margin-right:6px">' + (i+1) + '.</span>' + esc(summary) + '</div>';
+      '<span style="color:var(--nz-text-faint);margin-right:6px">' + (i+1) + '.</span>' + esc(summary) + '</div>';
   });
   const pill = document.getElementById('nav-pill');
   const popover = document.createElement('div');
@@ -4643,7 +4650,7 @@ function renderBackendPicker(backendsData) {
     return '<option value="' + escAttr(b.id) + '"' + selected + disabled + '>' + esc(label) + '</option>';
   }).join('');
   return '<div style="margin-bottom:12px">' +
-    '<label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px" for="new-backend">CLI backend</label>' +
+    '<label style="font-size:12px;color:var(--nz-text-mute);display:block;margin-bottom:4px" for="new-backend">CLI backend</label>' +
     '<select id="new-backend" style="width:100%;padding:6px 8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:4px">' +
     options +
     '</select>' +
@@ -4677,7 +4684,7 @@ function renderAgentPicker() {
     return '<option value="' + escAttr(a) + '"' + selected + '>' + esc(a) + '</option>';
   }).join('');
   return '<div style="margin-bottom:12px">' +
-    '<label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px" for="new-agent">Agent</label>' +
+    '<label style="font-size:12px;color:var(--nz-text-mute);display:block;margin-bottom:4px" for="new-agent">Agent</label>' +
     '<select id="new-agent" style="width:100%;padding:6px 8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:4px">' +
     options +
     '</select>' +
@@ -4789,7 +4796,7 @@ function createNewSession() {
           backendPicker +
           renderAgentPicker() +
           '<div style="margin-bottom:12px">' +
-            '<label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px" for="new-workspace">工作目录</label>' +
+            '<label style="font-size:12px;color:var(--nz-text-mute);display:block;margin-bottom:4px" for="new-workspace">工作目录</label>' +
             '<input id="new-workspace" placeholder="' + escAttr(ws) + '" value="' + escAttr(ws) + '" onkeydown="if(event.key===\'Enter\'){doCreateSession()}">' +
           '</div>' +
           '<div class="modal-btns">' +
@@ -5014,7 +5021,7 @@ function buildCustomRow(query, idx) {
     : '打开自定义工作目录…';
   el.innerHTML =
     '<span class="cp-icon">+</span>' +
-    '<div class="cp-main"><div class="cp-name" style="color:#8b949e">' + label + '</div></div>';
+    '<div class="cp-main"><div class="cp-name" style="color:var(--nz-text-mute)">' + label + '</div></div>';
   el.addEventListener('click', () => pickPaletteCustom(query));
   el.addEventListener('mouseenter', () => setActiveIdx(idx));
   return el;
@@ -6661,12 +6668,19 @@ async function flushFileRefBatch() {
     const headers = { 'Content-Type': 'application/json' };
     const t = getToken();
     if (t) headers['Authorization'] = 'Bearer ' + t;
-    const r = await fetch('/api/projects/files/exists', {
-      method: 'POST', headers,
-      body: JSON.stringify({ project: batch.project, node: batch.node, paths })
-    });
-    if (!r.ok) return;
-    const data = await r.json();
+    // RNEW-UX-003: 10s timeout — batch exists-check touches the FS for every
+    // path; a stalled disk shouldn't leak pending renders forever.
+    let data;
+    try {
+      data = await fetchJSON('/api/projects/files/exists', {
+        method: 'POST', headers,
+        body: JSON.stringify({ project: batch.project, node: batch.node, paths }),
+        timeoutMs: 10000,
+      });
+    } catch (err) {
+      if (err.status) return;
+      throw err;
+    }
     const results = (data && data.results) || {};
     for (const p of paths) {
       const entry = results[p] || { exists: false };
@@ -8460,8 +8474,10 @@ async function scanDiscovered() {
     const headers = {};
     const t = getToken();
     if (t) headers['Authorization'] = 'Bearer ' + t;
-    const r = await fetch('/api/discovered', { headers });
-    discoveredItems = (await r.json()) || [];
+    // RNEW-UX-003: 10s timeout — /api/discovered walks the filesystem, so a
+    // stalled disk shouldn't wedge the scan button forever.
+    const data = await fetchJSON('/api/discovered', { headers, timeoutMs: 10000 });
+    discoveredItems = data || [];
     // Trigger sidebar re-render to merge discovered into project groups
     lastVersion = 0;
     debouncedFetchSessions();
@@ -8522,15 +8538,19 @@ async function previewDiscovered(sessionId, cwd, pid, procStartTime, node, cliNa
     const headers = {};
     const t = getToken();
     if (t) headers['Authorization'] = 'Bearer ' + t;
-    const r = await fetch('/api/discovered/preview?session_id=' + encodeURIComponent(sessionId) + nodeParam, { headers });
-    if (!r.ok) {
-      const errText = await r.text().catch(() => '');
+    // RNEW-UX-003: 10s timeout — discovered preview loads a ~200-event tail
+    // from a JSONL transcript; a hung read shouldn't trap the user on a
+    // "加载中..." splash indefinitely.
+    let events;
+    try {
+      events = await fetchJSON('/api/discovered/preview?session_id=' + encodeURIComponent(sessionId) + nodeParam, { headers, timeoutMs: 10000 });
+    } catch (err) {
+      const errText = err.message || '';
       const el0 = document.getElementById('events-scroll');
       if (el0) el0.innerHTML = '<div class="empty-state">' + esc(errText || '预览失败') + '</div>';
-      showAPIError('预览会话', r.status, errText);
+      if (err.status) showAPIError('预览会话', err.status, errText);
       return;
     }
-    const events = await r.json();
     const el = document.getElementById('events-scroll');
     if (!el) return;
     const display = processEventsForDisplay(events);
@@ -10465,9 +10485,15 @@ async function fetchCronJobs() {
     const headers = {};
     const t = getToken();
     if (t) headers['Authorization'] = 'Bearer ' + t;
-    const r = await fetch('/api/cron', { headers });
-    if (!r.ok) return;
-    const data = await r.json();
+    // RNEW-UX-003: 8s timeout — cron list is polled periodically; a hung
+    // disk/fs call must release before the next tick fires.
+    let data;
+    try {
+      data = await fetchJSON('/api/cron', { headers, timeoutMs: 8000 });
+    } catch (err) {
+      if (err.status) return;
+      throw err;
+    }
     cronJobs = data.jobs || [];
     cronNotifyDefault = data.notify_default || null;
     const cronBadge = document.getElementById('cron-badge');

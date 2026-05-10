@@ -197,6 +197,49 @@ func TestSessionGuardCompat_TryAcquireRelease(t *testing.T) {
 	}
 }
 
+// TestRelease_DrainsQueuedMessages locks in R37-REL1: if the Dashboard/WS
+// Guard path acquires a session via TryAcquire and IM Enqueue lands messages
+// during the busy window, ReleaseWithDrain must surface those messages to the
+// caller (FIFO) rather than leaving them stranded until a future Enqueue.
+func TestRelease_DrainsQueuedMessages(t *testing.T) {
+	t.Parallel()
+	q := NewMessageQueue(10, 0)
+
+	// Dashboard Guard path acquires the session.
+	if !q.TryAcquire("k1") {
+		t.Fatal("TryAcquire should succeed on idle key")
+	}
+
+	// Two IM messages land while the session is busy.
+	if _, enqueued, _, _ := q.Enqueue("k1", QueuedMsg{Text: "A"}); !enqueued {
+		t.Fatal("A should be enqueued during busy window")
+	}
+	if _, enqueued, _, _ := q.Enqueue("k1", QueuedMsg{Text: "B"}); !enqueued {
+		t.Fatal("B should be enqueued during busy window")
+	}
+
+	var drained []string
+	q.ReleaseWithDrain("k1", func(m QueuedMsg) {
+		drained = append(drained, m.Text)
+	})
+
+	if len(drained) != 2 {
+		t.Fatalf("drained = %d, want 2", len(drained))
+	}
+	if drained[0] != "A" || drained[1] != "B" {
+		t.Fatalf("drained order = %v, want [A B]", drained)
+	}
+
+	// Post-drain the session must be fully releasable: next TryAcquire
+	// starts idle and Depth returns 0.
+	if d := q.Depth("k1"); d != 0 {
+		t.Fatalf("Depth = %d, want 0 after drain", d)
+	}
+	if !q.TryAcquire("k1") {
+		t.Fatal("TryAcquire should succeed after ReleaseWithDrain")
+	}
+}
+
 func TestLastNotify_CleanedOnDrain(t *testing.T) {
 	t.Parallel()
 	q := NewMessageQueue(10, 0)
