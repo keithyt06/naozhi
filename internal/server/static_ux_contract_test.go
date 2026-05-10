@@ -5054,3 +5054,95 @@ func TestDashboardJS_LoadEarlierFallbackWhenAllInternal(t *testing.T) {
 		t.Error("prependEvents must advance oldestFetchedEventTime — otherwise consecutive load-earlier clicks on fully-internal pages loop against the same cursor")
 	}
 }
+
+// TestDashboardJS_HTMLRenderSandbox pins the B1 HTML-preview client contract.
+//
+// Three invariants must all hold, or workspace HTML can escape to same-origin
+// execution in the dashboard:
+//
+//  1. The iframe MUST be created with sandbox=” — any allow-* token
+//     re-grants a capability.
+//  2. The bytes must arrive via fetch → Blob({type:'text/html'}) → blob
+//     URL, NOT via iframe.src = fileApiUrl(...render). The server returns
+//     application/octet-stream specifically so a direct URL hit downloads;
+//     client must never bypass that by pointing iframe.src at the API.
+//  3. The blob URL must be revoked when the drawer closes, or every open
+//     leaks up to maxRawBytes (50 MB) until the tab reloads.
+//
+// We scan the renderHtmlInSandbox helper body so the assertion is robust
+// against unrelated edits elsewhere in dashboard.js.
+func TestDashboardJS_HTMLRenderSandbox(t *testing.T) {
+	t.Parallel()
+	data, err := dashboardJS.ReadFile("static/dashboard.js")
+	if err != nil {
+		t.Fatalf("read dashboard.js: %v", err)
+	}
+	js := string(data)
+
+	helperIdx := strings.Index(js, "async function renderHtmlInSandbox(")
+	if helperIdx < 0 {
+		t.Fatal("dashboard.js missing renderHtmlInSandbox — structural anchor for HTML sandbox contract")
+	}
+	// The helper fits comfortably in 4 KiB; scoping keeps unrelated future
+	// mentions of "sandbox" or "allow-scripts" from tripping the checks.
+	end := helperIdx + 4096
+	if end > len(js) {
+		end = len(js)
+	}
+	helper := js[helperIdx:end]
+
+	// Invariant 1: sandbox attribute is set with an empty string value.
+	sandboxRe := regexp.MustCompile(`setAttribute\(\s*['"]sandbox['"]\s*,\s*['"]\s*['"]\s*\)`)
+	if !sandboxRe.MatchString(helper) {
+		t.Error("renderHtmlInSandbox must call setAttribute('sandbox', '') — empty string grants zero capabilities; any other value weakens the iframe")
+	}
+	for _, forbidden := range []string{"allow-scripts", "allow-same-origin", "allow-forms", "allow-top-navigation", "allow-popups"} {
+		if strings.Contains(helper, forbidden) {
+			t.Errorf("renderHtmlInSandbox must not include sandbox token %q — re-opens the escape it exists to prevent", forbidden)
+		}
+	}
+
+	// Invariant 2: bytes routed through fetch + Blob + createObjectURL.
+	for _, required := range []string{"fileApiUrl(", "'render'", "arrayBuffer", "new Blob(", "URL.createObjectURL("} {
+		if !strings.Contains(helper, required) {
+			t.Errorf("renderHtmlInSandbox must use %s — bypassing the blob path re-exposes the Firefox CSP-sandbox top-level-nav gap", required)
+		}
+	}
+	// Blob type MUST be forced to text/html — server returns octet-stream,
+	// so only the client-constructed Blob's type tells the browser how to
+	// interpret the bytes.
+	typeRe := regexp.MustCompile(`type\s*:\s*['"]text/html['"]`)
+	if !typeRe.MatchString(helper) {
+		t.Error("renderHtmlInSandbox must wrap bytes as Blob({type:'text/html'}) — without this the iframe gets octet-stream and shows download UI")
+	}
+
+	// Invariant 3: blob URL is tracked and revoked on drawer close.
+	closeIdx := strings.Index(js, "function closeFilePreview(")
+	if closeIdx < 0 {
+		t.Fatal("dashboard.js missing closeFilePreview — structural anchor for blob-revoke contract")
+	}
+	closeEnd := closeIdx + 2048
+	if closeEnd > len(js) {
+		closeEnd = len(js)
+	}
+	closeBody := js[closeIdx:closeEnd]
+	if !strings.Contains(closeBody, "revokeObjectURL") || !strings.Contains(closeBody, "_pendingHtmlBlobUrl") {
+		t.Error("closeFilePreview must revoke the tracked blob URL — each open otherwise leaks up to maxRawBytes (50 MB) until the tab reloads")
+	}
+
+	// Invariant 4: renderHtmlInSandbox uses a monotonic seq token to
+	// detect a superseding render while fetch is in flight, and revokes
+	// its own stale blob URL instead of overwriting the tracked slot.
+	// Missing this, rapidly opening file A then file B leaks A's blob.
+	if !strings.Contains(helper, "_htmlRenderSeq") {
+		t.Error("renderHtmlInSandbox must use _htmlRenderSeq token — without it, a second HTML open while the first fetch is in flight leaks the first blob URL")
+	}
+	// At minimum 3 staleness checks: after fetch headers, after arrayBuffer
+	// body, and one more either around the URL allocation or the catch
+	// branch. Count occurrences of the compare to catch regressions that
+	// drop a single check.
+	staleChecks := strings.Count(helper, "mySeq !== _htmlRenderSeq")
+	if staleChecks < 3 {
+		t.Errorf("renderHtmlInSandbox must check mySeq !== _htmlRenderSeq at every await boundary (got %d, want >=3)", staleChecks)
+	}
+}

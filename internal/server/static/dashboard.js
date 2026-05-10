@@ -6591,6 +6591,15 @@ async function openFilePreview(wrapEl) {
 // the drawer only ever shows one file at a time.
 let _pendingHtmlBlobUrl = null;
 
+// _htmlRenderSeq is a monotonic token for renderHtmlInSandbox invocations.
+// The function is async: a user who opens file A and then clicks file B
+// before A's fetch resolves would, under a naive implementation, see A's
+// bytes rendered into B's drawer AND leak A's blob URL (its own invocation
+// has already passed the revoke-prior step). Every call bumps the seq and
+// captures its own copy; when fetch resolves, callers whose token no longer
+// equals _htmlRenderSeq revoke their own blob URL and abandon the render.
+let _htmlRenderSeq = 0;
+
 // renderHtmlInSandbox fetches workspace HTML, wraps it in a Blob, and
 // points a sandboxed iframe at the resulting blob URL.
 //
@@ -6607,6 +6616,12 @@ let _pendingHtmlBlobUrl = null;
 // braces so a future change to any single layer does not regress security.
 async function renderHtmlInSandbox(project, node, path, body) {
   body.innerHTML = '<div class="fv-loading">loading…</div>';
+  // Claim the invocation slot BEFORE awaiting anything. Every caller
+  // snapshots the seq here; when its fetch resolves later it compares
+  // against the live _htmlRenderSeq to detect whether a newer render
+  // superseded it. This closes the "open A then open B before A resolves"
+  // race where A would otherwise overwrite B's tracked blob URL and leak.
+  const mySeq = ++_htmlRenderSeq;
   // Revoke any prior blob URL before overwriting. Missing this leaked a
   // ~50 MB report across every re-open of the drawer in manual testing.
   if (_pendingHtmlBlobUrl) {
@@ -6618,16 +6633,29 @@ async function renderHtmlInSandbox(project, node, path, body) {
     const t = getToken();
     if (t) headers['Authorization'] = 'Bearer ' + t;
     const r = await fetch(fileApiUrl(project, node, path, 'render'), { headers });
+    // A newer invocation has already taken over the drawer — abandon.
+    // Check happens at every await boundary: after fetch (headers arrived)
+    // and after arrayBuffer (body fully drained).
+    if (mySeq !== _htmlRenderSeq) return;
     if (!r.ok) {
       body.innerHTML = '<div class="fv-error">render failed (' + r.status + ')</div>';
       return;
     }
     const bytes = await r.arrayBuffer();
+    if (mySeq !== _htmlRenderSeq) return;
     // Force type=text/html on the Blob — the server intentionally returned
     // application/octet-stream so direct-URL hits don't render. The browser
     // only interprets the bytes as HTML because we ask it to here.
     const blob = new Blob([bytes], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
+    // Final stale check AFTER allocating the URL — if a newer invocation
+    // landed in the tiny window between the arrayBuffer await and now,
+    // revoke our URL immediately instead of stashing it in the tracked
+    // slot (which would clobber the newer render's tracking and leak).
+    if (mySeq !== _htmlRenderSeq) {
+      try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ }
+      return;
+    }
     _pendingHtmlBlobUrl = url;
 
     body.innerHTML = '';
@@ -6640,6 +6668,7 @@ async function renderHtmlInSandbox(project, node, path, body) {
     frame.referrerPolicy = 'no-referrer';
     body.appendChild(frame);
   } catch (e) {
+    if (mySeq !== _htmlRenderSeq) return;
     body.innerHTML = '<div class="fv-error">' + esc(String(e && e.message || e)) + '</div>';
   }
 }

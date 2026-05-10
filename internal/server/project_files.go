@@ -503,7 +503,7 @@ func (h *ProjectHandlers) handleFileGet(w http.ResponseWriter, r *http.Request) 
 	if mode == "" {
 		mode = "preview"
 	}
-	if mode != "preview" && mode != "raw" && mode != "download" {
+	if mode != "preview" && mode != "raw" && mode != "download" && mode != "render" {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]string{"error": "invalid mode"})
 		return
 	}
@@ -553,9 +553,117 @@ func (h *ProjectHandlers) handleFileGet(w http.ResponseWriter, r *http.Request) 
 		h.servePreview(w, resolved, info)
 	case "raw":
 		h.serveRaw(w, r, resolved, info)
+	case "render":
+		h.serveRender(w, r, resolved, info)
 	case "download":
 		h.serveDownload(w, r, resolved, info)
 	}
+}
+
+// serveRender streams the bytes of a workspace .html file so the dashboard
+// can embed it as a **blob URL** inside a sandboxed iframe for visual review
+// (coverage reports, Playwright trace, pytest-html, etc).
+//
+// Threat model & design: workspace files are untrusted — Claude CLI's Write
+// tool can drop any <script>...</script> into a .html at any time. Rendering
+// that content same-origin to the dashboard is stored-XSS. Three specific
+// browser behaviors make naïve approaches unsafe:
+//
+//  1. Firefox ignores the HTTP `Content-Security-Policy: sandbox` directive
+//     on top-level navigation (see the preexisting comment in serveRaw).
+//     Setting the header alone is not enough — a user pasting the render
+//     URL into a new tab gets a same-origin document in Firefox.
+//  2. X-Frame-Options + CSP frame-ancestors only cover iframe embedding,
+//     not top-level navigation.
+//  3. The iframe `sandbox=""` attribute DOES cover both cases — but only if
+//     the document sourced into the iframe has an origin distinct from
+//     the dashboard, OR if allow-same-origin is absent (which drops us into
+//     an opaque origin regardless of URL).
+//
+// To make this robust across browsers this handler deliberately does NOT
+// serve `Content-Type: text/html`. Instead it returns `application/octet-
+// stream` + `Content-Disposition: attachment` so a direct URL navigation
+// always downloads the file instead of rendering it. The dashboard JS fetches
+// the bytes, wraps them in a Blob({type:'text/html'}), and feeds the
+// resulting blob: URL into a sandboxed iframe. Blob URLs carry an opaque
+// origin — even if sandbox is stripped by a future refactor, the document
+// cannot read dashboard cookies or same-origin fetch.
+//
+// MIME gating still happens server-side (reject non-HTML at the boundary
+// instead of relying on the client) so bytes that would sniff as a different
+// type can't flow through this route at all.
+//
+// Size cap mirrors serveRaw (maxRawBytes, 50 MB) so a pathologically large
+// file doesn't wedge the dashboard tab allocating the Blob.
+//
+// Known limitation: relative-path resources (<img src="./foo.png">, external
+// CSS, web fonts) inside the rendered HTML will fail because the blob URL
+// has no base path and default-src is 'none'. This matches B1 scope — most
+// report generators (`go tool cover -html`, Playwright trace, pytest-html)
+// emit self-contained single-file HTML and are unaffected. Relative-asset
+// support is B2, gated on actual user demand.
+func (h *ProjectHandlers) serveRender(w http.ResponseWriter, r *http.Request, resolved string, info os.FileInfo) {
+	if info.Size() > maxRawBytes {
+		writeJSONStatus(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "file too large for inline render; use download mode"})
+		return
+	}
+
+	f, err := os.Open(resolved)
+	if err != nil {
+		writeJSONStatus(w, http.StatusInternalServerError, map[string]string{"error": "open failed"})
+		return
+	}
+	defer f.Close()
+
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(f, head)
+	mime := detectMime(resolved, head[:n])
+
+	// Normalize to base MIME (strip charset params) before whitelist check.
+	// detectMime returns "text/html; charset=utf-8" for real HTML payloads,
+	// which must still match the "text/html" gate.
+	base := mime
+	if i := strings.Index(mime, ";"); i > 0 {
+		base = strings.TrimSpace(mime[:i])
+	}
+	// Strict whitelist — XHTML, plain XML, SVG, PDF, images, text all route
+	// through their dedicated handlers. Render is HTML-only.
+	if base != "text/html" && base != "application/xhtml+xml" {
+		writeJSONStatus(w, http.StatusUnsupportedMediaType, map[string]string{"error": "render mode is HTML-only; use preview/raw/download for other types"})
+		return
+	}
+
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		writeJSONStatus(w, http.StatusInternalServerError, map[string]string{"error": "seek failed"})
+		return
+	}
+
+	// Deliberately NOT text/html. application/octet-stream + attachment
+	// disposition ensures:
+	//   (a) A direct URL navigation downloads rather than renders, neutering
+	//       the Firefox-ignores-CSP-sandbox top-level-nav attack vector.
+	//   (b) The dashboard fetch() path still receives the raw bytes and
+	//       constructs a blob: URL client-side, where the iframe sandbox
+	//       contract is reliable.
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", contentDisposition("attachment", resolved))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Belt-and-braces CSP: if a future change flips Content-Type back to
+	// text/html, the sandbox + default-src 'none' still denies script
+	// execution on supporting browsers. Harmless on the octet-stream path.
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'none'; sandbox; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:")
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	// Workspace bytes must not sit in shared proxy caches under no-auth
+	// deployments. handleFileGet already wrote Cache-Control: private,
+	// max-age=60 + ETag before dispatching; a no-store response with a
+	// validator is semantically inconsistent, so we drop the ETag too.
+	// Blob-URL consumers on the client re-fetch cheaply; no 304 needed.
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Del("ETag")
+
+	http.ServeContent(w, r, filepath.Base(resolved), info.ModTime(), f)
 }
 
 // servePreview returns the first ~maxPreviewBytes of a workspace file as JSON
