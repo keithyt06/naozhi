@@ -170,6 +170,19 @@ curl -s -H "Authorization: Bearer $TOK" http://127.0.0.1:8180/api/debug/vars | j
 
 `metrics_doc_sync_test.go` 的正则只匹配 `*_total`，所以新增 gauge 不会强制文档同步；但保持本表跟 `metrics.go` 齐整对操作员仍然有价值。
 
+### 运行时 gauge（R208-OBS1）
+
+| 名称 | 语义 | 什么时候值得警觉 |
+|---|---|---|
+| `goroutines` | `runtime.NumGoroutine()` 在 scrape 时刻的实时值（`expvar.Func` 动态求值，无后台采样） | 稳态取决于 session 并发数（每 session ~2-4 goroutine）。突增且不回落 = wsclient / wshub / dispatch / shim readLoop 某处泄漏，对照 `/api/debug/pprof/goroutine?debug=2` stack dump 定位 |
+
+拉取：
+```bash
+curl -s -H "Authorization: Bearer $TOK" http://127.0.0.1:8180/api/debug/vars | jq '.goroutines'
+```
+
+注意：键名不带 `naozhi_` 前缀，因为这是进程级 runtime 指标，不是业务 counter；跟 stdlib 的 `cmdline` / `memstats` 同层。
+
 ### 拉取
 
 ```bash

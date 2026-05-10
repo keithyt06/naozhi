@@ -180,6 +180,14 @@ func (p *ACPProtocol) WriteUserMessageLocked(w io.Writer, _, text string, images
 func (p *ACPProtocol) SupportsPriority() bool { return false }
 func (p *ACPProtocol) SupportsReplay() bool   { return false }
 
+// Capabilities returns the hard-coded Caps for ACP JSON-RPC.
+// ACP has no stdin-level interrupt but session/cancel is a safe soft
+// cancel RPC, so SoftInterrupt=true even though WriteInterrupt
+// currently returns ErrInterruptUnsupported. See RNEW-ARCH-404.
+func (p *ACPProtocol) Capabilities() Caps {
+	return Caps{Replay: false, Priority: false, SoftInterrupt: true, StreamJSON: false}
+}
+
 func (p *ACPProtocol) ReadEvent(line string) (Event, bool, error) {
 	var msg RPCMessage
 	if err := json.Unmarshal([]byte(line), &msg); err != nil {

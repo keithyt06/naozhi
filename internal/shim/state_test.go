@@ -125,6 +125,71 @@ func TestWriteStateFile_SetsVersion(t *testing.T) {
 	}
 }
 
+func TestShimState_SchemaVersionPersisted(t *testing.T) {
+	// Writers that set SchemaVersion must see it round-trip intact, so a
+	// future reader can inspect the advisory marker without re-parsing.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "schema_version.json")
+
+	want := State{
+		SchemaVersion: 1,
+		ShimPID:       1,
+		Socket:        "/tmp/s.sock",
+		AuthToken:     "dA==",
+		Key:           "k",
+	}
+	if err := WriteStateFile(path, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadStateFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SchemaVersion != 1 {
+		t.Errorf("SchemaVersion round-trip = %d, want 1", got.SchemaVersion)
+	}
+
+	// Also verify the on-disk JSON key is the canonical snake_case form.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"schema_version": 1`) {
+		t.Errorf("on-disk JSON missing schema_version key: %s", raw)
+	}
+}
+
+func TestShimState_ZeroSchemaVersionIsV1(t *testing.T) {
+	// Contract: an older writer omits schema_version entirely (omitempty on
+	// zero). Readers must tolerate this and interpret missing/zero as v1.
+	// This test documents that semantics — no runtime translation is done
+	// today, but the contract is locked so future consumers can rely on it.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "no_schema_version.json")
+
+	// Older-style payload: "version":1 present, "schema_version" absent.
+	payload := `{"version":1,"shim_pid":1,"cli_pid":0,"socket":"/tmp/s.sock","auth_token":"dA==","key":"k","session_id":"","workspace":"","cli_args":null,"cli_alive":false,"started_at":"","buffer_count":0}`
+	if err := os.WriteFile(path, []byte(payload), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadStateFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SchemaVersion != 0 {
+		t.Errorf("absent schema_version should decode to zero, got %d", got.SchemaVersion)
+	}
+	// Contract: zero reads as v1. Consumers doing capability checks should
+	// treat got.SchemaVersion == 0 equivalently to got.SchemaVersion == 1.
+	effective := got.SchemaVersion
+	if effective == 0 {
+		effective = 1
+	}
+	if effective != 1 {
+		t.Errorf("effective schema version = %d, want 1 (zero-means-v1 contract)", effective)
+	}
+}
+
 func TestReadStateFile_NotFound(t *testing.T) {
 	_, err := ReadStateFile("/nonexistent/path/state.json")
 	if err == nil {

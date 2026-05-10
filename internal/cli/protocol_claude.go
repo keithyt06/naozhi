@@ -85,6 +85,13 @@ func (p *ClaudeProtocol) WriteUserMessageLocked(w io.Writer, uuid, text string, 
 func (p *ClaudeProtocol) SupportsPriority() bool { return true }
 func (p *ClaudeProtocol) SupportsReplay() bool   { return true }
 
+// Capabilities returns the hard-coded Caps for Claude stream-json.
+// See RNEW-ARCH-404: opt-in accessor for consumers migrating off
+// individual SupportsX() methods.
+func (p *ClaudeProtocol) Capabilities() Caps {
+	return Caps{Replay: true, Priority: true, SoftInterrupt: false, StreamJSON: true}
+}
+
 // controlRequestInterrupt is the NDJSON payload for an in-band "abort this turn"
 // signal sent via stdin. The Claude CLI reacts by killing any in-flight tool
 // call (bash children are SIGKILL'd), closing the current turn with a

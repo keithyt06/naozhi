@@ -5728,3 +5728,33 @@ func TestDashboardJS_RNEW_UX008_ActiveCardHelper(t *testing.T) {
 		t.Errorf("RNEW-UX-008: expected at most 1 legacy querySelectorAll('.session-card').forEach + remove('active') site, found %d", len(legacy))
 	}
 }
+
+// TestDashboardJS_RNEW_UX015_HexBaseline is a regression ratchet on inline
+// 6-char hex color literals in dashboard.js. The long-running RNEW-UX-015
+// migration moves `#rrggbb` into the canonical `var(--nz-*)` tokens declared
+// in dashboard.html, so operators restyling via the CSS variables get uniform
+// propagation (dark-mode, high-contrast, etc.). Round 208's micro-batch
+// converted 5 sites (8 hex instances) — new dashboard.js PRs should LOWER
+// this ceiling (or leave it flat), never raise it. If a PR needs to add a
+// brand-new hex that has no canonical variable, the correct response is
+// (1) define a new --nz-* token in dashboard.html, (2) use it here, or
+// (3) raise this ceiling with a comment explaining why. Silent growth is
+// the failure mode this guard exists for.
+func TestDashboardJS_RNEW_UX015_HexBaseline(t *testing.T) {
+	t.Parallel()
+	jsBytes, err := dashboardJS.ReadFile("static/dashboard.js")
+	if err != nil {
+		t.Fatalf("read dashboard.js: %v", err)
+	}
+	// Strict 6-char hex; this skips HTML numeric entities (&#8592; etc.)
+	// and avoids matching 3-char shorthand (no current call sites use it).
+	hexPattern := regexp.MustCompile(`#[0-9a-fA-F]{6}`)
+	hits := hexPattern.FindAllIndex(jsBytes, -1)
+	const ceiling = 28
+	if got := len(hits); got > ceiling {
+		t.Errorf("RNEW-UX-015: inline 6-char hex literals in dashboard.js grew to %d, ceiling is %d. "+
+			"Prefer var(--nz-*) tokens from dashboard.html — if a new color is truly needed, "+
+			"add a --nz-* variable there first and reference it. See also R208-RNEW-UX-015 residual.",
+			got, ceiling)
+	}
+}

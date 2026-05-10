@@ -997,7 +997,7 @@ function applyHistoryFilter(merged, query) {
     const onclick = 'resumeRecentSession(this.dataset.sid);closeHistoryPopover()';
     return dayHeader +
       '<div class="history-popover-item" data-sid="' + escAttr(s.session_id) + '" onclick="' + onclick + '">' +
-      (s.prompt ? '<div class="hp-prompt" title="' + escAttr(s.prompt) + '">' + esc(s.prompt) + '</div>' : '<div class="hp-prompt" style="color:#6e7681">未命名</div>') +
+      (s.prompt ? '<div class="hp-prompt" title="' + escAttr(s.prompt) + '">' + esc(s.prompt) + '</div>' : '<div class="hp-prompt" style="color:var(--nz-text-dim)">未命名</div>') +
       '<div class="hp-meta">' +
         (s.project ? '<span class="hp-project">' + esc(s.project) + '</span><span class="hp-dot">&middot;</span>' : '') +
         (ago ? '<span' + (abs ? ' title="' + escAttr(abs) + '"' : '') + '>' + ago + '</span>' : '') +
@@ -1925,7 +1925,7 @@ function renderMainShell() {
 
   // Enable drag-drop
   const ia = document.getElementById('input-area');
-  ia.addEventListener('dragover', e => { e.preventDefault(); ia.style.borderColor='#58a6ff'; });
+  ia.addEventListener('dragover', e => { e.preventDefault(); ia.style.borderColor='var(--nz-accent)'; });
   ia.addEventListener('dragleave', () => { ia.style.borderColor=''; });
   ia.addEventListener('drop', e => { e.preventDefault(); ia.style.borderColor=''; handleFiles(e.dataTransfer.files); });
 
@@ -2135,7 +2135,7 @@ function ensureEarlierButton() {
     btn.id = 'earlier-events-btn';
     btn.type = 'button';
     btn.className = 'earlier-events-btn';
-    btn.style.cssText = 'display:block;margin:8px auto;padding:6px 14px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;cursor:pointer;font-size:12px';
+    btn.style.cssText = 'display:block;margin:8px auto;padding:6px 14px;background:var(--nz-bg-2);border:1px solid var(--nz-border);color:var(--nz-text);border-radius:6px;cursor:pointer;font-size:12px';
     btn.textContent = '加载更早的事件';
     btn.onclick = loadEarlierEvents;
     el.insertBefore(btn, el.firstChild);
@@ -3485,7 +3485,7 @@ function navShowList() {
   const items = navUserEls.map((el, i) => {
     const txt = (el.querySelector('.event-content')?.textContent || '').trim();
     const summary = txt.length > 50 ? txt.slice(0, 50) + '...' : txt;
-    const active = i === navIdx ? ' style="color:#58a6ff;font-weight:600"' : '';
+    const active = i === navIdx ? ' style="color:var(--nz-accent);font-weight:600"' : '';
     return '<div class="nav-list-item" data-idx="' + i + '"' + active + '>' +
       '<span style="color:#484f58;margin-right:6px">' + (i+1) + '.</span>' + esc(summary) + '</div>';
   });
@@ -3497,7 +3497,7 @@ function navShowList() {
   popover.innerHTML = items.join('');
   pill.appendChild(popover);
   popover.querySelectorAll('.nav-list-item').forEach(item => {
-    item.style.cssText += 'padding:8px 12px;cursor:pointer;color:#c9d1d9;transition:background .1s;border-bottom:1px solid #21262d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    item.style.cssText += 'padding:8px 12px;cursor:pointer;color:var(--nz-text);transition:background .1s;border-bottom:1px solid var(--nz-bg-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
     item.onmouseenter = () => item.style.background = '#1f2937';
     item.onmouseleave = () => item.style.background = '';
     item.onclick = () => {
