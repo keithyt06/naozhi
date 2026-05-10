@@ -611,40 +611,10 @@ func main() {
 	}
 
 	// Register platforms
-	platforms := make(map[string]platform.Platform)
-	if cfg.Platforms.Feishu != nil {
-		f := feishu.New(feishu.Config{
-			AppID:             cfg.Platforms.Feishu.AppID,
-			AppSecret:         cfg.Platforms.Feishu.AppSecret,
-			ConnectionMode:    cfg.Platforms.Feishu.ConnectionMode,
-			VerificationToken: cfg.Platforms.Feishu.VerificationToken,
-			EncryptKey:        cfg.Platforms.Feishu.EncryptKey,
-			MaxReplyLen:       cfg.Platforms.Feishu.MaxReplyLength,
-		}, stt)
-		platforms["feishu"] = f
-	}
-	if cfg.Platforms.Slack != nil {
-		s := slackplatform.New(slackplatform.Config{
-			BotToken:    cfg.Platforms.Slack.BotToken,
-			AppToken:    cfg.Platforms.Slack.AppToken,
-			MaxReplyLen: cfg.Platforms.Slack.MaxReplyLength,
-		})
-		platforms["slack"] = s
-	}
-	if cfg.Platforms.Discord != nil {
-		d := discordplatform.New(discordplatform.Config{
-			BotToken:    cfg.Platforms.Discord.BotToken,
-			MaxReplyLen: cfg.Platforms.Discord.MaxReplyLength,
-		})
-		platforms["discord"] = d
-	}
-	if cfg.Platforms.Weixin != nil {
-		wx := weixinplatform.New(weixinplatform.Config{
-			Token:       cfg.Platforms.Weixin.Token,
-			BaseURL:     cfg.Platforms.Weixin.BaseURL,
-			MaxReplyLen: cfg.Platforms.Weixin.MaxReplyLength,
-		})
-		platforms["weixin"] = wx
+	platforms, err := initPlatforms(cfg, stt)
+	if err != nil {
+		slog.Error("init platforms failed", "err", err)
+		os.Exit(1)
 	}
 
 	if len(platforms) == 0 {
@@ -899,6 +869,51 @@ func main() {
 		// Wait for HTTP server to finish draining in-flight requests
 		<-serverErr
 	}
+}
+
+// initPlatforms wires each configured IM platform adapter into a map.
+// Extracted from main() for testability + readability (CQ1). Callers
+// still own lifecycle — initPlatforms neither starts goroutines nor
+// touches globals; it just constructs the adapters and returns them.
+// The transcribe service is threaded through so Feishu can accept voice
+// messages; other adapters do not need it today.
+func initPlatforms(cfg *config.Config, stt transcribe.Service) (map[string]platform.Platform, error) {
+	platforms := make(map[string]platform.Platform)
+	if cfg.Platforms.Feishu != nil {
+		f := feishu.New(feishu.Config{
+			AppID:             cfg.Platforms.Feishu.AppID,
+			AppSecret:         cfg.Platforms.Feishu.AppSecret,
+			ConnectionMode:    cfg.Platforms.Feishu.ConnectionMode,
+			VerificationToken: cfg.Platforms.Feishu.VerificationToken,
+			EncryptKey:        cfg.Platforms.Feishu.EncryptKey,
+			MaxReplyLen:       cfg.Platforms.Feishu.MaxReplyLength,
+		}, stt)
+		platforms["feishu"] = f
+	}
+	if cfg.Platforms.Slack != nil {
+		s := slackplatform.New(slackplatform.Config{
+			BotToken:    cfg.Platforms.Slack.BotToken,
+			AppToken:    cfg.Platforms.Slack.AppToken,
+			MaxReplyLen: cfg.Platforms.Slack.MaxReplyLength,
+		})
+		platforms["slack"] = s
+	}
+	if cfg.Platforms.Discord != nil {
+		d := discordplatform.New(discordplatform.Config{
+			BotToken:    cfg.Platforms.Discord.BotToken,
+			MaxReplyLen: cfg.Platforms.Discord.MaxReplyLength,
+		})
+		platforms["discord"] = d
+	}
+	if cfg.Platforms.Weixin != nil {
+		wx := weixinplatform.New(weixinplatform.Config{
+			Token:       cfg.Platforms.Weixin.Token,
+			BaseURL:     cfg.Platforms.Weixin.BaseURL,
+			MaxReplyLen: cfg.Platforms.Weixin.MaxReplyLength,
+		})
+		platforms["weixin"] = wx
+	}
+	return platforms, nil
 }
 
 // parseDurationOrDefault parses a duration string, returning def on empty or error.

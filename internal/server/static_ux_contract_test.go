@@ -5758,3 +5758,38 @@ func TestDashboardJS_RNEW_UX015_HexBaseline(t *testing.T) {
 			got, ceiling)
 	}
 }
+
+// TestDashboardJS_RNEW_UX003_FetchJSONHelper pins the starter slice of
+// RNEW-UX-003: a central fetchJSON() wrapper with AbortController and a
+// 10s default timeout, plus at least one migrated call site. 38 raw
+// fetch() call sites originally had no timeout, so a NAT-dropped TCP
+// connection could leave spinners stuck for minutes. The remaining 35
+// sites migrate in later rounds.
+func TestDashboardJS_RNEW_UX003_FetchJSONHelper(t *testing.T) {
+	t.Parallel()
+	data, err := dashboardJS.ReadFile("static/dashboard.js")
+	if err != nil {
+		t.Fatalf("read dashboard.js: %v", err)
+	}
+	js := string(data)
+	idx := strings.Index(js, "async function fetchJSON(url, opts")
+	if idx < 0 {
+		t.Fatalf("RNEW-UX-003: missing fetchJSON helper declaration")
+	}
+	end := idx + 4096
+	if end > len(js) {
+		end = len(js)
+	}
+	body := js[idx:end]
+	if !strings.Contains(body, "AbortController") {
+		t.Errorf("RNEW-UX-003: fetchJSON body missing AbortController reference")
+	}
+	if !strings.Contains(body, "timeoutMs = 10000") && !strings.Contains(body, "10000") {
+		t.Errorf("RNEW-UX-003: fetchJSON missing 10000ms default timeout")
+	}
+	// Helper's own declaration uses `function fetchJSON(`, so counting
+	// `fetchJSON(` occurrences must be >=2 to prove at least one caller.
+	if n := strings.Count(js, "fetchJSON("); n < 2 {
+		t.Errorf("RNEW-UX-003: expected >=1 fetchJSON( caller plus the definition, got %d total occurrences", n)
+	}
+}

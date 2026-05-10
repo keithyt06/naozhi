@@ -123,6 +123,36 @@ function lsRemove(key) { try { localStorage.removeItem(LS_PREFIX + key); } catch
 function getToken() { return ''; }
 function setToken(t) { /* token stored in HttpOnly cookie only */ }
 
+// RNEW-UX-003: fetchJSON wraps fetch with an AbortController + timeout.
+// NAT-dropped TCP connections can leave the browser in a "pending" state
+// for minutes with no visible signal — fetchJSON guarantees the Promise
+// resolves/rejects within `timeoutMs` (default 10s) so spinners and
+// error paths fire deterministically. Returns parsed JSON on 2xx, throws
+// with the response body on non-2xx. Partial migration: only the 3
+// highest-risk polling sites (sessions, cli/backends, events) use this
+// helper today; the remaining 35 fetch() sites are the next round's work.
+async function fetchJSON(url, opts = {}) {
+  const { timeoutMs = 10000, signal: parentSignal, ...rest } = opts;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new Error('timeout')), timeoutMs);
+  // Chain caller-provided signal so e.g. component-unmount can abort too.
+  if (parentSignal) {
+    if (parentSignal.aborted) { clearTimeout(timer); ctrl.abort(parentSignal.reason); }
+    else parentSignal.addEventListener('abort', () => ctrl.abort(parentSignal.reason), { once: true });
+  }
+  try {
+    const r = await fetch(url, { ...rest, signal: ctrl.signal });
+    clearTimeout(timer);
+    const text = await r.text();
+    if (!r.ok) { const err = new Error('HTTP ' + r.status + ': ' + text.slice(0, 500)); err.status = r.status; throw err; }
+    return text ? JSON.parse(text) : null;
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') throw new Error('fetch timed out after ' + timeoutMs + 'ms: ' + url);
+    throw e;
+  }
+}
+
 function removePendingSession(key) {
   delete sessionWorkspaces[key];
   delete sessionNodes[key];
@@ -133,16 +163,19 @@ async function fetchSessions() {
     const headers = {};
     const t = getToken();
     if (t) headers['Authorization'] = 'Bearer ' + t;
-    const r = await fetch('/api/sessions', { headers });
-    if (r.status === 401 || r.status === 403) {
-      if (!document.querySelector('.modal-overlay')) showAuthModal();
-      // Explicit falsy return lets maybeShowOnboarding know auth is still
-      // unresolved and skip its overlay, avoiding stacking onboarding on
-      // top of the auth modal.
-      return false;
+    // RNEW-UX-003: 8s timeout — sessions poll runs every 5s so a hung
+    // response must release before the next tick fires.
+    let data;
+    try {
+      data = await fetchJSON('/api/sessions', { headers, timeoutMs: 8000 });
+    } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        if (!document.querySelector('.modal-overlay')) showAuthModal();
+        return false;
+      }
+      if (err.status) return false;
+      throw err;
     }
-    if (!r.ok) return false;
-    const data = await r.json();
     // Use server-side version counter for efficient change detection.
     // Falls back to JSON comparison for nodes/history which lack a version.
     const version = (data.stats && data.stats.version) || 0;
@@ -1988,9 +2021,16 @@ async function fetchEvents(full) {
     const headers = {};
     const t = getToken();
     if (t) headers['Authorization'] = 'Bearer ' + t;
-    const r = await fetch(url, { headers });
-    if (!r.ok) return;
-    const events = await r.json();
+    // RNEW-UX-003: 5s timeout — events poll fallback ticks every 1s, so
+    // a hung response must release well before the next tick or the UI
+    // falls behind the live stream.
+    let events;
+    try {
+      events = await fetchJSON(url, { headers, timeoutMs: 5000 });
+    } catch (err) {
+      if (err.status) return; // HTTP non-2xx — mirror legacy !r.ok early-return
+      throw err;              // timeout / network — surface via outer catch
+    }
     if (!events || events.length === 0) return;
     // Drop stale responses whose selection has since moved. Clearing
     // `lastEventTime` is the caller's job at switch time, so we don't touch
@@ -4577,9 +4617,9 @@ async function fetchCLIBackends() {
     return cliBackends;
   }
   try {
-    const r = await fetch('/api/cli/backends', {credentials: 'same-origin'});
-    if (!r.ok) return null;
-    const data = await r.json();
+    // RNEW-UX-003: default 10s timeout is fine here — this fetch is cached
+    // for 60s and only fires at modal-open time, not on a poll.
+    const data = await fetchJSON('/api/cli/backends', {credentials: 'same-origin'});
     cliBackends = data && Array.isArray(data.backends) ? data : null;
     cliBackendsFetchedAt = Date.now();
     return cliBackends;
