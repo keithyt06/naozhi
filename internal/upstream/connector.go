@@ -453,12 +453,28 @@ func (c *Connector) handleConn(ctx context.Context, conn *websocket.Conn) error 
 							"panic", r, "stack", string(debug.Stack()))
 					}
 				}()
+				// Two-stage acquire to distinguish "got a slot immediately"
+				// from "had to block". The first non-blocking try keeps the
+				// happy path identical to the original select{acquire,
+				// ctx.Done} (no extra syscall, no extra allocation); only
+				// the contended path pays the WaitTotal increment + the
+				// outer blocking select. ctx.Done lives on the blocking
+				// branch so cancellation semantics are unchanged.
 				select {
 				case reqSem <- struct{}{}:
-					defer func() { <-reqSem }()
-				case <-ctx.Done():
-					return
+				default:
+					reqSemReqWaitTotal.Add(1)
+					select {
+					case reqSem <- struct{}{}:
+					case <-ctx.Done():
+						return
+					}
 				}
+				reqSemReqInflight.Add(1)
+				defer func() {
+					<-reqSem
+					reqSemReqInflight.Add(-1)
+				}()
 				result, err := c.handleRequest(ctx, connCtx, req, &wg)
 				resp := node.ReverseMsg{Type: "response", ReqID: req.ReqID}
 				if err != nil {
