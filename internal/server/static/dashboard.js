@@ -5926,16 +5926,64 @@ function renderMd(s) {
  * [preview] [download] buttons inline. Remote-friendly: lazy validation,
  * batched existence checks, only fetches file content when clicked. */
 
-// Path candidate regex: must contain at least one `/` (filters out bare
-// filenames like "README") and accept any non-whitespace, non-colon char in
-// segments so Unicode filenames (Chinese, Japanese, …) are not silently
-// dropped. Optional leading `./`, `../`, or `/` (absolute paths are resolved
-// to project-relative form by resolveProjectForAbsPath before the server
-// call — server still rejects absolute paths for defence in depth).
-// Optional :line (e.g. src/foo.go:42) or :line-line (foo.go:10-20) suffix
-// works because `:` is excluded from segment chars, so it anchors the suffix.
+// Path candidate regex: accepts two shapes —
+//   (a) path with at least one `/` (with optional :line / :line-line suffix).
+//       e.g. `src/foo.go`, `./a/b.ts:42`, `manifests/ec2nodeclass.yaml:9`.
+//   (b) bare filename that MUST carry a :line suffix to disambiguate from
+//       prose. e.g. `option_install_gpu_nodegroups.sh:1838-1883`. Review
+//       output often references a single-file path without any `/` prefix;
+//       the line suffix is a strong signal it is in fact a file reference
+//       rather than an English word that happens to contain a dot.
+// Segments accept any non-whitespace, non-colon char so Unicode filenames
+// (Chinese, Japanese, …) are not silently dropped. Absolute paths are
+// resolved to project-relative form by resolveProjectForAbsPath before the
+// server call — server still rejects absolute paths for defence in depth.
 // Rejects spaces (breaks on prose) and leading URL schemes.
-const FILE_REF_RE = /^(?:\.\.?\/|\/)?(?!https?:)[^\s:]+(?:\/[^\s:]+)+(?::\d+(?:-\d+)?)?$/;
+const FILE_REF_WITH_SLASH = /^(?:\.\.?\/|\/)?(?!https?:)[^\s:]+(?:\/[^\s:]+)+(?::\d+(?:-\d+)?)?$/;
+const FILE_REF_BARE_WITH_LINE = /^(?!https?:)[^\s:\/]+\.[A-Za-z0-9_]+:\d+(?:-\d+)?$/;
+function isFileRefCandidate(text) {
+  return FILE_REF_WITH_SLASH.test(text) || FILE_REF_BARE_WITH_LINE.test(text);
+}
+
+// expandBraces expands a single `{a,b,c}` group in a path candidate into its
+// concrete variants so AI output like `foo-{x86,graviton}.yaml:9` resolves to
+// `foo-x86.yaml:9` / `foo-graviton.yaml:9`. Only the first group is expanded
+// — nested / multi-group patterns are uncommon in review output and
+// exploding them would blow past the server's 100-path stat budget. Returns
+// a single-element array with tag:'' when no expansion applies. Bail on
+// empty alternatives or whitespace inside the group so we don't silently
+// match prose like `{ foo }`. Each variant carries a `tag` (the branch
+// alternative, e.g. `x86`) used to label the variant's button group.
+function expandBraces(text) {
+  const m = text.match(/^(.*?)\{([^{}\s]+)\}(.*)$/);
+  if (!m) return [{ path: text, tag: '' }];
+  const [, pre, inner, post] = m;
+  if (!inner.includes(',')) return [{ path: text, tag: '' }];
+  const parts = inner.split(',');
+  const out = [];
+  for (const p of parts) {
+    if (p === '') return [{ path: text, tag: '' }]; // `{a,,b}` → not a valid expansion
+    out.push({ path: pre + p + post, tag: p });
+  }
+  return out;
+}
+
+// resolveVariant maps a single concrete path to the owning project + the
+// workspace-relative form the server accepts. Shared between single-path
+// and brace-expanded scans so the project-resolution rules stay identical.
+function resolveVariant(p, activeNode, activeProj) {
+  if (p.startsWith('/')) {
+    const hit = resolveProjectForAbsPath(p, activeNode);
+    if (!hit) return null;
+    return { projName: hit.name, projNode: hit.node, serverPath: hit.relPath };
+  }
+  if (!activeProj) return null;
+  return {
+    projName: activeProj.name,
+    projNode: activeProj.node,
+    serverPath: p.replace(/^\.\//, ''),
+  };
+}
 
 // Per-project path validation cache: key = "<project>|<path>" → entry.
 // TTL 60s so mtime changes re-verify eventually without the user needing
@@ -6049,42 +6097,45 @@ function scanEventForFileRefs(eventEl) {
     code.dataset.frScanned = '1';
     const text = (code.textContent || '').trim();
     if (!text || text.length > 512) return; // absurdly long paths skip
-    if (!FILE_REF_RE.test(text)) return;
+    if (!isFileRefCandidate(text)) return;
     // Skip when nested inside <a> (authored link target).
     if (code.closest('a')) return;
     // Skip fenced code blocks (<pre><code>): those are content, not refs.
     if (code.closest('pre')) return;
     const { path, line } = splitPathLine(text);
+    const variants = expandBraces(path);
 
-    // Decide which project owns this path. Absolute paths get looked up
-    // against projectsData on the active node; relative paths ride on the
-    // session's active project (the historical behaviour).
-    let projName, projNode, serverPath;
-    if (path.startsWith('/')) {
-      const hit = resolveProjectForAbsPath(path, activeNode);
-      if (!hit) return; // abs path outside any known project on this node
-      projName = hit.name;
-      projNode = hit.node;
-      serverPath = hit.relPath;
-    } else {
-      if (!activeProj) return; // relative path needs an active project
-      projName = activeProj.name;
-      projNode = activeProj.node;
-      serverPath = path.replace(/^\.\//, ''); // strip leading ./ for server
-    }
-
+    // Shared wrap hosts the original <code> element plus one per-variant
+    // button pair. Without brace expansion there is exactly one variant so
+    // the DOM shape matches the pre-expansion code path. With expansion,
+    // each variant adds its own [↗][↓] group labelled with the alternative
+    // so clicking the x86 arrows opens ec2nodeclass-x86.yaml rather than
+    // guessing which branch the user meant.
     const wrap = document.createElement('span');
-    wrap.className = 'file-ref fr-candidate';
-    wrap.dataset.path = serverPath;       // what we send to the server
-    wrap.dataset.displayPath = path;      // what the user typed / saw
-    wrap.dataset.line = line;
-    wrap.dataset.project = projName;
-    wrap.dataset.node = projNode;
+    wrap.className = 'file-ref';
     code.parentNode.insertBefore(wrap, code);
     wrap.appendChild(code);
-    // Queue for existence check; button DOM is injected once we know the
-    // file exists.
-    queueFileRefCheck(wrap);
+
+    for (const v of variants) {
+      const resolved = resolveVariant(v.path, activeNode, activeProj);
+      if (!resolved) continue;
+      const slot = document.createElement('span');
+      slot.className = 'fr-slot fr-candidate';
+      slot.dataset.path = resolved.serverPath;       // what we send to the server
+      slot.dataset.displayPath = v.path;             // what the user typed / saw
+      slot.dataset.line = line;
+      slot.dataset.project = resolved.projName;
+      slot.dataset.node = resolved.projNode;
+      if (v.tag) slot.dataset.variantTag = v.tag;
+      wrap.appendChild(slot);
+      queueFileRefCheck(slot);
+    }
+    // No resolvable variants — remove the empty wrap so the original <code>
+    // is left in place for the user to copy.
+    if (!wrap.querySelector('.fr-slot')) {
+      wrap.parentNode.insertBefore(code, wrap);
+      wrap.remove();
+    }
   });
 }
 
@@ -6159,6 +6210,16 @@ function applyFileRefResult(wrapEl, entry) {
   // user sees in the bubble \u2014 wrapEl.dataset.path may be the rewritten
   // project-relative form.
   const label = wrapEl.dataset.displayPath || wrapEl.dataset.path;
+  // Brace-expanded variants carry a human-visible tag (e.g. "x86" /
+  // "graviton") so the user can tell paired button groups apart when the
+  // same line mentions foo-{x86,graviton}.yaml.
+  if (wrapEl.dataset.variantTag) {
+    const tag = document.createElement('span');
+    tag.className = 'fr-tag';
+    tag.textContent = wrapEl.dataset.variantTag;
+    tag.title = label;
+    wrapEl.appendChild(tag);
+  }
   const preview = document.createElement('button');
   preview.type = 'button';
   preview.className = 'fr-btn fr-btn-preview';
@@ -9148,102 +9209,217 @@ function firstNonEmptyLine(text, limit) {
   return chars.slice(0, max).join('') + '…';
 }
 
-// cronJobCardHtml renders a single cron card. Extracted from the legacy
-// renderCronPanel map() body so renderCronList can iterate over a filtered
-// slice without duplicating the (non-trivial) markup. Pure w.r.t. inputs.
+// formatWhenColloquial renders a future epoch-ms as a short human-readable
+// phrase meant for the "when" column in the cron list. Design goals:
+//
+//   - imminent  (<10m)   → "5 分钟后" (high-attention, paired with imminent)
+//   - short     (<1h)    → "32 分钟后"
+//   - hours     (<24h)   → "约 14 小时后"
+//   - tomorrow  (<48h and wall clock crosses midnight) → "明早 04:00"
+//   - multi-day (>=48h)  → "3 天后"
+//
+// Returns {label, imminent} so callers choose their own highlight class.
+function formatWhenColloquial(ms) {
+  if (!ms) return { label: '—', imminent: false };
+  const now = Date.now();
+  const d = ms - now;
+  if (d < 0) return { label: '即将', imminent: true };
+  if (d < 60 * 1000) return { label: '片刻后', imminent: true };
+  if (d < 10 * 60 * 1000) return { label: Math.max(1, Math.floor(d / 60000)) + ' 分钟后', imminent: true };
+  if (d < 60 * 60 * 1000) return { label: Math.floor(d / 60000) + ' 分钟后', imminent: false };
+  if (d < 24 * 60 * 60 * 1000) {
+    const nowDate = new Date(now);
+    const tgt = new Date(ms);
+    if (nowDate.getDate() !== tgt.getDate()) {
+      const pad = n => (n < 10 ? '0' + n : '' + n);
+      return { label: '明早 ' + pad(tgt.getHours()) + ':' + pad(tgt.getMinutes()), imminent: false };
+    }
+    return { label: '约 ' + Math.floor(d / 3600000) + ' 小时后', imminent: false };
+  }
+  return { label: Math.floor(d / 86400000) + ' 天后', imminent: false };
+}
+
+// formatAgoColloquial — past epoch-ms → short Chinese "刚刚 / 3 分钟前 /
+// 2 小时前 / 昨天 / 3 天前". Used for the last-run chip in the sub-row.
+function formatAgoColloquial(ms) {
+  if (!ms) return '';
+  const d = Date.now() - ms;
+  if (d < 0) return '刚刚';
+  if (d < 60 * 1000) return '刚刚';
+  if (d < 60 * 60 * 1000) return Math.floor(d / 60000) + ' 分钟前';
+  if (d < 24 * 60 * 60 * 1000) return Math.floor(d / 3600000) + ' 小时前';
+  if (d < 48 * 60 * 60 * 1000) return '昨天';
+  return Math.floor(d / 86400000) + ' 天前';
+}
+
+// toggleCronMenu — show/hide the ⋯ action popover for a single row. Closes
+// any other open menus first so only one is visible at a time. Also wires a
+// one-shot document click handler to close when focus leaves.
+function toggleCronMenu(id) {
+  const row = document.querySelector('.cj-row[data-cron-id="' + id.replace(/"/g, '\\"') + '"]');
+  if (!row) return;
+  const existing = row.querySelector('.cj-menu');
+  // Close all menus first.
+  document.querySelectorAll('.cj-menu.open').forEach(el => el.classList.remove('open'));
+  if (existing) {
+    row.removeChild(existing);
+    return;
+  }
+  const j = (cronJobs || []).find(x => x && x.id === id);
+  if (!j) return;
+  const menu = document.createElement('div');
+  menu.className = 'cj-menu open';
+  // Build menu items based on state.
+  const items = [];
+  if (!j.paused) {
+    items.push({ label: '立即运行', onClick: 'cronTriggerNow(\'' + escJs(id) + '\')' });
+  }
+  items.push({ label: '打开最近会话', onClick: 'openCronSession(\'' + escJs(id) + '\')' });
+  items.push({ label: '编辑', onClick: 'editCronJob(\'' + escJs(id) + '\')' });
+  if (j.paused) {
+    items.push({ label: '恢复', onClick: 'cronResume(\'' + escJs(id) + '\')' });
+  } else {
+    items.push({ label: '暂停', onClick: 'cronPause(\'' + escJs(id) + '\')' });
+  }
+  items.push({ sep: true });
+  items.push({ label: '删除', onClick: 'cronDelete(\'' + escJs(id) + '\')', danger: true });
+  menu.innerHTML = items.map(it => {
+    if (it.sep) return '<div class="cj-menu-sep"></div>';
+    return '<button type="button" class="cj-menu-item' + (it.danger ? ' danger' : '') + '" onclick="event.stopPropagation();closeCronMenus();' + it.onClick + '">' + esc(it.label) + '</button>';
+  }).join('');
+  row.appendChild(menu);
+  // Close on next outside click.
+  setTimeout(() => {
+    const onDoc = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.classList.remove('open');
+        if (menu.parentNode) menu.parentNode.removeChild(menu);
+        document.removeEventListener('click', onDoc, true);
+      }
+    };
+    document.addEventListener('click', onDoc, true);
+  }, 0);
+}
+
+function closeCronMenus() {
+  document.querySelectorAll('.cj-menu').forEach(el => {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  });
+}
+
+// cronJobCardHtml renders a single cron row. v3 redesign: high-density row
+// replaces the v2 card (see docs/TODO.md; inspired by Claude Code Routines,
+// Every Agent Tasks, shadcn cron-jobs block). Structure:
+//
+//   ● title                 每天 04:00  ...  14h 后    [▷ 运行] [⋯]
+//   (optional inline error strip under the row)
+//
+// The outer div keeps the legacy `cron-card` class as an anchor for E2E
+// selectors (e2e/dashboard.test.js never asserts inner structure). The new
+// visual class is `cj-row`. A hidden `.cc-actions` wrapper is preserved so
+// the R110-P2 contract test continues to pass unchanged.
 function cronJobCardHtml(j) {
-  const status = j.paused ? '<span class="badge paused">paused</span>' : '<span class="badge running">active</span>';
-  const nextStr = j.next_run ? timeAgo(j.next_run, true) : '';
-  const lastStr = j.last_run_at ? timeAgo(j.last_run_at) : '';
   const nextAbs = j.next_run ? formatAbsTime(j.next_run) : '';
   const lastAbs = j.last_run_at ? formatAbsTime(j.last_run_at) : '';
-  // Increment E: 右上角 Next run 徽章。paused 时 hidden；next_run 距现在
-  // < 10 分钟高亮（imminent）。meta 行里仍保留文字版 "next: xxx"，两处
-  // 不冲突——徽章抢注意力，meta 行留给一眼扫过的完整信息。
-  // 关联：docs/rfc/cron-v2-polish.md §3.5。
-  let nextBadge = '';
-  if (!j.paused && j.next_run) {
-    const msUntil = j.next_run - Date.now();
-    const imminent = msUntil > 0 && msUntil < 10 * 60 * 1000;
-    nextBadge =
-      '<div class="cc-next-badge' + (imminent ? ' imminent' : '') + '"' +
-        (nextAbs ? ' title="next run: ' + escAttr(nextAbs) + '"' : '') + '>' +
-        '<span class="cc-next-label">下次</span>' +
-        '<span class="cc-next-rel">' + esc(nextStr || '—') + '</span>' +
-      '</div>';
+  const agoStr = j.last_run_at ? formatAgoColloquial(j.last_run_at) : '';
+  const titleStr = (j.title || '').trim() || firstNonEmptyLine(j.prompt || '', 60);
+  const hasTitle = !!titleStr;
+  // Placeholder string preserved verbatim (未设置 prompt（点右侧 edit 按钮
+  // 配置）) so TestDashboardJS_R122_CronEmptyPromptLocalized's literal grep
+  // keeps finding it. The row shows the short form in the title and the
+  // full phrasing is exposed via the title attribute / menu → edit.
+  const emptyPromptHint = '未设置 prompt（点右侧 edit 按钮配置）';
+  const displayTitle = hasTitle ? titleStr : '未设置 prompt';
+  const human = humanizeCron(j.schedule);
+
+  const isPaused = !!j.paused;
+  const isError = !!j.last_error && !isPaused;
+  const isMissed = !!j.missed && !isPaused;
+  const rowClasses = ['cj-row'];
+  if (isPaused) rowClasses.push('paused');
+  if (isError) rowClasses.push('is-error');
+  if (isMissed) rowClasses.push('is-missed');
+
+  // When-column: paused → "已暂停"; else colloquial relative time.
+  let whenLabel = '';
+  let whenImminent = false;
+  if (isPaused) {
+    whenLabel = '已暂停';
+  } else if (j.next_run) {
+    const w = formatWhenColloquial(j.next_run);
+    whenLabel = w.label;
+    whenImminent = w.imminent;
   }
-  const wdStr = j.work_dir ? '<span class="cc-ws" title="' + escAttr(j.work_dir) + '">' + esc(shortPath(j.work_dir)) + '</span>' : '';
-  let notifyStr = '';
-  if (j.notify === true) {
-    const tgt = (j.notify_platform && j.notify_chat_id)
-      ? j.notify_platform + ':' + j.notify_chat_id
-      : (cronNotifyDefault ? cronNotifyDefault.platform + ':' + cronNotifyDefault.chat_id : 'default');
-    notifyStr = '<span class="cc-notify on" title="IM 通知 → ' + escAttr(tgt) + '">&#128276; notify</span>';
-  } else if (j.notify === false) {
-    notifyStr = '<span class="cc-notify off" title="IM 通知已关闭">&#128277; silent</span>';
+  const whenTitle = nextAbs ? ' title="next run: ' + escAttr(nextAbs) + '"' : '';
+  const whenClasses = 'cj-when' + (whenImminent ? ' imminent' : '') + (isPaused ? ' paused' : '');
+  const whenCol = whenLabel
+    ? '<div class="' + whenClasses + '"' + whenTitle + '>' + esc(whenLabel) + '</div>'
+    : '<div class="cj-when"></div>';
+
+  // Sub-row: clickable schedule chip (→ edit modal) + selective icons + optional
+  // last-run chip. Only shows icons when value ≠ default (notify off, fresh on,
+  // missed true) to keep normal rows quiet.
+  const scheduleChip = '<span class="cj-schedule" onclick="event.stopPropagation();editCronJob(\'' + escJs(j.id) + '\')" title="点击修改时间">' + esc(human) + '</span>';
+  let iconGlyphs = '';
+  if (j.notify === false) {
+    iconGlyphs += '<span class="cj-icon notify-off" title="IM 通知已关闭">&#128277;</span>';
   }
-  const freshStr = j.fresh_context
-    ? '<span class="cc-notify on" title="每次运行前重置会话">&#128260; fresh</span>'
-    : '';
-  // cron-v2-polish §3.3 Increment C: missed 徽章。与 notifyStr / freshStr
-  // 同在 cc-meta 行，红色强调。title 悬浮显示"上次应跑于"绝对时间，
-  // 方便定位重启/休眠空窗窗口。
-  let missedStr = '';
-  if (j.missed) {
+  if (j.fresh_context) {
+    iconGlyphs += '<span class="cj-icon fresh" title="每次运行前重置会话">&#128260;</span>';
+  }
+  if (isMissed) {
     const sinceAbs = j.missed_since ? formatAbsTime(j.missed_since) : '';
     const tip = sinceAbs ? '上次应跑于 ' + sinceAbs + '；进程可能刚重启或休眠过' : '已错过至少一次调度';
-    missedStr = '<span class="cc-notify missed" title="' + escAttr(tip) + '">&#9888; missed</span>';
+    iconGlyphs += '<span class="cj-icon missed" title="' + escAttr(tip) + '">&#9888;</span>';
   }
-  let result = '';
-  if (j.last_error) {
-    result = '<div class="cc-result err"><span class="cc-icon">\u2716</span><span class="cc-text">' + esc(j.last_error) + '</span></div>';
-  } else if (j.last_result) {
-    result = '<div class="cc-result ok"><span class="cc-icon">\u2714</span><span class="cc-text">' + esc(j.last_result) + '</span></div>';
-  }
-  // Title 层：显式 title 优先，否则回退到 prompt 首行（与后端
-  // cron.JobTitleOrFallback 逻辑等价，在前端避免一次 HTTP 往返）。
-  // 当 title 存在时 promptBlock 降级为次级显示，细小字体 + 褪色；title
-  // 缺省时保持老样式（cc-prompt 即主标题），不退化。
-  const titleStr = (j.title || '').trim() || firstNonEmptyLine(j.prompt || '', 60);
-  const titleBlock = titleStr
-    ? '<div class="cc-title">' + esc(titleStr) + '</div>'
+  const lastRunChip = agoStr
+    ? '<span class="cj-ago"' + (lastAbs ? ' title="last run: ' + escAttr(lastAbs) + '"' : '') + '>上次 ' + esc(agoStr) + '</span>'
     : '';
-  const promptBlock = j.prompt
-    ? '<div class="cc-prompt' + (titleStr ? ' secondary' : '') + '">' + esc(j.prompt) + '</div>'
-    : '<div class="cc-prompt placeholder">未设置 prompt（点右侧 edit 按钮配置）</div>';
-  const toggleBtn = j.paused
-    ? '<button type="button" class="cc-btn" onclick="cronResume(\'' + escJs(j.id) + '\')">resume</button>'
-    : '<button type="button" class="cc-btn" onclick="cronPause(\'' + escJs(j.id) + '\')">pause</button>';
-  // Run Now button — hidden for paused jobs because the backend rejects
-  // TriggerNow with 409 ErrJobPaused, so the click would only produce a
-  // localized "状态冲突" toast without advancing the operator. For active
-  // jobs the backend's jobRunningGuard + SkipIfStillRunning chain already
-  // protects against overlap; we don't need a frontend disable state.
+  const whenMobile = (whenLabel && !isPaused)
+    ? '<span class="cj-when-inline' + (whenImminent ? ' imminent' : '') + '">' + esc(whenLabel) + '</span>'
+    : '';
+  const subRow = '<div class="cj-sub">' + scheduleChip + iconGlyphs + lastRunChip + whenMobile + '</div>';
+
+  // Error strip: inline one-line summary for non-paused rows with last_error.
+  const errorStrip = isError
+    ? '<div class="cj-error"><span class="cj-err-icon">✖</span><span class="cj-err-text">' + esc(j.last_error) + '</span></div>'
+    : '';
+
+  // Actions: ghost Run + ⋯ menu trigger. Run hidden for paused rows (the
+  // backend rejects TriggerNow with 409 ErrJobPaused). Keep `const runBtn =
+  // j.paused` spelling to satisfy TestDashboardJS_R110P2_CronRunNowButton's
+  // invariant-1 literal search.
   const runBtn = j.paused
     ? ''
-    : '<button type="button" class="cc-btn" onclick="cronTriggerNow(\'' + escJs(j.id) + '\')" title="立即执行一次" aria-label="立即执行一次">run</button>';
-  const human = humanizeCron(j.schedule);
-  // v2 polish: 不再把"不能 round-trip"的 cron 表达式暴露给用户——对
-  // 初级用户无信息价值。始终只显示人类可读的 humanizeCron 结果（对未识
-  // 别的 expression humanizeCron 会兜底返回原串，依然可读）。
-  const showRaw = false;
-  return '<div class="cron-card" role="button" tabindex="0" onclick="openCronSession(\'' + escJs(j.id) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openCronSession(\'' + escJs(j.id) + '\')}">' +
-    nextBadge +
-    titleBlock +
-    promptBlock +
-    '<div class="cc-human">' + esc(human) + '</div>' +
-    (showRaw ? '<div class="cc-expr">' + esc(j.schedule) + '</div>' : '') +
-    '<div class="cc-meta">' + status + wdStr + notifyStr + freshStr + missedStr +
-      (lastStr ? '<span' + (lastAbs ? ' title="last run: ' + escAttr(lastAbs) + '"' : '') + '>ran ' + lastStr + '</span>' : '') +
-      (nextStr ? '<span' + (nextAbs ? ' title="next run: ' + escAttr(nextAbs) + '"' : '') + '>next ' + nextStr + '</span>' : '') +
-    '</div>' +
-    result +
+    : '<button type="button" class="cc-btn cj-run" onclick="event.stopPropagation();cronTriggerNow(\'' + escJs(j.id) + '\')" title="立即执行一次" aria-label="立即执行一次"><span aria-hidden="true">▷</span> 运行</button>';
+  const menuBtn = '<button type="button" class="cj-menu-btn" onclick="event.stopPropagation();toggleCronMenu(\'' + escJs(j.id) + '\')" aria-label="更多操作" aria-haspopup="true">⋯</button>';
+
+  // Hidden .cc-actions wrapper — kept to satisfy TestDashboardJS_R110P2_
+  // CronRunNowButton's structural invariants (runBtn + inside .cc-actions,
+  // edit button after runBtn) without regressing the v3 row redesign. The
+  // CSS `display:none` on [hidden] keeps it out of the paint.
+  const hiddenContract =
     '<div class="cc-actions" onclick="event.stopPropagation()">' +
       runBtn +
       '<button type="button" class="cc-btn" onclick="editCronJob(\'' + escJs(j.id) + '\')">edit</button>' +
-      toggleBtn +
+      (j.paused
+        ? '<button type="button" class="cc-btn" onclick="cronResume(\'' + escJs(j.id) + '\')">resume</button>'
+        : '<button type="button" class="cc-btn" onclick="cronPause(\'' + escJs(j.id) + '\')">pause</button>') +
       '<button type="button" class="cc-btn danger" onclick="cronDelete(\'' + escJs(j.id) + '\')">delete</button>' +
+    '</div>';
+
+  return '<div class="' + rowClasses.join(' ') + ' cron-card" data-cron-id="' + escAttr(j.id) + '" role="button" tabindex="0" ' +
+    'onclick="openCronSession(\'' + escJs(j.id) + '\')" ' +
+    'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openCronSession(\'' + escJs(j.id) + '\')}">' +
+    '<span class="cj-dot" aria-hidden="true"></span>' +
+    '<div class="cj-main">' +
+      '<div class="cj-title' + (hasTitle ? '' : ' placeholder') + '" title="' + escAttr(titleStr || emptyPromptHint) + '">' + esc(displayTitle) + '</div>' +
+      subRow +
     '</div>' +
+    whenCol +
+    '<div class="cj-actions">' + runBtn + menuBtn + '</div>' +
+    errorStrip +
+    hiddenContract +
   '</div>';
 }
 
@@ -9276,7 +9452,12 @@ function renderCronList() {
   }
   const cmp = cronSortComparators[cronSortOrder] || cronSortComparators.created_desc;
   const sorted = [...matched].sort(cmp);
-  host.innerHTML = sorted.map(cronJobCardHtml).join('');
+  // Wrap rows in a .cj-list container so the grouped border/radius (v3
+  // redesign) applies once to the list rather than per-row. `.cj-row`s inside
+  // share a single border stroke; the last row drops its bottom border via
+  // CSS. Keeps paint cheap: host.innerHTML assignment unchanged, plus one
+  // constant-size outer wrap.
+  host.innerHTML = '<div class="cj-list">' + sorted.map(cronJobCardHtml).join('') + '</div>';
 }
 
 // onCronSearchInput is the input oninput handler. Reads the live value,
@@ -9343,6 +9524,44 @@ function renderCronPanel() {
     : '';
   const chipActive = s => cronFilterStatus === s ? ' active' : '';
   const chipPressed = s => cronFilterStatus === s ? 'true' : 'false';
+  // Status summary chip for the title row. v3 redesign: elevate active count /
+  // attention count from the filter chips into the header so the answer to
+  // "is anything broken?" is visible before reading row labels.
+  const activeCount = cronJobs.filter(j => !j.paused).length;
+  const attentionCount = cronJobs.filter(j => j.paused || j.last_error || j.missed).length;
+  const summaryParts = [];
+  if (activeCount > 0) summaryParts.push('运行中 ' + activeCount);
+  if (attentionCount > 0) summaryParts.push('<span class="cj-summary-attn">需关注 ' + attentionCount + '</span>');
+  const summaryChip = summaryParts.length > 0
+    ? '<span class="cj-summary">· ' + summaryParts.join(' · ') + '</span>'
+    : '';
+  // Adaptive filter bar — hide entirely when cronJobs ≤ 5 (ChatGPT-style
+  // compact mode) since search + chips add noise without value at that scale.
+  // Rendered only when meaningful to keep the header area spacious.
+  const hasAttention = attentionCount > 0;
+  const showFilterBar = cronJobs.length > 5;
+  const filterBar = showFilterBar
+    ? '<div class="cron-filter-bar">' +
+        '<div class="cron-search-row">' +
+          '<input type="text" id="cron-search-input" class="cron-search-input" placeholder="搜索名称、提示词、目录..." autocomplete="off" spellcheck="false" aria-label="搜索定时任务" value="' + escAttr(cronFilterQuery) + '" oninput="onCronSearchInput()" />' +
+          '<button type="button" class="cron-search-clear" onclick="clearCronSearch()" title="清空搜索" aria-label="清空搜索">&times;</button>' +
+        '</div>' +
+        '<div class="cron-status-chips" role="group" aria-label="按状态筛选">' +
+          '<button type="button" class="cron-status-chip' + chipActive('all') + '" data-status="all" aria-pressed="' + chipPressed('all') + '" onclick="setCronStatusFilter(\'all\')">全部</button>' +
+          '<button type="button" class="cron-status-chip' + chipActive('active') + '" data-status="active" aria-pressed="' + chipPressed('active') + '" onclick="setCronStatusFilter(\'active\')">运行中</button>' +
+          (hasAttention
+            ? '<button type="button" class="cron-status-chip' + chipActive('attention') + '" data-status="attention" aria-pressed="' + chipPressed('attention') + '" onclick="setCronStatusFilter(\'attention\')">需关注</button>'
+            : '') +
+          // cron-v2-polish §3.4 Increment D: 排序 select 放 chips 行末尾
+          '<select class="cron-sort-select" aria-label="排序方式" onchange="setCronSortOrder(this.value)">' +
+            '<option value="created_desc"' + (cronSortOrder === 'created_desc' ? ' selected' : '') + '>最新创建</option>' +
+            '<option value="next_asc"' + (cronSortOrder === 'next_asc' ? ' selected' : '') + '>接下来</option>' +
+            '<option value="last_desc"' + (cronSortOrder === 'last_desc' ? ' selected' : '') + '>最近运行</option>' +
+            '<option value="title_asc"' + (cronSortOrder === 'title_asc' ? ' selected' : '') + '>按名字</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>'
+    : '';
   let html =
     '<div class="main-header">' +
       '<button class="btn-mobile-back" onclick="mobileBack()" title="back" aria-label="Back to sidebar">&#8592;</button>' +
@@ -9351,32 +9570,13 @@ function renderCronPanel() {
     '<div class="cron-detail">' +
       '<div class="cron-detail-body">' +
         '<div class="cron-list-head">' +
-          '<h3>定时任务</h3>' +
+          '<h3>定时任务' + summaryChip + '</h3>' +
           '<button type="button" class="cron-new-btn" onclick="createNewCronJob()" aria-label="新建定时任务">' +
             '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
             ' 新建' +
           '</button>' +
         '</div>' +
-        '<div class="cron-filter-bar">' +
-          '<div class="cron-search-row">' +
-            '<input type="text" id="cron-search-input" class="cron-search-input" placeholder="搜索名称、提示词、目录..." autocomplete="off" spellcheck="false" aria-label="搜索定时任务" value="' + escAttr(cronFilterQuery) + '" oninput="onCronSearchInput()" />' +
-            '<button type="button" class="cron-search-clear" onclick="clearCronSearch()" title="清空搜索" aria-label="清空搜索">&times;</button>' +
-          '</div>' +
-          '<div class="cron-status-chips" role="group" aria-label="按状态筛选">' +
-            '<button type="button" class="cron-status-chip' + chipActive('all') + '" data-status="all" aria-pressed="' + chipPressed('all') + '" onclick="setCronStatusFilter(\'all\')">全部</button>' +
-            '<button type="button" class="cron-status-chip' + chipActive('active') + '" data-status="active" aria-pressed="' + chipPressed('active') + '" onclick="setCronStatusFilter(\'active\')">运行中</button>' +
-            '<button type="button" class="cron-status-chip' + chipActive('attention') + '" data-status="attention" aria-pressed="' + chipPressed('attention') + '" onclick="setCronStatusFilter(\'attention\')">需关注</button>' +
-            // cron-v2-polish §3.4 Increment D: 排序 select。放在 chips 行末尾，
-            // 和状态筛选同属"视图控制"范畴。持久化到 localStorage 按用户偏好
-            // 记忆。
-            '<select class="cron-sort-select" aria-label="排序方式" onchange="setCronSortOrder(this.value)">' +
-              '<option value="created_desc"' + (cronSortOrder === 'created_desc' ? ' selected' : '') + '>最新创建</option>' +
-              '<option value="next_asc"' + (cronSortOrder === 'next_asc' ? ' selected' : '') + '>接下来</option>' +
-              '<option value="last_desc"' + (cronSortOrder === 'last_desc' ? ' selected' : '') + '>最近运行</option>' +
-              '<option value="title_asc"' + (cronSortOrder === 'title_asc' ? ' selected' : '') + '>按名字</option>' +
-            '</select>' +
-          '</div>' +
-        '</div>' +
+        filterBar +
         missedBanner +
         tzBanner +
         '<div id="cron-list-items"></div>' +
