@@ -564,7 +564,7 @@ func (d *Dispatcher) sendAndReply(
 		}
 	}
 
-	tracker := newIMEventTracker(ctx, p, msg.ChatID)
+	tracker := newIMEventTracker(ctx, p, msg.ChatID, key)
 	defer tracker.stop()
 
 	result, err := d.sendFn(ctx, key, sess, text, images, tracker.onEvent)
@@ -737,9 +737,14 @@ func formatChineseDuration(d time.Duration) string {
 // to the read path so we don't waste allocations on events that are coalesced
 // away by the 1-per-second rate limit.
 type replyTracker struct {
-	ctx    context.Context
-	p      platform.Platform
-	chatID string
+	ctx context.Context
+	p   platform.Platform
+	// sessionKey is the naozhi session key this turn belongs to; embedded in
+	// AskUserQuestion card action payloads so upstream card-click callbacks
+	// can route the synthesised answer back to the correct session without
+	// re-deriving chat → session mapping.
+	sessionKey string
+	chatID     string
 	// thinkingMsgID is written by the Reply goroutine spawned in onEvent and
 	// read by editLoop + by sendAndReply (via waitReady→ctx.Done fallback).
 	// When ctx cancels, waitReady can return before msgIDReady is closed,
@@ -804,10 +809,11 @@ func (t *replyTracker) getThinkingMsgID() string {
 	return ""
 }
 
-func newIMEventTracker(ctx context.Context, p platform.Platform, chatID string) *replyTracker {
+func newIMEventTracker(ctx context.Context, p platform.Platform, chatID, sessionKey string) *replyTracker {
 	t := &replyTracker{
 		ctx:         ctx,
 		p:           p,
+		sessionKey:  sessionKey,
 		chatID:      chatID,
 		statusLines: make([]string, 0, maxStatusLines),
 		msgIDReady:  make(chan struct{}),
@@ -861,6 +867,73 @@ func (t *replyTracker) todoLoop() {
 	}
 }
 
+// sendAskQuestionCard surfaces an AskUserQuestion prompt to the IM channel.
+// Platforms that implement QuestionCardSender render a native interactive
+// card; others fall back to a plain-text reply enumerating the options so
+// the user can still reply free-form. Best-effort: any error is logged but
+// does not abort the turn.
+func (t *replyTracker) sendAskQuestionCard(aq *cli.AskQuestion) {
+	if aq == nil || len(aq.Items) == 0 {
+		return
+	}
+	rctx, cancel := context.WithTimeout(t.ctx, 15*time.Second)
+	defer cancel()
+
+	if sender, ok := platform.AsQuestionCardSender(t.p); ok {
+		card := platform.QuestionCard{
+			ToolUseID:  aq.ToolUseID,
+			SessionKey: t.sessionKey,
+			Items:      make([]platform.QuestionItem, 0, len(aq.Items)),
+		}
+		for _, q := range aq.Items {
+			opts := make([]platform.QuestionOption, 0, len(q.Options))
+			for _, o := range q.Options {
+				opts = append(opts, platform.QuestionOption{Label: o.Label, Description: o.Description})
+			}
+			card.Items = append(card.Items, platform.QuestionItem{
+				Question: q.Question, Header: q.Header,
+				MultiSelect: q.MultiSelect, Options: opts,
+			})
+		}
+		if _, err := sender.SendQuestionCard(rctx, t.chatID, card); err != nil {
+			slog.Warn("ask_question card send failed, falling back to text",
+				"chat_id", t.chatID, "tool_use_id", aq.ToolUseID, "err", err)
+			t.sendAskQuestionFallback(rctx, aq)
+		}
+		return
+	}
+	t.sendAskQuestionFallback(rctx, aq)
+}
+
+// sendAskQuestionFallback posts a plain-text message listing the questions +
+// options so a user on a platform without native card support can still reply
+// free-form (their next message becomes the answer).
+func (t *replyTracker) sendAskQuestionFallback(ctx context.Context, aq *cli.AskQuestion) {
+	var b strings.Builder
+	b.WriteString("Claude 想请你确认：\n")
+	for qi, q := range aq.Items {
+		if q.Header != "" {
+			fmt.Fprintf(&b, "\n【%s】", q.Header)
+		} else {
+			fmt.Fprintf(&b, "\n问题 %d：", qi+1)
+		}
+		b.WriteString(q.Question)
+		b.WriteString("\n")
+		for oi, o := range q.Options {
+			fmt.Fprintf(&b, "  %d. %s", oi+1, o.Label)
+			if o.Description != "" {
+				fmt.Fprintf(&b, " — %s", o.Description)
+			}
+			b.WriteString("\n")
+		}
+	}
+	b.WriteString("\n直接回复选项内容即可（例如：「Error style: Return an error」）。")
+	if _, err := t.p.Reply(ctx, platform.OutgoingMessage{ChatID: t.chatID, Text: b.String()}); err != nil {
+		slog.Debug("ask_question text fallback failed",
+			"chat_id", t.chatID, "tool_use_id", aq.ToolUseID, "err", err)
+	}
+}
+
 // sendTodoMessage posts the rendered checklist as a standalone Reply. Identical
 // consecutive checklists are suppressed so repeated TodoWrite calls that didn't
 // change anything don't spam the chat. Uses an independent bounded ctx so a
@@ -901,6 +974,17 @@ func (t *replyTracker) stop() {
 }
 
 func (t *replyTracker) onEvent(ev cli.Event) {
+	// AskUserQuestion: when the assistant emits a tool_use for this tool,
+	// the CLI auto-rejects it (verified in test/e2e/askuser — CC injects
+	// is_error:true tool_result within ~3ms in -p mode). We surface the
+	// question as a native interactive card (or a plain-text fallback)
+	// so the next user turn carries the selected option(s).
+	if ev.AskQuestion != nil {
+		t.sendAskQuestionCard(ev.AskQuestion)
+		// Fall through so the existing status-banner logic (tool_use line etc.)
+		// also runs — the card is a parallel surface, not a replacement.
+	}
+
 	// TodoWrite gets its own chat bubble: send as a standalone Reply so it
 	// isn't overwritten by the next banner edit, and so platforms that don't
 	// support interim edits (Weixin) still surface the checklist — the task

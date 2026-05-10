@@ -575,7 +575,7 @@ func TestFormatChineseDuration(t *testing.T) {
 
 func TestReplyTracker_NonInterim_WaitReadyInstant(t *testing.T) {
 	fp := &fakePlatform{supportsInterim: false}
-	tracker := newIMEventTracker(context.Background(), fp, "c1")
+	tracker := newIMEventTracker(context.Background(), fp, "c1", "test:direct:c1:agent")
 	defer tracker.stop()
 	tracker.onEvent(cli.Event{
 		Type:    "assistant",
@@ -597,7 +597,7 @@ func TestReplyTracker_Interim_InitialReply(t *testing.T) {
 	fp := &fakePlatform{supportsInterim: true, replyMsgID: "thinking-1"}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	tracker := newIMEventTracker(ctx, fp, "c1")
+	tracker := newIMEventTracker(ctx, fp, "c1", "test:direct:c1:agent")
 	defer tracker.stop()
 	tracker.onEvent(cli.Event{
 		Type:    "assistant",
@@ -614,7 +614,7 @@ func TestReplyTracker_Interim_InitialReply(t *testing.T) {
 
 func TestReplyTracker_RenderStatus(t *testing.T) {
 	fp := &fakePlatform{supportsInterim: false}
-	tracker := newIMEventTracker(context.Background(), fp, "c1")
+	tracker := newIMEventTracker(context.Background(), fp, "c1", "test:direct:c1:agent")
 	defer tracker.stop()
 	tracker.linesMu.Lock()
 	tracker.statusLines = appendStatusLine(tracker.statusLines, "💭 thinking")
@@ -628,7 +628,7 @@ func TestReplyTracker_RenderStatus(t *testing.T) {
 
 func TestReplyTracker_Stop_Idempotent(t *testing.T) {
 	fp := &fakePlatform{supportsInterim: false}
-	tracker := newIMEventTracker(context.Background(), fp, "c1")
+	tracker := newIMEventTracker(context.Background(), fp, "c1", "test:direct:c1:agent")
 	tracker.stop()
 	tracker.stop()
 }
@@ -636,7 +636,7 @@ func TestReplyTracker_Stop_Idempotent(t *testing.T) {
 func TestReplyTracker_WaitReady_CtxCancel(t *testing.T) {
 	fp := &fakePlatform{supportsInterim: true}
 	ctx, cancel := context.WithCancel(context.Background())
-	tracker := newIMEventTracker(ctx, fp, "c1")
+	tracker := newIMEventTracker(ctx, fp, "c1", "test:direct:c1:agent")
 	defer tracker.stop()
 	cancel()
 	done := make(chan struct{})

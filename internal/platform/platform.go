@@ -98,6 +98,56 @@ func AsReactor(p Platform) (Reactor, bool) {
 	return r, ok
 }
 
+// QuestionCard is the platform-agnostic payload for an AskUserQuestion prompt.
+// Adapters turn this into a native interactive card (Feishu interactive
+// card, Slack block actions, etc.). See docs/rfc/askuser-question.md.
+type QuestionCard struct {
+	// ToolUseID is the correlation id from the assistant tool_use block —
+	// carried into card action callbacks so the handler knows which
+	// question the user answered.
+	ToolUseID string
+	// SessionKey is the naozhi session key the reply should land on.
+	// Embedded in the card's action payload so card-click callbacks can
+	// route the synthesised answer to the right session without looking up
+	// chat → session mapping separately.
+	SessionKey string
+	// Items is one or more questions. Adapters render each as its own
+	// labelled block.
+	Items []QuestionItem
+}
+
+// QuestionItem mirrors cli.AskQuestionItem but lives in the platform package
+// so adapters don't need a reverse dependency on internal/cli. Kept as a
+// plain struct so tests can build fixtures without importing cli.
+type QuestionItem struct {
+	Question    string
+	Header      string
+	MultiSelect bool
+	Options     []QuestionOption
+}
+
+// QuestionOption is one selectable choice in a QuestionItem.
+type QuestionOption struct {
+	Label       string
+	Description string
+}
+
+// QuestionCardSender is an optional capability: platforms that support native
+// interactive cards for AskUserQuestion implement it. Missing implementations
+// degrade to a plain-text reply listing the options (handled in dispatch).
+//
+// SendQuestionCard returns the platform-native message id of the posted card
+// so dispatch can later edit it to "✅ 已回答 …" once the user selects.
+type QuestionCardSender interface {
+	SendQuestionCard(ctx context.Context, chatID string, card QuestionCard) (msgID string, err error)
+}
+
+// AsQuestionCardSender returns p as a QuestionCardSender if supported.
+func AsQuestionCardSender(p Platform) (QuestionCardSender, bool) {
+	q, ok := p.(QuestionCardSender)
+	return q, ok
+}
+
 // RunnablePlatform extends Platform for platforms needing background goroutines.
 type RunnablePlatform interface {
 	Platform

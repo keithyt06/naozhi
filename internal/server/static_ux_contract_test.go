@@ -705,8 +705,8 @@ func TestDashboardJS_MarkdownExport(t *testing.T) {
 	//    plus `thinking` which the UI also hides. Drift between this
 	//    set and INTERNAL_EVENT_TYPES would cause the export to contain
 	//    content the operator never saw.
-	if !strings.Contains(js, "const MARKDOWN_EXPORT_IGNORE = new Set(['tool_use', 'result', 'agent', 'task_start', 'task_progress', 'task_done', 'thinking']);") {
-		t.Error("MARKDOWN_EXPORT_IGNORE must list exactly the UI-hidden types (tool_use/result/agent/task_*/thinking)")
+	if !strings.Contains(js, "const MARKDOWN_EXPORT_IGNORE = new Set(['tool_use', 'result', 'agent', 'task_start', 'task_progress', 'task_done', 'thinking', 'ask_question']);") {
+		t.Error("MARKDOWN_EXPORT_IGNORE must list exactly the UI-hidden types (tool_use/result/agent/task_*/thinking/ask_question)")
 	}
 
 	// 3. Formatter signature + key behaviours.

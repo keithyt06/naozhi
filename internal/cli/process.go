@@ -1813,6 +1813,25 @@ func EventEntriesFromEventAt(ev Event, nowMS int64) []EventEntry {
 			}
 			out = append(out, entry)
 		}
+		// Surface the AskUserQuestion card as a dedicated EventEntry alongside
+		// the tool_use bubble. Placing it AFTER the tool_use entry keeps the
+		// chronological transcript order (tool_use → interactive card) and
+		// preserves the Agent → task_started tool_use_id linkage above.
+		if ev.AskQuestion != nil {
+			entry := base
+			entry.Type = "ask_question"
+			entry.Tool = "AskUserQuestion"
+			entry.ToolUseID = ev.AskQuestion.ToolUseID
+			// Summary is a one-line digest used for sidebar preview;
+			// AskQuestion field carries the full card payload.
+			if len(ev.AskQuestion.Items) > 0 {
+				entry.Summary = TruncateRunes(ev.AskQuestion.Items[0].Question, 120)
+			} else {
+				entry.Summary = "AskUserQuestion"
+			}
+			entry.AskQuestion = ev.AskQuestion
+			out = append(out, entry)
+		}
 		if len(out) == 0 {
 			return nil
 		}

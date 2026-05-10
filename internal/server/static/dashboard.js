@@ -1662,7 +1662,7 @@ async function renameSession() {
 // bookkeeping + the result envelope duplicated by streaming `text`
 // events). The export pipeline drops them to keep the emitted document
 // aligned with what the operator actually read in the UI.
-const MARKDOWN_EXPORT_IGNORE = new Set(['tool_use', 'result', 'agent', 'task_start', 'task_progress', 'task_done', 'thinking']);
+const MARKDOWN_EXPORT_IGNORE = new Set(['tool_use', 'result', 'agent', 'task_start', 'task_progress', 'task_done', 'thinking', 'ask_question']);
 
 // sessionMarkdownFilename returns a safe, dated filename for a session
 // export. Strips filesystem-hostile characters from the title and caps
@@ -2260,8 +2260,168 @@ function renderTodoList(detail, summary) {
   return header + '<ul class="todo-list">' + items + '</ul>';
 }
 
+// AskUserQuestion card state lives client-side only — we don't persist which
+// button was clicked. The keyed set below disables option buttons after the
+// first click so rapid double-clicks (or re-render during answer round-trip)
+// don't fire two answers. Keyed by tool_use_id which is stable per card.
+const _askAnswered = new Set();
+
+function renderAskQuestionCard(e) {
+  const aq = e.ask_question;
+  if (!aq || !Array.isArray(aq.items) || aq.items.length === 0) {
+    // Defensive: if payload missing, fall back to a plain status bubble.
+    return '<div class="event ask_question"><span class="event-icon">?</span>' +
+      '<div class="event-content">' + esc(e.summary || 'AskUserQuestion') + '</div></div>';
+  }
+  const tuid = aq.tool_use_id || '';
+  const disabled = _askAnswered.has(tuid);
+  const groups = aq.items.map((item, qi) => {
+    const header = item.header ? '<div class="ask-q-header">' + esc(item.header) + '</div>' : '';
+    const question = '<div class="ask-q-text">' + esc(item.question || '') + '</div>';
+    const multi = !!item.multi_select;
+    const opts = (item.options || []).map((opt, oi) => {
+      // data-header/data-label let the click handler build the reply text
+      // without keeping the whole tree in memory.
+      return '<button class="ask-opt" type="button"' +
+        ' data-tuid="' + escAttr(tuid) + '"' +
+        ' data-qi="' + qi + '"' +
+        ' data-oi="' + oi + '"' +
+        ' data-multi="' + (multi ? '1' : '0') + '"' +
+        ' data-header="' + escAttr(item.header || '') + '"' +
+        ' data-label="' + escAttr(opt.label || '') + '"' +
+        (disabled ? ' disabled' : '') +
+        ' onclick="onAskOptionClick(this)">' +
+        '<span class="ask-opt-label">' + esc(opt.label || '') + '</span>' +
+        (opt.description ? '<span class="ask-opt-desc">' + esc(opt.description) + '</span>' : '') +
+        '</button>';
+    }).join('');
+    const submitBtn = multi
+      ? '<button class="ask-submit" type="button"' +
+        ' data-tuid="' + escAttr(tuid) + '"' +
+        ' data-qi="' + qi + '"' +
+        ' data-header="' + escAttr(item.header || '') + '"' +
+        (disabled ? ' disabled' : '') +
+        ' onclick="onAskMultiSubmit(this)">提交</button>'
+      : '';
+    return '<div class="ask-q-group" data-multi="' + (multi ? '1' : '0') + '">' +
+      header + question +
+      '<div class="ask-opts">' + opts + '</div>' +
+      submitBtn +
+      '</div>';
+  }).join('');
+  const status = disabled
+    ? '<div class="ask-status">已回答</div>'
+    : '';
+  const timeAttr = e.time ? ' data-time="' + e.time + '" title="' + escAttr(formatTimeFull(e.time)) + '"' : '';
+  return '<div class="event ask_question"' + timeAttr +
+    ' data-tool-use-id="' + escAttr(tuid) + '">' +
+    '<span class="event-icon">?</span>' +
+    '<div class="event-content ask-card">' +
+      '<div class="ask-title">AskUserQuestion</div>' +
+      groups +
+      status +
+    '</div></div>';
+}
+
+// Build the plain-text answer payload from a card click. Single-select: one
+// option per question. Format: "Header: Label." joined with " " — this is the
+// shape verified in test/e2e/askuser/aq4 as being understood by CC.
+function composeAskAnswer(parts) {
+  // parts is array of {header, label}
+  return parts.map(p => {
+    const h = (p.header || '').trim();
+    const l = (p.label || '').trim();
+    if (!h) return l;
+    return h + ': ' + l;
+  }).filter(Boolean).join('. ') + (parts.length > 0 ? '.' : '');
+}
+
+function onAskOptionClick(btn) {
+  const tuid = btn.dataset.tuid || '';
+  if (!tuid || _askAnswered.has(tuid)) return;
+  const multi = btn.dataset.multi === '1';
+  if (multi) {
+    // Toggle the button's selected state; actual send happens on submit.
+    btn.classList.toggle('selected');
+    return;
+  }
+  // Single-select: lock card + send one option as the answer.
+  _askAnswered.add(tuid);
+  const parts = [{ header: btn.dataset.header || '', label: btn.dataset.label || '' }];
+  sendAskAnswer(tuid, btn, parts);
+}
+
+function onAskMultiSubmit(btn) {
+  const tuid = btn.dataset.tuid || '';
+  const qi = btn.dataset.qi;
+  if (!tuid || _askAnswered.has(tuid)) return;
+  const header = btn.dataset.header || '';
+  const groupSel = '.event.ask_question[data-tool-use-id="' + (tuid || '').replace(/"/g, '\\"') + '"]';
+  const card = document.querySelector(groupSel);
+  if (!card) return;
+  const selected = card.querySelectorAll('.ask-q-group[data-multi="1"] .ask-opt.selected');
+  if (selected.length === 0) return;
+  const labels = [];
+  selected.forEach(b => {
+    // Only collect labels from the same question group this submit belongs to.
+    if (b.dataset.qi === qi) labels.push(b.dataset.label || '');
+  });
+  if (labels.length === 0) return;
+  _askAnswered.add(tuid);
+  const parts = [{ header: header, label: labels.join(', ') }];
+  sendAskAnswer(tuid, btn, parts);
+}
+
+function sendAskAnswer(tuid, originBtn, parts) {
+  const answer = composeAskAnswer(parts);
+  if (!answer) return;
+  // Disable all option / submit buttons inside this card immediately.
+  const card = originBtn.closest('.event.ask_question');
+  if (card) {
+    card.querySelectorAll('button').forEach(b => { b.disabled = true; });
+    const content = card.querySelector('.event-content');
+    if (content && !content.querySelector('.ask-status')) {
+      const div = document.createElement('div');
+      div.className = 'ask-status';
+      div.textContent = '已选择：' + answer;
+      content.appendChild(div);
+    }
+  }
+  // Reuse the server's session send endpoint so queue / passthrough /
+  // broadcast semantics all apply; we do NOT call sendMessage() because that
+  // path reads from the message input box and manages optimistic rendering,
+  // which is a mismatch for card-triggered sends (no input value, the card
+  // itself already shows "已选择").
+  sendAskAnswerViaAPI(answer).catch(err => {
+    _askAnswered.delete(tuid);
+    if (card) {
+      card.querySelectorAll('button').forEach(b => { b.disabled = false; });
+      const status = card.querySelector('.ask-status');
+      if (status) status.textContent = '发送失败：' + (err && err.message || err);
+    }
+  });
+}
+
+async function sendAskAnswerViaAPI(text) {
+  if (!selectedKey) throw new Error('no active session');
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const payload = { key: selectedKey, text: text };
+  if (selectedNode && selectedNode !== 'local') payload.node = selectedNode;
+  const r = await fetch('/api/sessions/send', { method: 'POST', headers, body: JSON.stringify(payload) });
+  if (!r.ok) {
+    const raw = await r.text().catch(() => '');
+    throw new Error('send failed: ' + r.status + ' ' + raw.slice(0, 200));
+  }
+}
+
 function eventHtml(e) {
   if (isInternalEvent(e) || e.type === 'thinking') return '';
+  // AskUserQuestion interactive card: dedicated renderer with option buttons.
+  // The matching tool_use entry is already filtered out via INTERNAL_EVENT_TYPES,
+  // so the card stands alone in the transcript.
+  if (e.type === 'ask_question') return renderAskQuestionCard(e);
   // Filter out Claude Code system XML injected as user messages
   const raw = e.detail || e.summary || '';
   if (e.type === 'user' && /^<(task-notification|system-reminder|local-command|command-name|available-deferred-tools)[\s>]/.test(raw)) return '';

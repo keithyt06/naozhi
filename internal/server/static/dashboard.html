@@ -1302,6 +1302,30 @@ body.kbd-open .sidebar-footer{display:none}
   .event-ask-btn,.event-copy-btn{font-size:12px;padding:4px 10px;min-height:32px}
 }
 
+/* AskUserQuestion interactive card. Rendered as a bubble of type
+   .event.ask_question; mirrors .event.todo density (tight vertical rhythm,
+   high contrast borders) so the card reads as an actionable block without
+   overwhelming the conversation. */
+.event.ask_question .ask-card{border:1px solid var(--nz-border);border-radius:8px;padding:12px 14px;background:var(--nz-bg-1)}
+.event.ask_question .ask-title{font-size:11px;color:var(--nz-text-faint);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.ask-q-group + .ask-q-group{margin-top:14px;padding-top:12px;border-top:1px solid var(--nz-bg-2)}
+.ask-q-header{font-size:12px;color:var(--nz-text-faint);margin-bottom:2px}
+.ask-q-text{font-size:14px;line-height:1.5;color:var(--nz-text);margin-bottom:10px}
+.ask-opts{display:flex;flex-direction:column;gap:6px}
+.ask-opt{text-align:left;display:flex;flex-direction:column;gap:2px;background:var(--nz-bg-0);border:1px solid var(--nz-border);border-radius:6px;padding:8px 10px;cursor:pointer;color:var(--nz-text);font:inherit;transition:border-color .15s,background .15s,color .15s}
+.ask-opt:hover:not([disabled]){border-color:var(--nz-accent);background:var(--nz-bg-2)}
+.ask-opt.selected{border-color:var(--nz-accent);background:var(--nz-bg-2);color:var(--nz-accent)}
+.ask-opt[disabled]{opacity:.55;cursor:not-allowed}
+.ask-opt-label{font-size:14px;font-weight:500}
+.ask-opt-desc{font-size:12px;color:var(--nz-text-faint);line-height:1.45}
+.ask-submit{margin-top:8px;background:var(--nz-accent);color:var(--nz-bg-0);border:none;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;font:inherit}
+.ask-submit[disabled]{opacity:.55;cursor:not-allowed}
+.ask-status{margin-top:10px;font-size:12px;color:var(--nz-text-faint);padding-top:8px;border-top:1px dashed var(--nz-bg-2)}
+@media (pointer: coarse){
+  .ask-opt{padding:10px 12px}
+  .ask-submit{min-height:36px;padding:8px 16px}
+}
+
 </style>
 </head>
 <body>

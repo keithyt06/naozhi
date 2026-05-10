@@ -36,11 +36,46 @@ type Event struct {
 	// RPCRequestID is set for ACP permission_request events that need a response.
 	RPCRequestID int `json:"-"`
 
+	// AskQuestion is populated for synthetic Type:"ask_question" events derived
+	// from an AskUserQuestion tool_use in the assistant stream. The CLI's
+	// headless -p mode auto-rejects the tool with is_error:true, so this is
+	// observational only — dispatch uses it to surface an interactive card.
+	// The user's answer flows back as a normal user message on the next turn.
+	// See docs/rfc/askuser-question.md and test/e2e/askuser/.
+	AskQuestion *AskQuestion `json:"ask_question,omitempty"`
+
 	// recvAt is the wall-clock moment readLoop pushed the event to eventCh.
 	// Used by drainStaleEvents to distinguish events belonging to a previous
 	// (possibly interrupted) turn from events produced for the current turn
 	// after drain entered. Not serialized.
 	recvAt time.Time
+}
+
+// AskQuestion mirrors the shape of AskUserQuestion.input observed against
+// claude CLI 2.1.132 (see test/e2e/askuser/aq1_aq2_trigger_and_schema.py).
+// ToolUseID is the tool_use id emitted by the assistant and serves as a
+// correlation key across dashboard + IM renderings of the same question.
+type AskQuestion struct {
+	ToolUseID string            `json:"tool_use_id"`
+	Items     []AskQuestionItem `json:"items"`
+}
+
+// AskQuestionItem is one question in a possibly multi-question card.
+// MultiSelect=true signals checkbox semantics; the CLI may set it but the
+// dashboard currently degrades to single-select (one click = one answer).
+type AskQuestionItem struct {
+	Question    string           `json:"question"`
+	Header      string           `json:"header,omitempty"`
+	MultiSelect bool             `json:"multi_select,omitempty"`
+	Options     []AskQuestionOpt `json:"options"`
+}
+
+// AskQuestionOpt is one selectable choice. Label is the user-facing text that
+// the answer composer will echo back ("Header: Label."). Description is shown
+// in the card tooltip / secondary line but never echoed.
+type AskQuestionOpt struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
 }
 
 // TaskUsage holds resource consumption stats from agent task events.

@@ -117,6 +117,13 @@ type EventEntry struct {
 	Tokens     int      `json:"tokens,omitempty"`      // total tokens consumed by agent task
 	DurationMS int      `json:"duration_ms,omitempty"` // elapsed ms for agent task
 	Status     string   `json:"status,omitempty"`      // agent task status (completed, error, etc.)
+	// AskQuestion carries the interactive AskUserQuestion card payload. Only
+	// set on Type=="ask_question" entries synthesised from an AskUserQuestion
+	// tool_use block — kept as a separate field (rather than stuffing JSON
+	// into Detail) so the dashboard renderer doesn't have to re-parse and
+	// so Go callers (EventLog replay → WS broadcast) don't pay a JSON
+	// unmarshal per question bubble.
+	AskQuestion *AskQuestion `json:"ask_question,omitempty"`
 }
 
 // SubagentInfo holds display information about an active sub-agent in the current turn.
