@@ -2,6 +2,11 @@
 if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 
 let selectedKey = null;
+// _activeCardEl caches the currently-.active session card element so the
+// selector switch doesn't have to O(N) scan every card each time. Stays in
+// sync via setActiveSessionCard(); after renderSidebar rebuilds the list the
+// cached node becomes detached — the helper's isConnected guard recovers.
+let _activeCardEl = null;
 let eventTimer = null;
 let lastEventTime = 0;
 let lastRenderedEventTime = 0;
@@ -493,6 +498,11 @@ function renderSidebar(data) {
   // filter-specific empty state ('没有匹配的会话') already covers that path.
   if (!html && !filterActive) html = '<div class="no-sessions">no sessions<br><button type="button" class="no-sessions-cta" onclick="createNewSession()">+ 开启你的第一个会话</button></div>';
   list.innerHTML = html;
+  // Sidebar rebuild detached the previously-cached active card; re-resolve
+  // it against the fresh DOM so selector switches stay O(1) on the next
+  // click. No-op when nothing is selected (openCronPanel / previewDiscovered
+  // clear paths already reset _activeCardEl).
+  if (selectedKey) setActiveSessionCard(selectedKey, selectedNode);
   // Restore scroll on the next frame so the browser finishes layout first;
   // synchronous assignment after innerHTML can visibly jump on slow devices.
   requestAnimationFrame(() => {
@@ -1523,11 +1533,8 @@ function selectSession(key, node) {
   oldestFetchedEventTime = 0;
   mobileEnterChat();
   stopPreviewPolling();
-  document.querySelectorAll('.session-card').forEach(el => {
-    const nowActive = el.dataset.key === key && (el.dataset.node || 'local') === node;
-    el.classList.toggle('active', nowActive);
-    if (nowActive) updateCardUnreadChip(el, 0);
-  });
+  const activeCard = setActiveSessionCard(key, node);
+  if (activeCard) updateCardUnreadChip(activeCard, 0);
   renderMainShell();
   navRebuild(); // clear stale nav state before async events arrive
   const draftInput = document.getElementById('msg-input');
@@ -5110,7 +5117,7 @@ function doCreateInProject(projectPath, projectName, nodeId, backend, agent) {
   if (typeof updateNodeSelector === 'function') updateNodeSelector();
   lastEventTime = 0;
   mobileEnterChat();
-  document.querySelectorAll('.session-card').forEach(el => el.classList.remove('active'));
+  setActiveSessionCard(key, selectedNode);
   renderMainShell();
   navRebuild();
   lastVersion = 0;
@@ -5187,7 +5194,7 @@ function doCreateSession() {
   if (typeof updateNodeSelector === 'function') updateNodeSelector();
   lastEventTime = 0;
   mobileEnterChat();
-  document.querySelectorAll('.session-card').forEach(el => el.classList.remove('active'));
+  setActiveSessionCard(key, 'local');
   renderMainShell();
   navRebuild();
   lastVersion = 0;
@@ -5245,7 +5252,7 @@ function createQuickSession(initialText, onTextStranded) {
   if (typeof updateNodeSelector === 'function') updateNodeSelector();
   lastEventTime = 0;
   mobileEnterChat();
-  document.querySelectorAll('.session-card').forEach(el => el.classList.remove('active'));
+  setActiveSessionCard(key, 'local');
   renderMainShell();
   navRebuild();
   lastVersion = 0;
@@ -7316,6 +7323,32 @@ function processEventsForDisplay(events) {
 
 function sid(key, node) { return key + '\t' + (node || 'local'); }
 
+// setActiveSessionCard flips the .active class on at most one session card.
+// Replaces the old O(N) querySelectorAll('.session-card').forEach pattern
+// with a cached reference (_activeCardEl). key===null drops selection
+// altogether (used by openCronPanel / previewDiscovered clear paths). Node
+// defaults to 'local' to match data-node attribute emission. A subsequent
+// card with the same key but a different node counts as "different" — the
+// data-key + data-node pair is the identity.
+function setActiveSessionCard(key, node) {
+  const n = node || 'local';
+  // Drop stale cached ref if the previous card was detached by a sidebar
+  // rebuild (renderSidebar replaces list.innerHTML wholesale).
+  if (_activeCardEl && !_activeCardEl.isConnected) _activeCardEl = null;
+  if (_activeCardEl) _activeCardEl.classList.remove('active');
+  _activeCardEl = null;
+  if (key === null || key === undefined) return null;
+  const next = document.querySelector(
+    '.session-card[data-key="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"]'
+    + '[data-node="' + (window.CSS && CSS.escape ? CSS.escape(n) : n) + '"]'
+  );
+  if (next) {
+    next.classList.add('active');
+    _activeCardEl = next;
+  }
+  return next;
+}
+
 function isMultiNode() {
   const keys = Object.keys(nodesData);
   return keys.length > 1 || (keys.length === 1 && keys[0] !== 'local');
@@ -8411,13 +8444,10 @@ async function previewDiscovered(sessionId, cwd, pid, procStartTime, node, cliNa
   selectedKey = null;
   if (wsm.subscribedKey) wsm.unsubscribe();
   if (eventTimer) { clearInterval(eventTimer); eventTimer = null; }
-  document.querySelectorAll('.session-card').forEach(el => el.classList.remove('active'));
   mobileEnterChat();
 
   // Highlight the discovered card
-  document.querySelectorAll('.session-card').forEach(el => el.classList.remove('active'));
-  const card = document.querySelector('.session-card[data-key="_discovered:' + pid + '"]');
-  if (card) card.classList.add('active');
+  setActiveSessionCard('_discovered:' + pid, node || 'local');
 
   const base = cwd.split('/').pop() || cwd;
   const main = document.getElementById('main');
@@ -9842,7 +9872,7 @@ function openCronPanel() {
   selectedKey = null;
   if (wsm.subscribedKey) wsm.unsubscribe();
   if (eventTimer) { clearInterval(eventTimer); eventTimer = null; }
-  document.querySelectorAll('.session-card').forEach(el => el.classList.remove('active'));
+  setActiveSessionCard(null);
   mobileEnterChat();
   // Paint immediately from the cache primed at page load (line ~5982) so the
   // click feels instant. If the cache is empty we still render the panel —

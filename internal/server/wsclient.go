@@ -63,6 +63,13 @@ const (
 	// worst-case map growth on long-lived clients that open/close many
 	// session panels between the natural 30s sweep ticks.
 	subGenHighWaterMark = 200
+
+	// wsDropThreshold: If a client drops this many messages cumulatively,
+	// close the connection so the browser side reconnects and resyncs state
+	// via the fresh `subscribe` handshake. 64 = ~ 1 min of 1Hz updates at
+	// worst — well below what a transiently slow client might hit, generous
+	// enough that a permanently-slow client is the only one hitting it.
+	wsDropThreshold = 64
 )
 
 type wsClient struct {
@@ -187,8 +194,21 @@ func (c *wsClient) SendRaw(data []byte) {
 		// the hub mutex when broadcasting to slow clients. Both per-client
 		// and hub-wide counters bump so /health can report totals without
 		// scanning the clients map under RLock.
-		c.dropped.Add(1)
+		n := c.dropped.Add(1)
 		c.hub.droppedTotal.Add(1)
+		// Safety net: a permanently-slow client silently falling arbitrarily
+		// behind is worse than a forced reconnect. Once cumulative drops
+		// cross wsDropThreshold, close the connection so the browser side
+		// reconnects and resyncs state via a fresh subscribe handshake.
+		// closeDone uses sync.Once so concurrent SendRaw calls tripping the
+		// threshold simultaneously all collapse to a single close.
+		if n >= wsDropThreshold {
+			c.doneOnce.Do(func() {
+				slog.Warn("slow client closed; will reconnect",
+					"ip", c.remoteIP, "dropped", n)
+				close(c.done)
+			})
+		}
 	}
 }
 

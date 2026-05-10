@@ -289,6 +289,10 @@ type Router struct {
 	// escape obvious and the dereference pattern unambiguous. R59-GO-M3.
 	onChange atomic.Pointer[onChangeHolder]
 
+	// onKeyRetired fires after Reset/Remove finish; lets side-indices keyed
+	// on the session key (e.g. dispatch.MessageQueue) drop their entries.
+	onKeyRetired atomic.Pointer[onKeyRetiredHolder]
+
 	// historyWg tracks startup history-loading goroutines so Shutdown waits for them.
 	historyWg sync.WaitGroup
 
@@ -1314,6 +1318,47 @@ func (r *Router) reconnectShims(parentCtx context.Context) {
 			proc.SetCwdForLinker(ws)
 		}
 
+		// Shim replays (DrainReplay output) are intentionally NOT injected
+		// into EventLog — they lack per-event timestamps and would corrupt
+		// chronology. But they DO carry the `system.task_started` markers
+		// for any in-process teammate / sidechain agent the shim saw before
+		// naozhi restart. Without plumbing those markers to the Linker, the
+		// dashboard drill-in serves 202 forever because Linker.Query has
+		// never seen the task_id. Walk the replay once, extract each
+		// task_started, and kick an async Resolve — Resolve is idempotent
+		// + cached, so this costs at most one stat per unique task_id.
+		if linker := proc.Linker(); linker != nil && len(replays) > 0 {
+			seen := make(map[string]struct{})
+			for _, r := range replays {
+				if r.Type != "replay" {
+					continue
+				}
+				ev, _, err := recWrapper.Protocol.ReadEvent(r.Line)
+				if err != nil || ev.Type != "system" || ev.SubType != "task_started" {
+					continue
+				}
+				if ev.TaskID == "" || ev.ToolUseID == "" {
+					continue
+				}
+				// Skip local_bash — no internal transcript on disk.
+				if ev.TaskType == "local_bash" {
+					continue
+				}
+				if _, dup := seen[ev.TaskID]; dup {
+					continue
+				}
+				seen[ev.TaskID] = struct{}{}
+				name := strings.TrimSpace(ev.Description)
+				if i := strings.IndexByte(name, ':'); i > 0 {
+					name = strings.TrimSpace(name[:i])
+				}
+				taskID, toolUseID := ev.TaskID, ev.ToolUseID
+				desc := ev.Description
+				wallclock := time.Now().UnixMilli()
+				go linker.Resolve(taskID, toolUseID, name, desc, wallclock)
+			}
+		}
+
 		// Restore dashboard history from JSONL only.
 		//
 		// Replay events are intentionally NOT injected into persistedHistory:
@@ -1451,6 +1496,27 @@ func (r *Router) SetOnChange(fn func()) {
 func (r *Router) notifyChange() {
 	if h := r.onChange.Load(); h != nil {
 		h.fn()
+	}
+}
+
+// onKeyRetiredHolder mirrors onChangeHolder for the key-retirement hook.
+type onKeyRetiredHolder struct{ fn func(key string) }
+
+// SetOnKeyRetired registers a callback fired from Reset/Remove AFTER the
+// session teardown completes. Typical wiring: dispatch.MessageQueue.Cleanup
+// so it does not accumulate empty entries Discard retains for gen-monotonicity.
+func (r *Router) SetOnKeyRetired(fn func(key string)) {
+	if fn == nil {
+		r.onKeyRetired.Store(nil)
+		return
+	}
+	r.onKeyRetired.Store(&onKeyRetiredHolder{fn: fn})
+}
+
+// notifyKeyRetired invokes the onKeyRetired callback if set. Call outside r.mu.
+func (r *Router) notifyKeyRetired(key string) {
+	if h := r.onKeyRetired.Load(); h != nil {
+		h.fn(key)
 	}
 }
 
@@ -2257,6 +2323,7 @@ func (r *Router) Reset(key string) {
 	}
 
 	slog.Info("session reset", "key", key)
+	r.notifyKeyRetired(key)
 	r.notifyChange()
 }
 
@@ -2512,6 +2579,7 @@ func (r *Router) Remove(key string) bool {
 	}
 
 	slog.Info("session removed", "key", key)
+	r.notifyKeyRetired(key)
 	r.notifyChange()
 	return true
 }

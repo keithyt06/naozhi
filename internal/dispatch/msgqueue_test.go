@@ -370,6 +370,43 @@ func TestEnqueue_InterruptMode_Discard_ResetsInterruptFlag(t *testing.T) {
 	}
 }
 
+// TestMessageQueue_Cleanup_RemovesMapEntry verifies Cleanup drops the entry
+// Discard retains for gen-monotonicity, and the next Enqueue starts at gen=0.
+func TestMessageQueue_Cleanup_RemovesMapEntry(t *testing.T) {
+	t.Parallel()
+	q := NewMessageQueue(10, 0)
+	q.Enqueue("k1", QueuedMsg{Text: "A"})
+	q.Enqueue("k2", QueuedMsg{Text: "A"})
+	q.Discard("k1") // retains the map entry with bumped gen
+
+	q.mu.Lock()
+	before := len(q.queues)
+	_, retained := q.queues["k1"]
+	q.mu.Unlock()
+	if !retained {
+		t.Fatal("Discard should retain the map entry")
+	}
+
+	q.Cleanup("k1")
+	q.Cleanup("never-seen") // no-op on unknown key
+
+	q.mu.Lock()
+	after := len(q.queues)
+	_, present := q.queues["k1"]
+	q.mu.Unlock()
+	if present {
+		t.Fatal("Cleanup should delete the map entry")
+	}
+	if got := before - after; got != 1 {
+		t.Fatalf("len(queues) dropped by %d, want 1", got)
+	}
+
+	isOwner, _, _, gen := q.Enqueue("k1", QueuedMsg{Text: "fresh"})
+	if !isOwner || gen != 0 {
+		t.Fatalf("post-Cleanup: isOwner=%v, gen=%d; want true, 0", isOwner, gen)
+	}
+}
+
 // TestConcurrent_EnqueueDrain verifies no races under concurrent access.
 func TestConcurrent_EnqueueDrain(t *testing.T) {
 	t.Parallel()

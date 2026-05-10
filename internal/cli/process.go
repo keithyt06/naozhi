@@ -867,13 +867,23 @@ func (p *Process) readLoop() {
 					projectDir := resolveProjectDir(p.cwd)
 					p.linker.SetContext(projectDir, ev.SessionID)
 				}
-				if ev.Type == "system" && ev.SubType == "task_started" && ev.TaskType == "in_process_teammate" && ev.ToolUseID != "" {
+				// Trigger Resolve for BOTH in-process teammates (TeamCreate's
+				// Agent spawns; task_type="in_process_teammate") AND standalone
+				// sub-agents (Task(subagent_type=...); task_type often empty
+				// or vendor-specific). Both write subagents/agent-<task_id>.
+				// jsonl, so the linker's fast path (stat by task_id) is the
+				// right common denominator. Exclude local_bash — those only
+				// persist to tool-results/ and have no internal transcript.
+				if ev.Type == "system" && ev.SubType == "task_started" &&
+					ev.TaskType != "local_bash" && ev.TaskID != "" && ev.ToolUseID != "" {
 					taskID := ev.TaskID
 					toolUseID := ev.ToolUseID
 					name := ev.Description
 					if nameTrim := strings.TrimSpace(name); nameTrim != "" {
-						// task_started.description is "<name>: <prompt body>".
-						// The linker selector only needs the leading name.
+						// task_started.description is "<name>: <prompt body>"
+						// for teammates; for sub-agents it's just the prompt.
+						// The linker's fast path works either way; trimming
+						// to the name prefix only helps the name-scan fallback.
 						if idx := strings.IndexByte(nameTrim, ':'); idx > 0 {
 							name = strings.TrimSpace(nameTrim[:idx])
 						} else {
@@ -2157,37 +2167,56 @@ func (p *Process) InjectHistory(entries []EventEntry) {
 	//        right after the paired agent entry.
 	// We index task_start by ToolUseID so a single pass assembles the args
 	// Resolve wants: (taskID, toolUseID, name, description, agentToolUseMS).
+	// De-dupe by task_id so we fire at most one Resolve per unique task.
+	// Ring-buffered history commonly carries many task_progress entries
+	// for the same task_id; the fast path inside Resolve is cached after
+	// the first hit but we want to avoid the goroutine churn.
+	seen := make(map[string]struct{})
 	taskStartByToolUse := make(map[string]EventEntry, len(entries))
 	for _, e := range entries {
 		if e.Type == "task_start" && e.ToolUseID != "" {
 			taskStartByToolUse[e.ToolUseID] = e
 		}
 	}
-	for _, e := range entries {
-		if e.Type != "agent" || e.ToolUseID == "" {
-			continue
+	kick := func(taskID, toolUseID, name, desc string, wallclock int64) {
+		if taskID == "" {
+			return
 		}
-		if e.InternalAgentID != "" {
-			continue // SeedFromHistory already took care of it
+		if _, ok := seen[taskID]; ok {
+			return
 		}
-		ts, ok := taskStartByToolUse[e.ToolUseID]
-		if !ok || ts.TaskID == "" {
-			continue // task never started — nothing to resolve against
-		}
-		// Cheap guard against ballooning goroutines during a huge replay:
-		// Resolve holds a short dirCache + exits fast on already-cached
-		// task_ids. Still: one goroutine per live team agent from the
-		// last session lifetime is a reasonable ceiling.
+		seen[taskID] = struct{}{}
 		linker := p.linker
-		taskID := ts.TaskID
-		toolUseID := e.ToolUseID
-		name := e.Subagent
-		if name == "" {
-			name = e.TeamName
-		}
-		desc := e.Summary
-		wallclock := e.Time
 		go linker.Resolve(taskID, toolUseID, name, desc, wallclock)
+	}
+	for _, e := range entries {
+		switch e.Type {
+		case "agent":
+			if e.ToolUseID == "" || e.InternalAgentID != "" {
+				continue
+			}
+			ts, ok := taskStartByToolUse[e.ToolUseID]
+			if !ok || ts.TaskID == "" {
+				continue
+			}
+			name := e.Subagent
+			if name == "" {
+				name = e.TeamName
+			}
+			kick(ts.TaskID, e.ToolUseID, name, e.Summary, e.Time)
+		case "task_start", "task_progress":
+			// Orphan task path — the originating agent entry was evicted
+			// from the ring buffer before the replay window. Without this
+			// the dashboard sees a banner row (rebuilt from task_progress
+			// via the frontend) but Linker.Query returns ok=false for the
+			// task_id, so the HTTP endpoint serves 202 forever. Fast-path
+			// Resolve by task_id works because Claude 2.1.132 names the
+			// jsonl file after the task_id directly.
+			if e.TaskID == "" || e.InternalAgentID != "" {
+				continue
+			}
+			kick(e.TaskID, e.ToolUseID, e.Subagent, e.Summary, e.Time)
+		}
 	}
 }
 

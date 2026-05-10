@@ -164,6 +164,14 @@ func (l *SubagentLinker) ProjectSessionDir() string {
 //
 // Tombstones are cached so repeated Resolve attempts on a permanently-missing
 // task_id do not re-scan every poll.
+//
+// Claude CLI 2.1.132 emits subagents/agent-<task_id>.jsonl (the hex component
+// is literally the task_id). We try that direct path first — it skips the
+// scan entirely for the common case, and also covers historical entries
+// replayed via InjectHistory where `name` is empty (so the original scan +
+// agentType match would always miss). The legacy scan stays as a fallback
+// for older CLI versions or sidechain agents whose filename convention
+// differs.
 func (l *SubagentLinker) Resolve(taskID, toolUseID, name, description string, agentToolUseMS int64) (LinkInfo, bool) {
 	// Step 1: already resolved?
 	l.mu.RLock()
@@ -179,6 +187,14 @@ func (l *SubagentLinker) Resolve(taskID, toolUseID, name, description string, ag
 	}
 
 	subagentDir := filepath.Join(projectDir, sessionID, "subagents")
+
+	// Fast path: Claude 2.1.132 puts the task_id directly into the filename.
+	// Try that before the name-based scan — cheap stat beats scanning a
+	// directory of dozens/hundreds of candidate meta files, and handles the
+	// shim-reconnect case where historical EventEntry has empty name.
+	if info, ok := l.resolveByTaskIDFast(taskID, toolUseID, subagentDir, sessionID); ok {
+		return info, true
+	}
 	var picked metaEntry
 	var pickedFirst firstLineMeta
 
@@ -301,6 +317,76 @@ func (l *SubagentLinker) Resolve(taskID, toolUseID, name, description string, ag
 	}
 	l.byName[name] = append(l.byName[name], info)
 	l.fireOnResolveLocked(taskID, toolUseID, info.InternalAgentID)
+	return info, true
+}
+
+// resolveByTaskIDFast covers the Claude 2.1.132 convention where the
+// subagents/agent-<hex>.jsonl filename's hex component IS the task_id.
+// On a cache miss + empty candidate set (the original name-based scan would
+// retry for 3 s grace and then tombstone), we stat the direct path first —
+// cheap, stable, and robust to missing/empty `name` (which is exactly the
+// shim-reconnect + history-replay case).
+//
+// Returns ok=true only on a positive stat with a non-empty first-line session
+// match. ok=false falls through to the original scan (and its retry loop) so
+// older CLIs / sidechain agents whose filename scheme differs still work.
+func (l *SubagentLinker) resolveByTaskIDFast(taskID, toolUseID, subagentDir, sessionID string) (LinkInfo, bool) {
+	if !agentHexRe.MatchString(taskID) {
+		return LinkInfo{}, false
+	}
+	jsonlPath := filepath.Join(subagentDir, "agent-"+taskID+".jsonl")
+	st, err := os.Stat(jsonlPath)
+	if err != nil || st.Size() == 0 {
+		return LinkInfo{}, false
+	}
+	first, err := readFirstLineMeta(jsonlPath)
+	if err != nil {
+		return LinkInfo{}, false
+	}
+	// sessionId cross-check defends against the lossy projectDir encoding
+	// collision (§3.3.2) — two distinct cwds mapping to the same encoded
+	// directory must not let agent jsonl from one session leak into another.
+	if first.SessionID != "" && first.SessionID != sessionID {
+		return LinkInfo{}, false
+	}
+
+	// Optionally pull the agent name from the sibling meta.json for
+	// display purposes. Not required for Resolve to succeed; leave empty
+	// on any error since the dashboard already has the name from the
+	// parent-stream `agent` EventEntry when present.
+	name := ""
+	if data, err := os.ReadFile(filepath.Join(subagentDir, "agent-"+taskID+".meta.json")); err == nil {
+		var m struct {
+			AgentType string `json:"agentType"`
+		}
+		if json.Unmarshal(data, &m) == nil {
+			name = m.AgentType
+		}
+	}
+
+	info := LinkInfo{
+		InternalAgentID: "agent-" + taskID,
+		JSONLPath:       jsonlPath,
+		Name:            name,
+		Resolved:        true,
+		FirstPromptID:   first.PromptID,
+	}
+
+	l.mu.Lock()
+	// Re-check under write lock (another goroutine may have raced in).
+	if cached, ok := l.byTaskID[taskID]; ok {
+		l.mu.Unlock()
+		return cached, cached.Resolved
+	}
+	l.byTaskID[taskID] = info
+	if toolUseID != "" {
+		l.byToolUseID[toolUseID] = info
+	}
+	if name != "" {
+		l.byName[name] = append(l.byName[name], info)
+	}
+	l.fireOnResolveLocked(taskID, toolUseID, info.InternalAgentID)
+	l.mu.Unlock()
 	return info, true
 }
 

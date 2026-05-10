@@ -473,6 +473,15 @@ func buildServer(opts ServerOptions) *Server {
 		},
 	}
 
+	// Q1: wire router's terminal-removal hook to msgQueue.Cleanup so the
+	// per-session FIFO map entry is truly deleted when the user resets or
+	// removes a session (/new, dashboard delete). Without this the entry
+	// is retained forever for gen-monotonicity — fine under LRU eviction
+	// (the session might return) but a slow leak when the key is never
+	// reused. Router.Reset and Router.Remove both fire this callback; LRU
+	// evictOldest deliberately does NOT.
+	router.SetOnKeyRetired(s.msgQueue.Cleanup)
+
 	s.nodeAccess = newNodeAccessor(&s.nodesMu, s.nodes, s.knownNodes)
 
 	s.nodeCache = node.NewCacheManager(

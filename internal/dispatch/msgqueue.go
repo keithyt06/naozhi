@@ -307,6 +307,23 @@ func (q *MessageQueue) Discard(key string) {
 	}
 }
 
+// Cleanup UNCONDITIONALLY deletes the map entry for key — the only public
+// method allowed to break gen-monotonicity. Callers MUST ensure no in-flight
+// owner can arrive on this key afterwards (otherwise a stale owner whose gen
+// equals the from-scratch 0 could drain a newly-enqueued batch). Intended
+// caller: session.Router on user-initiated terminal removal (Reset/Remove),
+// where the preceding Discard already signalled any racing owner to stop.
+// No-op for unknown keys. Also clears the dropNotifyLRU entry for key.
+func (q *MessageQueue) Cleanup(key string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	delete(q.queues, key)
+	if elem, ok := q.dropNotifyIndex[key]; ok {
+		q.dropNotifyLRU.Remove(elem)
+		delete(q.dropNotifyIndex, key)
+	}
+}
+
 // Depth returns the number of queued messages for key (excludes the active one).
 func (q *MessageQueue) Depth(key string) int {
 	q.mu.Lock()

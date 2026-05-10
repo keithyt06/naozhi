@@ -5694,3 +5694,37 @@ func TestDashboard_RNEW_UX007_PreserveSelection(t *testing.T) {
 		t.Error("RNEW-UX-007: selection guard must scope to selections inside the events panel (contains(anchorNode))")
 	}
 }
+
+// TestDashboardJS_RNEW_UX008_ActiveCardHelper pins the RNEW-UX-008 fix that
+// replaced 7+ copies of O(N) `querySelectorAll('.session-card').forEach(...
+// classList.remove('active'))` with a single helper backed by a cached
+// reference (_activeCardEl). Sidebar switching used to scan every card on
+// every click; with many sessions the latency became visible. The contract
+// pins (a) the cache variable declaration, (b) the helper function, and
+// (c) that at most one legacy forEach + classList.remove('active') site
+// survives (a defensive initial-clear slot is tolerated; two or more
+// indicates the refactor regressed).
+func TestDashboardJS_RNEW_UX008_ActiveCardHelper(t *testing.T) {
+	t.Parallel()
+	jsBytes, err := dashboardJS.ReadFile("static/dashboard.js")
+	if err != nil {
+		t.Fatalf("read dashboard.js: %v", err)
+	}
+	js := string(jsBytes)
+	if !strings.Contains(js, "let _activeCardEl") {
+		t.Error("RNEW-UX-008: expected module-scoped `let _activeCardEl` cache for the active session card")
+	}
+	if !strings.Contains(js, "function setActiveSessionCard(") {
+		t.Error("RNEW-UX-008: expected helper `function setActiveSessionCard(...)` that toggles .active via cached ref")
+	}
+	// Count legacy forEach + classList.remove('active') sites. Each legacy
+	// site is a pair (querySelectorAll line, classList.remove('active')
+	// callback). Counting the callbacks is the reliable signal — the
+	// helper body itself calls classList.remove('active') but on the
+	// cached element, not via forEach.
+	legacyPattern := regexp.MustCompile(`querySelectorAll\('\.session-card'\)[^;]*forEach[^;]*classList\.remove\('active'\)`)
+	legacy := legacyPattern.FindAllStringIndex(js, -1)
+	if len(legacy) >= 2 {
+		t.Errorf("RNEW-UX-008: expected at most 1 legacy querySelectorAll('.session-card').forEach + remove('active') site, found %d", len(legacy))
+	}
+}
