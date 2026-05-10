@@ -1465,7 +1465,7 @@ function selectSession(key, node) {
   // (RFC v4 agent-team-ui §3.6.6). Must run BEFORE saveScrollPos so the
   // agent-view scroll snapshot still keys off the old session id.
   if (window.AgentView && typeof window.AgentView.onSessionSwitch === 'function') {
-    window.AgentView.onSessionSwitch();
+    window.AgentView.onSessionSwitch(key, node);
   }
   // Recent session card click → trigger resume flow
   // Discovered session card click → trigger preview flow
@@ -2086,11 +2086,10 @@ function prependEvents(events) {
   // Restore scroll position.
   el.scrollTop = el.scrollHeight - el.clientHeight - prevScrollFromBottom;
 
-  // runMermaid / runKatex only iterate their `pending` dictionaries (new IDs
-  // emitted by the freshly-rendered bubbles above), so they are already
+  // runPendingAsync only iterates the `pending` dictionaries (new IDs
+  // emitted by the freshly-rendered bubbles above), so it is already
   // incremental — no DOM scan is needed.
-  runMermaid();
-  runKatex();
+  runPendingAsync();
   navRebuild();
 }
 
@@ -2169,8 +2168,7 @@ function renderEvents(events) {
   if (events.length >= INITIAL_HISTORY_LIMIT) {
     ensureEarlierButton();
   }
-  runMermaid();
-  runKatex();
+  runPendingAsync();
   navRebuild();
   if (!restoreScrollPos(selectedKey, selectedNode)) {
     stickEventsBottom();
@@ -2204,8 +2202,7 @@ function appendEvents(events) {
   });
   if (sawUser) stickEventsBottom();
   else if (wasBottom) el.scrollTop = el.scrollHeight;
-  runMermaid();
-  runKatex();
+  runPendingAsync();
   // Rebuild nav index but preserve current position
   const oldIdx = navIdx;
   navUserEls = [...document.querySelectorAll('#events-scroll .event.user')];
@@ -2521,7 +2518,7 @@ function eventHtml(e) {
         '&node=' + encodeURIComponent(selectedNode || 'local') +
         '&path=' + encodeURIComponent(persistedPath);
       persistedBtn = '<a class="tr-persisted" href="' + escAttr(toolURL) +
-        '" target="_blank" rel="noopener" title="查看完整输出">📎 打开完整输出</a>';
+        '" target="_blank" rel="noopener noreferrer" title="查看完整输出">📎 打开完整输出</a>';
     }
     content = '<details class="tr-wrap"><summary class="tr-summary">' +
       esc(summary) + '</summary>' + detailHtml + persistedBtn + '</details>';
@@ -3009,7 +3006,13 @@ function fmtDuration(ms) {
 const toolVerbs = {
   Read: '读取', Edit: '编辑', Write: '写入', Bash: '执行',
   Grep: '搜索', Glob: '查找文件', Agent: 'Agent',
-  Notebook: '编辑 Notebook', WebFetch: '抓取'
+  Notebook: '编辑 Notebook', WebFetch: '抓取',
+  // RFC v4 §3.6.8 — tool verbs for the 2026-05 Claude tool set extension.
+  TeamCreate: '创建团队', TeamDelete: '解散团队',
+  SendMessage: '发消息', ToolSearch: '加载工具',
+  TaskOutput: '读 agent 输出', TaskStop: '停止 agent',
+  ScheduleWakeup: '排唤醒',
+  CronCreate: '建定时任务', CronDelete: '删定时任务', CronList: '查定时任务'
 };
 
 function toolVerb(tool, summary) {
@@ -6049,6 +6052,24 @@ function runKatex() {
   });
 }
 
+// isMathInline — decide whether the content captured between `$...$` pair
+// looks like a math expression rather than prose. Called after the outer
+// guard (non-alphanumeric on both sides of the `$`) has already rejected
+// obvious prose like "每月$650$USD". Three-tier check, any-match passes:
+//   1) contains an unambiguous LaTeX char (\ ^ _ { })
+//   2) otherwise must be built from "math alphabet" chars only (digits,
+//      single letters, operators, parens, punctuation) AND contain no two
+//      consecutive 3+ letter English words AND contain at least one digit
+//      or operator — this accepts `$x=1$` / `$2x$` / `$a+b$` and rejects
+//      any multi-word sentence that happened to slip past the outer guard.
+function isMathInline(tex) {
+  if (/[\\^_{}]/.test(tex)) return true;
+  if (!/^[\s\d+\-*/=<>≤≥≠±·×÷!().,;\[\]|a-zA-Z]+$/.test(tex)) return false;
+  if (/[a-zA-Z]{3,}\s+[a-zA-Z]{3,}/.test(tex)) return false;
+  if (!/[\d+\-*/=<>]/.test(tex)) return false;
+  return true;
+}
+
 function renderKatex(tex, displayMode) {
   if (katexReady) {
     try { return katex.renderToString(tex, { displayMode: displayMode, throwOnError: false }); }
@@ -6058,6 +6079,67 @@ function renderKatex(tex, displayMode) {
   katexPending[id] = { tex: tex, display: displayMode };
   loadKatex();
   return '<span id="' + id + '" class="katex-pending">' + esc(tex) + '</span>';
+}
+
+// runPendingAsync — single post-render glue point for every async pipeline
+// triggered by renderMd/renderRich output. Call sites that attach rendered
+// HTML to the live DOM invoke this once; never call runKatex / runMermaid
+// directly from feature code. Keeps chat bubbles, preview drawer, scratch
+// drawer, aside drawer on one flush contract so future pipelines (syntax
+// highlight etc.) plug in here without scattering across call sites.
+function runPendingAsync() {
+  runMermaid();
+  runKatex();
+}
+
+// renderRich — unified rich-text entrypoint. Single source of truth for
+// chat bubbles, file-preview drawer, scratch drawer, aside drawer. Pure
+// HTML producer (does NOT touch DOM); caller must runPendingAsync() after
+// attaching the result so KaTeX / Mermaid pending slots get flushed.
+//
+// opts.mode:
+//   'markdown' (default) — full md renderer (fenced code, math, mermaid,
+//                          tables, lists, links)
+//   'tex'                — .tex / .latex file: extract math blocks,
+//                          everything else kept as preformatted text
+//   'plain'              — no rendering, esc + <pre>
+function renderRich(src, opts) {
+  if (!src) return '';
+  const mode = (opts && opts.mode) || 'markdown';
+  if (mode === 'plain') return '<pre class="rich-plain">' + esc(src) + '</pre>';
+  if (mode === 'tex')   return renderTexDoc(src);
+  return renderMd(src);
+}
+
+// renderTexDoc — light .tex/.latex renderer. Not a LaTeX compiler; extracts
+// delimiters KaTeX supports and leaves the rest as preformatted text so
+// authors can see their source comments / section headers intact.
+function renderTexDoc(src) {
+  const RE = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\begin\{(equation|align|aligned|gather|multline|cases|array|pmatrix|bmatrix|vmatrix|Vmatrix|matrix)\*?\}[\s\S]+?\\end\{\2\*?\}|\$[^\$\n]+?\$|\\\([\s\S]+?\\\))/g;
+  const out = [];
+  let last = 0, m;
+  while ((m = RE.exec(src)) !== null) {
+    if (m.index > last) {
+      out.push('<pre class="rich-plain">' + esc(src.slice(last, m.index)) + '</pre>');
+    }
+    const b = m[0];
+    if (b.startsWith('$$')) {
+      out.push('<div class="md-math-display">' + renderKatex(b.slice(2, -2).trim(), true) + '</div>');
+    } else if (b.startsWith('\\[')) {
+      out.push('<div class="md-math-display">' + renderKatex(b.slice(2, -2).trim(), true) + '</div>');
+    } else if (b.startsWith('\\begin')) {
+      out.push('<div class="md-math-display">' + renderKatex(b, true) + '</div>');
+    } else if (b.startsWith('\\(')) {
+      out.push(renderKatex(b.slice(2, -2).trim(), false));
+    } else {
+      out.push(renderKatex(b.slice(1, -1), false));
+    }
+    last = m.index + b.length;
+  }
+  if (last < src.length) {
+    out.push('<pre class="rich-plain">' + esc(src.slice(last)) + '</pre>');
+  }
+  return out.join('');
 }
 
 /* Lightweight Markdown renderer for text/result events.
@@ -6258,7 +6340,13 @@ function scanEventForFileRefs(eventEl) {
   const activeNode = activeProj ? activeProj.node :
     (selectedKey ? (selectedNode || 'local') : null);
   if (!activeNode) return;
-  const codeEls = eventEl.querySelectorAll('.event-content code, .event-content .md-code');
+  // Selector covers both shapes of container:
+  //   - chat bubbles: `.event > .event-content > code/.md-code`
+  //   - preview drawer: `.fv-rich > code/.md-code`
+  //   - future drawers (scratch/aside): same contract — we only care about
+  //     code-shaped inline elements inside the passed root, regardless of
+  //     the intermediate wrapper class.
+  const codeEls = eventEl.querySelectorAll('code, .md-code');
   codeEls.forEach(code => {
     if (code.dataset.frScanned === '1') return;
     code.dataset.frScanned = '1';
@@ -6439,6 +6527,12 @@ async function openFilePreview(wrapEl) {
   const title = document.getElementById('fv-title');
   const meta = document.getElementById('fv-meta');
   if (!drawer || !body || !title || !meta) return;
+  // Warm-start async renderers the moment the drawer opens. loadKatex /
+  // loadMermaid are idempotent no-ops once ready; kicking them off in
+  // parallel with the preview fetch eliminates first-open pending flicker
+  // on .md / .tex files that contain math or diagrams.
+  loadKatex();
+  loadMermaid();
   const project = wrapEl.dataset.project;
   const node = wrapEl.dataset.node;
   const path = wrapEl.dataset.path;
@@ -6522,9 +6616,12 @@ async function openFilePreview(wrapEl) {
       parts.push('<div class="fv-truncated">file truncated at ' + formatFileSize(1024 * 1024) + ' (total ' + formatFileSize(data.size || 0) + ') — download for full content</div>');
     }
     const lang = inferLang(path, data.mime || '');
-    // Markdown: render via existing renderer; others: raw <pre><code> with line gutter.
-    if (lang === 'markdown') {
-      parts.push('<div class="fv-md">' + renderMd(data.content || '') + '</div>');
+    // Route through renderRich — same renderer chat bubbles use so behaviour
+    // (math, mermaid, tables, lists, file-refs) stays consistent across
+    // surfaces. Source-code files keep the line-number gutter layout.
+    if (lang === 'markdown' || lang === 'tex') {
+      const mode = lang === 'tex' ? 'tex' : 'markdown';
+      parts.push('<div class="fv-rich">' + renderRich(data.content || '', { mode: mode }) + '</div>');
     } else {
       const raw = data.content || '';
       const lines = raw.split('\n');
@@ -6532,6 +6629,16 @@ async function openFilePreview(wrapEl) {
       parts.push('<pre class="fv-lined"><span class="fv-gutter" aria-hidden="true">' + gutter + '</span><code class="fv-code">' + esc(raw) + '</code></pre>');
     }
     body.innerHTML = parts.join('');
+    // Flush KaTeX / Mermaid pending slots produced by renderRich above.
+    // Without this call, first-open of a .md file with math would leave
+    // `<span class="katex-pending">` placeholders on screen until a chat
+    // render happened to fire from another code path.
+    runPendingAsync();
+    // Mirror chat-side file-ref chip injection so paths inside the preview
+    // body also get [preview]/[download] affordances.
+    if (typeof scanEventForFileRefs === 'function') {
+      body.querySelectorAll('.fv-rich').forEach(scanEventForFileRefs);
+    }
     if (line) scrollToPreviewLine(body, parseInt(line, 10));
   } catch (e) {
     body.innerHTML = '<div class="fv-error">' + esc(String(e && e.message || e)) + '</div>';
@@ -6649,7 +6756,9 @@ function formatFileSize(bytes) {
 function inferLang(path, mime) {
   const ext = (path.split('.').pop() || '').toLowerCase();
   if (ext === 'md' || ext === 'markdown') return 'markdown';
+  if (ext === 'tex' || ext === 'latex') return 'tex';
   if (mime === 'text/markdown') return 'markdown';
+  if (mime === 'text/x-tex' || mime === 'application/x-tex') return 'tex';
   return '';
 }
 
@@ -6764,9 +6873,22 @@ function startFileRefObserver() {
   target.querySelectorAll('.event').forEach(scanEventForFileRefs);
 }
 
+// KaTeX environment names we split out as block-level math. Whitelisted —
+// feeding KaTeX an environment it doesn't support just emits an error span
+// and pollutes the block flow.
+const KATEX_ENVS = 'equation|align|aligned|gather|multline|cases|array|pmatrix|bmatrix|vmatrix|Vmatrix|matrix|split|alignat|CD';
+const BLOCK_SPLIT_RE = new RegExp(
+  '(```[\\s\\S]*?```' +
+  '|\\$\\$[\\s\\S]*?\\$\\$' +
+  '|\\\\\\[[\\s\\S]*?\\\\\\]' +
+  '|\\\\begin\\{(?:' + KATEX_ENVS + ')\\*?\\}[\\s\\S]*?\\\\end\\{(?:' + KATEX_ENVS + ')\\*?\\})',
+  'g'
+);
+
 function renderMdUncached(s) {
-  // Split by fenced code blocks and display math blocks
-  const parts = s.split(/(```[\s\S]*?```|\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\])/g);
+  // Split by fenced code blocks and display math blocks (including LaTeX
+  // environments like \begin{aligned}...\end{aligned}).
+  const parts = s.split(BLOCK_SPLIT_RE);
   return parts.map(part => {
     if (part.startsWith('```')) {
       const m = part.match(/^```(\w*)\n?([\s\S]*?)```$/);
@@ -6789,6 +6911,22 @@ function renderMdUncached(s) {
     }
     if (part.startsWith('\\[') && part.endsWith('\\]')) {
       return '<div class="md-math-display">' + renderKatex(part.slice(2, -2).trim(), true) + '</div>';
+    }
+    if (part.startsWith('\\begin{')) {
+      // Hand the whole environment to KaTeX in displayMode. KaTeX accepts
+      // `\begin{aligned}...\end{aligned}` etc. directly without outer `\[ \]`.
+      return '<div class="md-math-display">' + renderKatex(part, true) + '</div>';
+    }
+    // Pre-extract cross-line `\(...\)` before the per-line loop runs. inlineMd
+    // processes one line at a time, which would otherwise truncate multi-line
+    // inline math. Tokens survive esc() (NUL byte is not an HTML special) and
+    // get swapped back in after list/heading/table rendering completes.
+    const inlineMathTokens = [];
+    if (part.indexOf('\\(') !== -1) {
+      part = part.replace(/\\\(([\s\S]+?)\\\)/g, function(_, tex) {
+        inlineMathTokens.push(renderKatex(tex.trim(), false));
+        return '\x00ILM' + (inlineMathTokens.length - 1) + '\x00';
+      });
     }
     // Process line by line for block elements. Accumulate into a chunks array
     // + single join() at the end rather than `html +=` per line: V8 reallocates
@@ -6849,7 +6987,16 @@ function renderMdUncached(s) {
       chunks.push(inlineMd(line) + '<br>');
     }
     if (inList) chunks.push('</' + inList + '>');
-    return chunks.join('');
+    let rendered = chunks.join('');
+    // Restore the cross-line `\(...\)` tokens captured before the per-line
+    // loop. inlineMd tokens (`\x00KTX*\x00`) were already restored inside
+    // inlineMd itself; these ILM tokens sit at the block level.
+    if (inlineMathTokens.length > 0) {
+      rendered = rendered.replace(/\x00ILM(\d+)\x00/g, function(_, idx) {
+        return inlineMathTokens[+idx];
+      });
+    }
+    return rendered;
   }).join('');
 }
 
@@ -6876,10 +7023,13 @@ function inlineMd(s) {
   // — on a 200-line response the savings are measurable in V8 profiler.
   const mathTokens = [];
   if (s.indexOf('$') !== -1 || s.indexOf('\\(') !== -1) {
-    // `$...$`: require non-alphanumeric outside + LaTeX-ish char inside,
-    // else prose like "每月$650$USD" gets rendered as italic math.
+    // `$...$`: require non-alphanumeric outside + math-like content inside.
+    // The outer guard (non-alphanumeric on both sides) handles the "每月$650$USD"
+    // prose case. The inner guard (isMathInline) decides whether the captured
+    // span looks like a formula — accepting plain algebra like `$x=1$` /
+    // `$2x$` / `$a+b$` which the previous LaTeX-only heuristic rejected.
     s = s.replace(/(?<![A-Za-z0-9])\$([^\s\$][^\$\n]*?[^\s\$]|[^\s\$])\$(?![A-Za-z0-9])/g, function(match, tex) {
-      if (!/[\\^_{}]/.test(tex)) return match;
+      if (!isMathInline(tex)) return match;
       const idx = mathTokens.length;
       mathTokens.push(renderKatex(tex, false));
       return '\x00KTX' + idx + '\x00';
@@ -7557,8 +7707,7 @@ const wsm = {
       if (events.length >= INITIAL_HISTORY_LIMIT) {
         ensureEarlierButton();
       }
-      runMermaid();
-      runKatex();
+      runPendingAsync();
       navRebuild();
       // 若有上次切走时保存的滚动位置且不在底部，恢复它；否则照旧贴底。
       if (!restoreScrollPos(selectedKey, selectedNode)) {
@@ -7594,8 +7743,7 @@ const wsm = {
       });
       if (sawUser) stickEventsBottom();
       else if (wasBottom) el.scrollTop = el.scrollHeight;
-      runMermaid();
-  runKatex();
+      runPendingAsync();
       navUserEls = [...document.querySelectorAll('#events-scroll .event.user')];
       if (navIdx >= 0 && navIdx < navUserEls.length) { /* preserve */ } else navIdx = -1;
       navUpdatePill();
@@ -7722,8 +7870,7 @@ const wsm = {
     // User events always force-bottom; AI output only sticks when already at bottom.
     if (isUser) stickEventsBottom();
     else if (wasBottom) el.scrollTop = el.scrollHeight;
-    runMermaid();
-  runKatex();
+    runPendingAsync();
     if (ev.type === 'user') {
       navUserEls = [...document.querySelectorAll('#events-scroll .event.user')];
       navUpdatePill();

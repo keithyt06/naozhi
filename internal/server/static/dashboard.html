@@ -550,6 +550,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hira
 .md-math-display .katex-display{margin:0.5em 0}
 .katex{font-size:1.1em}
 .katex-html{overflow-wrap:break-word}
+/* Placeholder shown while KaTeX lazy-loads; raw TeX stays readable so users
+   on slow connections don't stare at nothing. runKatex() swaps this span
+   for the rendered formula once the bundle lands. */
+.katex-pending{font-family:'SF Mono',Consolas,monospace;color:var(--nz-text-dim);font-size:0.95em;padding:0 2px;background:var(--nz-bg-1);border-radius:3px}
+/* renderRich output host — preview drawer today, scratch/aside drawers
+   tomorrow. Block-level so list/table/code children stack naturally;
+   .md-* styles continue to apply to markdown content inside. */
+.fv-rich{padding:8px 12px;font-size:13px;line-height:1.7}
+.fv-rich>.md-math-display{margin:12px 0}
+/* Preformatted text emitted by renderTexDoc for non-math fragments in
+   .tex/.latex files. Visually close to .fv-lined <pre> so switching
+   between file types doesn't jolt the reader. */
+.rich-plain{margin:0 0 8px 0;padding:0;white-space:pre-wrap;word-break:break-word;font-family:'SF Mono',Consolas,monospace;color:var(--nz-text);background:transparent;border:none}
 .ts-subagent{display:inline-block;background:#1f2937;color:#a5d6ff;padding:0 5px;border-radius:4px;font-size:11px;font-weight:600;margin-left:2px}
 
 
