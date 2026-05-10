@@ -575,7 +575,7 @@ func (h *Hub) sessionSendLegacy(p sendParams, onAsyncError func(string)) (bool, 
 			if !h.guard.AcquireTimeout(h.ctx, key, 2*time.Second) {
 				slog.Error("send: interrupt timed out", "key", key)
 				if onAsyncError != nil {
-					onAsyncError("session busy, interrupt timed out")
+					onAsyncError("会话中断超时，请稍后重试。")
 				}
 				return
 			}

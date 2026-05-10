@@ -46,6 +46,12 @@ func asyncErrorMessage(err error) string {
 		return "当前会话排队已满，请稍候或使用 /stop 取消。"
 	case errors.Is(err, cli.ErrProcessBusy):
 		return "当前会话正在处理上一条消息，请稍候再发。"
+	case errors.Is(err, cli.ErrMessageTooLarge):
+		// Distinct from the generic "/new" hint — a reset won't help, the
+		// only remedy is to shorten the message or downscale attachments.
+		return "消息内容过大，请缩短后重试。"
+	case errors.Is(err, cli.ErrOrphanedSlot):
+		return "处理超时，请稍后重试。"
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return "系统正在重启，请稍后重试。"
 	default:

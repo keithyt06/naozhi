@@ -685,12 +685,12 @@ func (p *Process) readLoop() {
 		// goroutine for the process lifetime (50 sessions × 50 KB ≈ 2.5 MB
 		// of quiet resident overhead). A legit large event paying the
 		// re-grow cost again is cheaper than the permanent footprint.
-		// Decide lineBuf in a single step: avoid the prior pattern of
-		// `lineBuf = line` followed by `lineBuf = make(...)` which briefly
-		// pinned a second reference to `line`'s large backing array until
-		// the next GC cycle. The capExceeded branch additionally drains
-		// below, but the assignment here should already land on the fresh
-		// 4 KiB buffer so the oversized page is eligible for collection.
+		// Decide lineBuf in a single step. The capExceeded branch previously
+		// did `lineBuf = line` then immediately `lineBuf = make(...)`, which
+		// pinned a transient second reference to `line`'s large backing
+		// array until the next GC. Folding the two cases into one guard
+		// also avoids doing an unnecessary `make` on the hot path when the
+		// shrink isn't needed.
 		if capExceeded || cap(line) > lineBufShrinkThreshold {
 			lineBuf = make([]byte, 0, 4096)
 		} else {
