@@ -232,6 +232,15 @@ var (
 	// same: investigate disk latency / writer stall.
 	AttachmentRefDropTotal = expvar.NewInt("naozhi_attachment_ref_drop_total")
 
+	// CronExecutionSlowTotal counts cron executions that exceeded
+	// cronSlowThreshold wall-clock — a poor-man's histogram for R208-OBS1
+	// residual. Counter is monotonic (never resets); correlate with
+	// naozhi_cron_execution_failed_total (existing) to classify slow-vs-
+	// failed outcomes. A full histogram would require expvar gauge
+	// infrastructure; this counter lets ops add a Grafana single-stat
+	// alert without schema churn.
+	CronExecutionSlowTotal = expvar.NewInt("naozhi_cron_execution_slow_total")
+
 	// --- Startup phase timing gauges (RNEW-OPS-414) -----------------------
 	//
 	// Cold-start observability: historically the only signal operators had

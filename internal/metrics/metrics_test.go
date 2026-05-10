@@ -35,6 +35,7 @@ func TestCountersRegisteredUnderStableNames(t *testing.T) {
 		"naozhi_attachment_ref_clear_total",
 		"naozhi_attachment_ref_meta_error_total",
 		"naozhi_attachment_ref_drop_total",
+		"naozhi_cron_execution_slow_total",
 		// RNEW-OPS-414: startup phase timing gauges. Same expvar.Int
 		// storage as the counters above, so they belong in the same
 		// stable-names pin; the `_ms` suffix distinguishes them as
@@ -93,6 +94,7 @@ func TestCountersIncrement(t *testing.T) {
 		"attachment_ref_clear":          AttachmentRefClearTotal,
 		"attachment_ref_meta_error":     AttachmentRefMetaErrorTotal,
 		"attachment_ref_drop":           AttachmentRefDropTotal,
+		"cron_execution_slow":           CronExecutionSlowTotal,
 		// RNEW-OPS-414: startup phase gauges share the expvar.Int storage
 		// with the counters, so Add-based delta observation still holds
 		// — in production these are written via Set once per process,
@@ -136,6 +138,7 @@ func TestCountersJSONEncodable(t *testing.T) {
 		EventLogPersistReplayLeakTotal,
 		AttachmentRefBumpTotal, AttachmentRefClearTotal,
 		AttachmentRefMetaErrorTotal, AttachmentRefDropTotal,
+		CronExecutionSlowTotal,
 		// RNEW-OPS-414: startup phase gauges use expvar.Int too, so the
 		// same JSON-number shape pin applies.
 		StartupPhaseConfigMs, StartupPhaseRouterMs, StartupPhaseShimReconnectMs,

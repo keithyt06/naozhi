@@ -107,6 +107,16 @@ func TestOBS2_CounterCallSiteWiring(t *testing.T) {
 			path:    "../server/wshub.go",
 			pattern: `metrics\.WSAuthFailInvalidTokenTotal\.Add\(1\)`,
 		},
+		{
+			// R208-OBS1: CronExecutionSlowTotal increments inside
+			// executeOpt's post-completion elapsed check. Wiring outside
+			// the threshold compare (or in the wrong function) would
+			// either over-count every run or under-count by landing in an
+			// error branch.
+			name:    "CronExecutionSlowTotal fires after cron execution exceeds threshold",
+			path:    "../cron/scheduler.go",
+			pattern: `metrics\.CronExecutionSlowTotal\.Add\(1\)`,
+		},
 	}
 	for _, c := range cases {
 		c := c

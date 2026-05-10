@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/naozhi/naozhi/internal/eventlog/persist"
+	"github.com/naozhi/naozhi/internal/testhelper"
 )
 
 // makeFakeLog creates an empty .log / .idx pair under dir for the given
@@ -198,12 +199,8 @@ func TestRouter_RunOrphanSweep_Integration(t *testing.T) {
 	// Wait for it to finish deterministically via Shutdown's drain.
 	// We don't want to call Shutdown yet (that would tear down the
 	// persister), so use a bounded poll on the filesystem.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(persist.LogPath(eventLogDir, "stale-ghost")); os.IsNotExist(err) {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Errorf("orphan sweep did not remove stale-ghost within 2s")
+	testhelper.Eventually(t, func() bool {
+		_, err := os.Stat(persist.LogPath(eventLogDir, "stale-ghost"))
+		return os.IsNotExist(err)
+	}, 2*time.Second, "orphan sweep did not remove stale-ghost")
 }

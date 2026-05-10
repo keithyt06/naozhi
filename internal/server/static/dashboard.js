@@ -840,9 +840,14 @@ async function toggleFavorite(name, node) {
     if (t) headers['Authorization'] = 'Bearer ' + t;
     const qs = 'name=' + encodeURIComponent(name) + '&favorite=' + (next ? 'true' : 'false') +
       (node && node !== 'local' ? '&node=' + encodeURIComponent(node) : '');
-    const r = await fetch('/api/projects/favorite?' + qs, { method: 'POST', headers });
-    if (!r.ok) {
-      showAPIError(next ? '收藏项目' : '取消收藏', r.status, '');
+    try {
+      await fetchJSON('/api/projects/favorite?' + qs, { timeoutMs: 10000, method: 'POST', headers });
+    } catch (err) {
+      if (err && err.status) {
+        showAPIError(next ? '收藏项目' : '取消收藏', err.status, '');
+      } else {
+        showNetworkError(next ? '收藏项目' : '取消收藏', err);
+      }
       // Re-render from the server so the star's visual hover/click state
       // snaps back to the authoritative `projectsData` value; otherwise the
       // user sees a phantom success.
@@ -852,9 +857,6 @@ async function toggleFavorite(name, node) {
     // Optimistic update then refresh.
     proj.favorite = next;
     showToast(next ? '已收藏 ' + name : '已取消收藏 ' + name, 'success');
-    fetchSessions();
-  } catch (e) {
-    showNetworkError(next ? '收藏项目' : '取消收藏', e);
     fetchSessions();
   } finally {
     _favInFlight.delete(key);
@@ -1633,13 +1635,15 @@ async function dismissSession(key, node, opts) {
       const headers = {'Content-Type': 'application/json'};
       const token = getToken();
       if (token) headers['Authorization'] = 'Bearer ' + token;
-      const r = await fetch('/api/discovered/close', {
-        method: 'POST', headers,
-        body: JSON.stringify({pid: d.pid, session_id: d.session_id || '', cwd: d.cwd || '', proc_start_time: d.proc_start_time || 0, node: node || ''})
-      });
-      if (!r.ok) {
-        const text = await r.text().catch(() => '');
-        showAPIError('关闭外部会话', r.status, text);
+      try {
+        await fetchJSON('/api/discovered/close', {
+          timeoutMs: 10000,
+          method: 'POST', headers,
+          body: JSON.stringify({pid: d.pid, session_id: d.session_id || '', cwd: d.cwd || '', proc_start_time: d.proc_start_time || 0, node: node || ''})
+        });
+      } catch (err) {
+        if (err && err.status) showAPIError('关闭外部会话', err.status, err.message || '');
+        else showNetworkError('关闭外部会话', err);
         return;
       }
       discoveredItems = discoveredItems.filter(x => x.pid !== pid);
@@ -1657,28 +1661,31 @@ async function dismissSession(key, node, opts) {
     return;
   }
 
+  const headers = {'Content-Type': 'application/json'};
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const body = {key: key};
+  if (node && node !== 'local') body.node = node;
   try {
-    const headers = {'Content-Type': 'application/json'};
-    const token = getToken();
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    const body = {key: key};
-    if (node && node !== 'local') body.node = node;
-    const r = await fetch('/api/sessions', {method: 'DELETE', headers, body: JSON.stringify(body)});
-    if (!r.ok && r.status !== 404) {
-      const text = await r.text().catch(() => '');
-      showAPIError('删除会话', r.status, text);
+    await fetchJSON('/api/sessions', {timeoutMs: 10000, method: 'DELETE', headers, body: JSON.stringify(body)});
+  } catch (err) {
+    // 404 means session already gone — treat as success so the local cache
+    // catches up with the server without surfacing an error to the operator.
+    if (!err || err.status !== 404) {
+      if (err && err.status) showAPIError('删除会话', err.status, err.message || '');
+      else showNetworkError('删除会话', err);
       return;
     }
-    delete sessionsData[sid(key, node)];
-    if (selectedKey === key) {
-      selectedKey = null;
-      if (wsm.subscribedKey === key) wsm.unsubscribe();
-      document.getElementById('main').innerHTML = mainEmptyHtml();
-      wireQuickAskInput();
-    }
-    lastVersion = 0;
-    debouncedFetchSessions();
-  } catch (e) { showNetworkError('删除会话', e); }
+  }
+  delete sessionsData[sid(key, node)];
+  if (selectedKey === key) {
+    selectedKey = null;
+    if (wsm.subscribedKey === key) wsm.unsubscribe();
+    document.getElementById('main').innerHTML = mainEmptyHtml();
+    wireQuickAskInput();
+  }
+  lastVersion = 0;
+  debouncedFetchSessions();
 }
 
 // Operator-facing rename flow. Prompts for a new display label; empty input
@@ -1703,33 +1710,31 @@ async function renameSession() {
   if (input === null) return; // user cancelled
   const next = input.trim();
   if (next === current) return;
+  const headers = {'Content-Type': 'application/json'};
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const body = {key: selectedKey, label: next};
+  if (selectedNode && selectedNode !== 'local') body.node = selectedNode;
   try {
-    const headers = {'Content-Type': 'application/json'};
-    const token = getToken();
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    const body = {key: selectedKey, label: next};
-    if (selectedNode && selectedNode !== 'local') body.node = selectedNode;
-    const r = await fetch('/api/sessions/label', {
+    await fetchJSON('/api/sessions/label', {
+      timeoutMs: 10000,
       method: 'PATCH', headers,
       body: JSON.stringify(body),
     });
-    if (!r.ok) {
-      const text = await r.text().catch(() => '');
-      showAPIError('重命名', r.status, text);
-      return;
-    }
-    // Patch local cache so the title refreshes before the next poll lands.
-    const cacheKey = sid(selectedKey, selectedNode);
-    if (sessionsData[cacheKey]) {
-      sessionsData[cacheKey].user_label = next;
-    }
-    lastVersion = 0;
-    debouncedFetchSessions();
-    if (typeof renderMainShell === 'function') renderMainShell();
-    showToast(next ? '已重命名' : '已恢复默认标题');
-  } catch (e) {
-    showNetworkError('重命名', e);
+  } catch (err) {
+    if (err && err.status) showAPIError('重命名', err.status, err.message || '');
+    else showNetworkError('重命名', err);
+    return;
   }
+  // Patch local cache so the title refreshes before the next poll lands.
+  const cacheKey = sid(selectedKey, selectedNode);
+  if (sessionsData[cacheKey]) {
+    sessionsData[cacheKey].user_label = next;
+  }
+  lastVersion = 0;
+  debouncedFetchSessions();
+  if (typeof renderMainShell === 'function') renderMainShell();
+  showToast(next ? '已重命名' : '已恢复默认标题');
 }
 
 // --- Markdown export (UX P2) ---
@@ -3540,7 +3545,7 @@ function navShowList() {
   const popover = document.createElement('div');
   popover.id = 'nav-list-popover';
   const maxW = Math.min(280, (document.getElementById('main')?.offsetWidth || 280) - 70);
-  popover.style.cssText = 'position:absolute;right:44px;bottom:0;width:' + maxW + 'px;max-height:300px;overflow-y:auto;background:rgba(22,27,34,.95);backdrop-filter:blur(8px);border:1px solid #30363d;border-radius:10px;padding:6px 0;z-index:11;font-size:13px;scrollbar-width:thin;scrollbar-color:#30363d transparent';
+  popover.style.cssText = 'position:absolute;right:44px;bottom:0;width:' + maxW + 'px;max-height:300px;overflow-y:auto;background:rgba(22,27,34,.95);backdrop-filter:blur(8px);border:1px solid var(--nz-border);border-radius:10px;padding:6px 0;z-index:11;font-size:13px;scrollbar-width:thin;scrollbar-color:var(--nz-border) transparent';
   popover.innerHTML = items.join('');
   pill.appendChild(popover);
   popover.querySelectorAll('.nav-list-item').forEach(item => {
@@ -4651,7 +4656,7 @@ function renderBackendPicker(backendsData) {
   }).join('');
   return '<div style="margin-bottom:12px">' +
     '<label style="font-size:12px;color:var(--nz-text-mute);display:block;margin-bottom:4px" for="new-backend">CLI backend</label>' +
-    '<select id="new-backend" style="width:100%;padding:6px 8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:4px">' +
+    '<select id="new-backend" style="width:100%;padding:6px 8px;background:var(--nz-bg-0);color:var(--nz-text);border:1px solid var(--nz-border);border-radius:4px">' +
     options +
     '</select>' +
     '</div>';
@@ -4685,7 +4690,7 @@ function renderAgentPicker() {
   }).join('');
   return '<div style="margin-bottom:12px">' +
     '<label style="font-size:12px;color:var(--nz-text-mute);display:block;margin-bottom:4px" for="new-agent">Agent</label>' +
-    '<select id="new-agent" style="width:100%;padding:6px 8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:4px">' +
+    '<select id="new-agent" style="width:100%;padding:6px 8px;background:var(--nz-bg-0);color:var(--nz-text);border:1px solid var(--nz-border);border-radius:4px">' +
     options +
     '</select>' +
     '</div>';
@@ -5099,7 +5104,7 @@ function pickPaletteCustom(initialValue) {
       picker +
       agentPicker +
       '<div style="margin-bottom:12px">' +
-        '<label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px" for="new-workspace">工作目录路径</label>' +
+        '<label style="font-size:12px;color:var(--nz-text-mute);display:block;margin-bottom:4px" for="new-workspace">工作目录路径</label>' +
         '<input id="new-workspace" placeholder="' + escAttr(ws) + '" value="' + escAttr(prefill) + '" onkeydown="if(event.key===\'Enter\'){doCreateSession()}">' +
       '</div>' +
       '<div class="modal-btns">' +
@@ -9905,13 +9910,15 @@ async function doCreateCronJob() {
     if (notifyVals.notify_chat_id !== null) body.notify_chat_id = notifyVals.notify_chat_id;
     const freshCtx = collectCronContextValue();
     if (freshCtx === true) body.fresh_context = true;
-    const r = await fetch('/api/cron', {method: 'POST', headers, body: JSON.stringify(body)});
-    if (!r.ok) {
-      const errText = await r.text().catch(() => '');
-      showAPIError('创建定时任务', r.status, errText);
+    let data;
+    try {
+      data = await fetchJSON('/api/cron', {timeoutMs: 10000, method: 'POST', headers, body: JSON.stringify(body)});
+    } catch (err) {
+      if (err && err.status) showAPIError('创建定时任务', err.status, err.message || '');
+      else showNetworkError('创建定时任务', err);
       return;
     }
-    const data = await r.json();
+    if (!data) data = {};
     if (overlay) overlay.remove();
     showToast('定时任务已创建', 'success');
     fetchCronJobs();

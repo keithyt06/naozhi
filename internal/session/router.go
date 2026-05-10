@@ -1157,6 +1157,47 @@ func classifyShimState(spawning, sessFound, hasLiveProc, wrapperNil, argsDrift b
 	return shimStateReconnect
 }
 
+// shutdownShimViaReconnect briefly reconnects to an existing shim and
+// asks it to Shutdown gracefully, with a timeout guard so a hung
+// socket cannot stall the caller. When sigusr2Fallback is true, a
+// failed Reconnect triggers SIGUSR2 on the shim PID (shim's
+// reload-and-die signal); with sigusr2Fallback false, failure is
+// silent (drift path: wrapper is guaranteed non-nil by classify, and
+// we let the 30s discovery tick revisit on next failure).
+//
+// IIFE-with-defer style in-place equivalent; the helper owns context
+// cancel so callers cannot forget it (R32-REL1 invariant).
+//
+// Returns no error: the original branches were fire-and-forget and
+// preserving that keeps the extraction behaviour-identical.
+func shutdownShimViaReconnect(
+	parentCtx context.Context,
+	wrapper *cli.Wrapper,
+	state shim.State,
+	timeout time.Duration,
+	sigusr2Fallback bool,
+) {
+	rctx, rcancel := context.WithTimeout(parentCtx, timeout)
+	defer rcancel()
+
+	var (
+		handle  *shim.ShimHandle
+		connErr error
+	)
+	if wrapper != nil && wrapper.ShimManager != nil {
+		handle, connErr = wrapper.ShimManager.Reconnect(rctx, state.Key, 0)
+	} else {
+		connErr = fmt.Errorf("no shim manager for backend %q", state.Backend)
+	}
+	if connErr == nil {
+		handle.Shutdown()
+		return
+	}
+	if sigusr2Fallback {
+		syscall.Kill(state.ShimPID, syscall.SIGUSR2) //nolint:errcheck
+	}
+}
+
 func (r *Router) reconnectShims(parentCtx context.Context) {
 	managers := r.shimManagers()
 	if len(managers) == 0 {
@@ -1239,27 +1280,8 @@ func (r *Router) reconnectShims(parentCtx context.Context) {
 			slog.Info("orphan shim found, shutting down", "key", state.Key)
 			// Connect briefly to send shutdown. Bound the reconnect so a
 			// hung shim socket cannot stall NewRouter startup — we fall
-			// through to SIGUSR2 if the timeout fires. IIFE + defer so
-			// rcancel always runs even if Reconnect or Shutdown panics
-			// (R32-REL1).
-			func() {
-				rctx, rcancel := context.WithTimeout(parentCtx, shimReconnectTimeout)
-				defer rcancel()
-				var (
-					handle  *shim.ShimHandle
-					connErr error
-				)
-				if recWrapper != nil && recWrapper.ShimManager != nil {
-					handle, connErr = recWrapper.ShimManager.Reconnect(rctx, state.Key, 0)
-				} else {
-					connErr = fmt.Errorf("no shim manager for backend %q", state.Backend)
-				}
-				if connErr == nil {
-					handle.Shutdown()
-				} else {
-					syscall.Kill(state.ShimPID, syscall.SIGUSR2) //nolint:errcheck
-				}
-			}()
+			// through to SIGUSR2 if the timeout fires.
+			shutdownShimViaReconnect(parentCtx, recWrapper, state, shimReconnectTimeout, true)
 			continue
 		case shimStateNoWrapper:
 			slog.Warn("shim reconnect skipped: no wrapper for backend",
@@ -1270,15 +1292,10 @@ func (r *Router) reconnectShims(parentCtx context.Context) {
 				"key", state.Key,
 				"old_args_len", len(storedBase),
 				"new_args_len", len(currentArgs))
-			// IIFE + defer ensures rcancel runs even on panic (R32-REL1).
-			func() {
-				rctx, rcancel := context.WithTimeout(parentCtx, shimReconnectTimeout)
-				defer rcancel()
-				handle, err := recWrapper.ShimManager.Reconnect(rctx, state.Key, 0)
-				if err == nil {
-					handle.Shutdown()
-				}
-			}()
+			// Drift path: classify guarantees recWrapper is non-nil, so no
+			// SIGUSR2 fallback needed — if Reconnect fails, the 30s tick
+			// will revisit.
+			shutdownShimViaReconnect(parentCtx, recWrapper, state, shimReconnectTimeout, false)
 			// After killing the old shim the session becomes suspended until the
 			// next user message spawns a fresh process. NewRouter's async JSONL
 			// load loop skips this key because shimManagedKeys() already claimed
@@ -1941,6 +1958,55 @@ func (r *Router) resolveSpawnParamsLocked(key, resumeID string, opts AgentOpts) 
 	}
 }
 
+// collectPreviousHistory gathers JSONL-backed history entries and the
+// session ID chain for a respawn. Returns (entries, chain). Pure
+// computation — no mutation of r.sessions; caller must hold r.mu
+// if it needs serialisation w.r.t. sibling spawn attempts.
+//
+// Extracted from spawnSession (R70-ARCH-H2 paired with
+// resolveSpawnParamsLocked). The dead-process branch prefers
+// EventEntries() over persistedHistory because EventEntries includes
+// live events accumulated since the JSONL snapshot was last loaded;
+// the live-but-suspended branch (no process, or alive waiting) falls
+// back to the persisted snapshot.
+func collectPreviousHistory(oldSess *ManagedSession, oldPrevIDs []string, resumeID string) ([]cli.EventEntry, []string) {
+	if oldSess == nil {
+		return nil, nil
+	}
+
+	var entries []cli.EventEntry
+	oldSess.historyMu.RLock()
+	if p := oldSess.loadProcess(); p != nil && !p.Alive() {
+		// Dead process: EventEntries() includes both injected history and live events
+		// logged during the last run. Use this instead of persistedHistory, which only
+		// holds the JSONL-loaded snapshot and misses events accumulated since that load.
+		entries = p.EventEntries()
+	} else if len(oldSess.persistedHistory) > 0 {
+		entries = make([]cli.EventEntry, len(oldSess.persistedHistory))
+		copy(entries, oldSess.persistedHistory)
+	}
+	oldSess.historyMu.RUnlock()
+
+	// Build session chain: inherit old chain and append old session ID,
+	// but only when the old ID differs from resumeID (i.e. a truly new
+	// CLI session is replacing the old one, not just resuming the same one).
+	var prevIDs []string
+	if oldID := oldSess.getSessionID(); oldID != "" && oldID != resumeID {
+		prevIDs = make([]string, len(oldPrevIDs), len(oldPrevIDs)+1)
+		copy(prevIDs, oldPrevIDs)
+		prevIDs = append(prevIDs, oldID)
+	} else {
+		prevIDs = oldPrevIDs
+	}
+	// Cap the chain to bound sessions.json size and JSONL load time on
+	// long-lived chats; oldest entries are the cheapest to drop because
+	// the retained tail carries the most recent conversational context.
+	if len(prevIDs) > maxPrevSessionIDs {
+		prevIDs = prevIDs[len(prevIDs)-maxPrevSessionIDs:]
+	}
+	return entries, prevIDs
+}
+
 // spawnSession creates a new process, optionally resuming an existing session.
 // Caller must hold r.mu. Releases r.mu during Spawn() to avoid blocking other
 // goroutines during potentially slow protocol init (e.g., ACP handshake).
@@ -2076,38 +2142,7 @@ func (r *Router) spawnSession(ctx context.Context, key string, resumeID string, 
 	}
 	r.mu.Unlock()
 
-	var oldHistory []cli.EventEntry
-	var prevIDs []string
-	if old != nil {
-		old.historyMu.RLock()
-		if p := old.loadProcess(); p != nil && !p.Alive() {
-			// Dead process: EventEntries() includes both injected history and live events
-			// logged during the last run. Use this instead of persistedHistory, which only
-			// holds the JSONL-loaded snapshot and misses events accumulated since that load.
-			oldHistory = p.EventEntries()
-		} else if len(old.persistedHistory) > 0 {
-			oldHistory = make([]cli.EventEntry, len(old.persistedHistory))
-			copy(oldHistory, old.persistedHistory)
-		}
-		old.historyMu.RUnlock()
-
-		// Build session chain: inherit old chain and append old session ID,
-		// but only when the old ID differs from resumeID (i.e. a truly new
-		// CLI session is replacing the old one, not just resuming the same one).
-		if oldID := old.getSessionID(); oldID != "" && oldID != resumeID {
-			prevIDs = make([]string, len(oldPrevIDs), len(oldPrevIDs)+1)
-			copy(prevIDs, oldPrevIDs)
-			prevIDs = append(prevIDs, oldID)
-		} else {
-			prevIDs = oldPrevIDs
-		}
-		// Cap the chain to bound sessions.json size and JSONL load time on
-		// long-lived chats; oldest entries are the cheapest to drop because
-		// the retained tail carries the most recent conversational context.
-		if len(prevIDs) > maxPrevSessionIDs {
-			prevIDs = prevIDs[len(prevIDs)-maxPrevSessionIDs:]
-		}
-	}
+	oldHistory, prevIDs := collectPreviousHistory(old, oldPrevIDs, resumeID)
 
 	r.mu.Lock()
 	// ── TOCTOU guard 2: Defends against concurrent spawnSession during history copy.

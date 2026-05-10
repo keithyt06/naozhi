@@ -253,7 +253,12 @@ func TestProcess_StateTransitions(t *testing.T) {
 
 	go p.readLoop()
 
-	// Wait for readLoop to set StateReady
+	// TRUE-time-delay (not migrated to testhelper.Eventually): readLoop
+	// does not mutate p.State before blocking on shimR.ReadBytes — only
+	// startReadLoop() sets StateReady, and this test calls readLoop
+	// directly. No observable "loop is scheduled" signal exists, so we
+	// yield the scheduler briefly. Keep short; state mutations below
+	// do not actually depend on readLoop having run.
 	time.Sleep(10 * time.Millisecond)
 
 	// Simulate Send() acquiring lock: Ready → Running

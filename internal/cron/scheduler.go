@@ -21,6 +21,7 @@ import (
 
 	robfigcron "github.com/robfig/cron/v3"
 
+	"github.com/naozhi/naozhi/internal/metrics"
 	"github.com/naozhi/naozhi/internal/osutil"
 	"github.com/naozhi/naozhi/internal/platform"
 	"github.com/naozhi/naozhi/internal/session"
@@ -94,7 +95,13 @@ type SchedulerConfig struct {
 	AgentCommands map[string]string
 	StorePath     string
 	MaxJobs       int
-	ExecTimeout   time.Duration
+	// MaxJobsPerChat overrides DefaultMaxJobsPerChat when > 0. Zero (and
+	// negative) values fall back to the default — this is deliberate so
+	// operators cannot accidentally disable the cap and let one chat
+	// starve the exempt-session pool (see DefaultMaxJobsPerChat's BL2
+	// note). R208-BL2.
+	MaxJobsPerChat int
+	ExecTimeout    time.Duration
 	// Location is the timezone in which schedule expressions are evaluated.
 	// nil defaults to time.Local so cron expressions match wall-clock time
 	// on the host (respects $TZ / /etc/localtime).
@@ -156,7 +163,11 @@ type Scheduler struct {
 	agentCommands map[string]string
 	storePath     string
 	maxJobs       int
-	execTimeout   time.Duration
+	// maxJobsPerChat is the resolved per-chat cap: SchedulerConfig
+	// MaxJobsPerChat when > 0, otherwise DefaultMaxJobsPerChat. Immutable
+	// after NewScheduler returns, so AddJob can read it lock-free.
+	maxJobsPerChat int
+	execTimeout    time.Duration
 	// location is the timezone used to interpret schedule expressions and to
 	// compute preview/next-run times exposed via the dashboard.
 	location *time.Location
@@ -250,8 +261,9 @@ const maxJobsHardCap = 500
 // DefaultMaxJobsPerChat bounds how many cron jobs a single chat (platform+
 // chat_id pair) may own. Prevents one loud group from consuming the
 // global MaxJobs quota. Exported so tests and docs can reference the
-// value; config override is deliberately not wired up yet — if operators
-// need it tunable, promote it into SchedulerConfig as a follow-up.
+// value; operators can override per deployment via
+// SchedulerConfig.MaxJobsPerChat (zero / unset falls back to this
+// default — no way to "disable" the cap without rebuilding).
 //
 // Relationship to exempt pool (BL2 acknowledged design):
 // Every cron job calls session.Router.RegisterCronStub at scheduler
@@ -262,6 +274,13 @@ const maxJobsHardCap = 500
 // maxCronExemptSessions reserve or per-chat fair-share eviction is the
 // escape hatch if pressure materialises.
 const DefaultMaxJobsPerChat = 10
+
+// cronSlowThreshold is the wall-clock budget beyond which a successful
+// cron execution is counted as "slow" (metrics.CronExecutionSlowTotal).
+// 30s is picked as an order-of-magnitude above a typical interactive
+// agent turn; jobs that regularly tip over are candidates for timeout /
+// workflow inspection. R208-OBS1.
+const cronSlowThreshold = 30 * time.Second
 
 // workDirReachable reports whether workDir exists and resolves to a
 // directory right now. Used before fresh-mode Reset so a job whose
@@ -331,6 +350,12 @@ func NewScheduler(cfg SchedulerConfig) *Scheduler {
 		slog.Warn("cron max_jobs exceeds hard cap, clamping", "requested", cfg.MaxJobs, "cap", maxJobsHardCap)
 		cfg.MaxJobs = maxJobsHardCap
 	}
+	// Resolve per-chat cap at construction: <= 0 maps to the default so a
+	// zero struct field cannot silently disable the cap. R208-BL2.
+	maxPerChat := cfg.MaxJobsPerChat
+	if maxPerChat <= 0 {
+		maxPerChat = DefaultMaxJobsPerChat
+	}
 	if cfg.ExecTimeout <= 0 {
 		cfg.ExecTimeout = 5 * time.Minute
 	}
@@ -368,6 +393,7 @@ func NewScheduler(cfg SchedulerConfig) *Scheduler {
 		agentCommands:       cfg.AgentCommands,
 		storePath:           cfg.StorePath,
 		maxJobs:             cfg.MaxJobs,
+		maxJobsPerChat:      maxPerChat,
 		execTimeout:         cfg.ExecTimeout,
 		location:            loc,
 		notifyDefault:       cfg.NotifyDefault,
@@ -638,9 +664,9 @@ func (s *Scheduler) AddJob(j *Job) error {
 			chatCount++
 		}
 	}
-	if chatCount >= DefaultMaxJobsPerChat {
+	if chatCount >= s.maxJobsPerChat {
 		s.mu.Unlock()
-		return fmt.Errorf("per-chat cron limit reached (%d)", DefaultMaxJobsPerChat)
+		return fmt.Errorf("per-chat cron limit reached (%d)", s.maxJobsPerChat)
 	}
 
 	j.ID = generateID()
@@ -1526,9 +1552,22 @@ func (s *Scheduler) executeOpt(j *Job, viaTriggerNow bool) {
 		return
 	}
 
+	elapsed := time.Since(execStart)
 	lg.Info("cron job completed",
 		"result_len", len(result.Text),
-		"elapsed_ms", time.Since(execStart).Milliseconds())
+		"elapsed_ms", elapsed.Milliseconds())
+	if elapsed > cronSlowThreshold {
+		// R208-OBS1: poor-man's histogram — a single counter that fires
+		// when a successful execution takes longer than cronSlowThreshold.
+		// Wired here (not in recordResult) so only success-path latency
+		// counts; error paths already surface via the existing
+		// LastError plumbing.
+		metrics.CronExecutionSlowTotal.Add(1)
+		lg.Warn("cron execution slow",
+			"job_id", jobID,
+			"elapsed_ms", elapsed.Milliseconds(),
+			"threshold_ms", cronSlowThreshold.Milliseconds())
+	}
 	// 把本次产生的 Claude session_id 也记下来：fresh_context=true 的
 	// 路径下一次 Reset 会清掉 stub 的 chain，不保留这个 ID 的话
 	// dashboard 点击 cron 侧边栏就看不到上一次的 JSONL 历史。

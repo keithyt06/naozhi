@@ -46,7 +46,11 @@ func TestProcess_DrainStaleEvents_ConcurrentInterruptLossless(t *testing.T) {
 	p.startReadLoop()
 	defer p.Kill()
 
-	// Let readLoop reach steady-state before we start racing atomics.
+	// TRUE-time-delay (not migrated to testhelper.Eventually):
+	// startReadLoop sets State=StateReady synchronously, so there is no
+	// State-based condition to poll; we are waiting for the goroutines
+	// (readLoop + heartbeat) to be scheduled and block on their
+	// respective reads before racing atomics against them.
 	time.Sleep(10 * time.Millisecond)
 
 	const iterations = 5000
@@ -171,6 +175,11 @@ func TestProcess_DrainStaleEvents_ClearsBothFlagsRegardlessOfEntry(t *testing.T)
 			// the test does not pay 500ms.
 			if tc.interrupted && tc.interruptedRun {
 				go func() {
+					// TRUE-time-delay (not migrated to
+					// testhelper.Eventually): intentional delay so the
+					// drain enters its 500ms settle window before a
+					// synthetic result arrives, exercising the settle
+					// path without paying the full settle timeout.
 					time.Sleep(20 * time.Millisecond)
 					srv.SendStdout(`{"type":"result","result":"drain"}`)
 				}()

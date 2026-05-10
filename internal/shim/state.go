@@ -51,6 +51,13 @@ type State struct {
 
 const stateVersion = 1
 
+// maxSupportedSchemaVersion is the largest SchemaVersion this naozhi
+// build knows how to read. A state file claiming a higher version
+// may contain fields / semantics this binary doesn't understand,
+// so Reader REFUSES to parse it rather than silently dropping data.
+// Bump this when the schema grows a new forward-compatible field.
+const maxSupportedSchemaVersion = 1
+
 // WriteStateFile atomically writes the state to path with mode 0600.
 func WriteStateFile(path string, state State) error {
 	state.Version = stateVersion
@@ -134,6 +141,9 @@ func ReadStateFile(path string) (State, error) {
 	}
 	if state.Version != stateVersion {
 		return State{}, fmt.Errorf("unsupported state version %d (want %d) in %s", state.Version, stateVersion, path)
+	}
+	if state.SchemaVersion > maxSupportedSchemaVersion {
+		return State{}, fmt.Errorf("shim state schema_version %d > max supported %d (newer naozhi wrote it)", state.SchemaVersion, maxSupportedSchemaVersion)
 	}
 	return state, nil
 }

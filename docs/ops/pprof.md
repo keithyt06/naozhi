@@ -136,6 +136,7 @@ curl -s -H "Authorization: Bearer $TOK" 'http://127.0.0.1:8180/api/debug/pprof/g
 | `naozhi_attachment_ref_clear_total` | OnSessionRemoved 走 workspace 清 keyhash 的 .meta 重写次数 | 仅在 session 被删时短时涨,平时 0 |
 | `naozhi_attachment_ref_meta_error_total` | tracker UpdateMetaFile 失败数(缺 sidecar / ENOSPC / perm) | 稳态 0;非零 = attachment 将回退到仅 uploaded_at TTL GC |
 | `naozhi_attachment_ref_drop_total` | tracker 非阻塞 enqueue 满 channel 丢弃数 | 稳态 0;非零 = 调用方提交过快或磁盘 latency 异常,同 Persister 运维 |
+| `naozhi_cron_execution_slow_total` | cron job 成功执行但耗时超过 `cronSlowThreshold`（当前 30s）的累计次数（R208-OBS1 的 MVP histogram 替身） | 持续增长 = 某些 job 长期压线超时；对照 job id（slog.Warn "cron execution slow"）确认是 prompt 设计问题还是 backend 退化 |
 
 这个表的"完整性"由 `internal/metrics/metrics_doc_sync_test.go` 锁定：metrics.go 新增 counter 但未同步文档会在 CI 红。
 
@@ -210,6 +211,7 @@ ssh ec2-user@prod-host 'curl -s -H "Authorization: Bearer $TOK" http://127.0.0.1
   attachment_ref_clear: .naozhi_attachment_ref_clear_total,
   attachment_ref_meta_error: .naozhi_attachment_ref_meta_error_total,
   attachment_ref_drop: .naozhi_attachment_ref_drop_total,
+  cron_execution_slow: .naozhi_cron_execution_slow_total,
   uptime: .memstats.uptime
 }'
 ```

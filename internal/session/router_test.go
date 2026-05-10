@@ -12,6 +12,7 @@ import (
 
 	"github.com/naozhi/naozhi/internal/cli"
 	"github.com/naozhi/naozhi/internal/discovery"
+	"github.com/naozhi/naozhi/internal/testhelper"
 )
 
 // ---------------------------------------------------------------------------
@@ -1526,14 +1527,9 @@ func TestStartCleanupLoop_TriggersCleanup(t *testing.T) {
 	r.StartCleanupLoop(ctx, 20*time.Millisecond)
 
 	// Wait for at least one cleanup cycle.
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		if !proc.Alive() {
-			return // cleanup fired and closed the expired session
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Error("cleanup loop did not close expired session within 500ms")
+	testhelper.Eventually(t, func() bool {
+		return !proc.Alive() // cleanup fired and closed the expired session
+	}, 500*time.Millisecond, "cleanup loop did not close expired session")
 }
 
 func TestStartCleanupLoop_StopsOnContextCancel(t *testing.T) {
@@ -2169,4 +2165,68 @@ func TestClassifyShimState(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// collectPreviousHistory — R70-ARCH-H2 paired with resolveSpawnParamsLocked
+// ---------------------------------------------------------------------------
+
+// TestCollectPreviousHistory covers the three shapes spawnSession feeds
+// in: fresh (no prior session), resume-same-id (no chain growth), and
+// respawn-different-id (old ID appended to prevIDs).
+func TestCollectPreviousHistory(t *testing.T) {
+	t.Run("fresh: nil old session returns empty", func(t *testing.T) {
+		entries, prev := collectPreviousHistory(nil, nil, "")
+		if entries != nil || prev != nil {
+			t.Errorf("collectPreviousHistory(nil) = (%v, %v), want (nil, nil)", entries, prev)
+		}
+	})
+
+	t.Run("resume same id: chain unchanged, persistedHistory cloned", func(t *testing.T) {
+		persisted := []cli.EventEntry{
+			{Time: 1000, Type: "user", Summary: "hi"},
+		}
+		oldPrev := []string{"id-a"}
+		s := &ManagedSession{persistedHistory: persisted}
+		s.setSessionID("id-b")
+
+		entries, prev := collectPreviousHistory(s, oldPrev, "id-b")
+
+		if len(entries) != 1 || entries[0].Summary != "hi" {
+			t.Errorf("entries = %v, want one 'hi' entry", entries)
+		}
+		if len(prev) != 1 || prev[0] != "id-a" {
+			t.Errorf("prev = %v, want [id-a] (same id, no growth)", prev)
+		}
+	})
+
+	t.Run("respawn new id: old id appended to chain", func(t *testing.T) {
+		s := &ManagedSession{}
+		s.setSessionID("id-old")
+
+		_, prev := collectPreviousHistory(s, []string{"id-a"}, "id-new")
+
+		if len(prev) != 2 || prev[0] != "id-a" || prev[1] != "id-old" {
+			t.Errorf("prev = %v, want [id-a id-old]", prev)
+		}
+	})
+
+	t.Run("chain cap: bounded at maxPrevSessionIDs", func(t *testing.T) {
+		s := &ManagedSession{}
+		s.setSessionID("id-old")
+
+		// Seed oldPrev at the cap so appending old.sessionID overflows.
+		oldPrev := make([]string, maxPrevSessionIDs)
+		for i := range oldPrev {
+			oldPrev[i] = fmt.Sprintf("id-%d", i)
+		}
+		_, prev := collectPreviousHistory(s, oldPrev, "id-new")
+
+		if len(prev) != maxPrevSessionIDs {
+			t.Fatalf("prev len = %d, want %d (capped)", len(prev), maxPrevSessionIDs)
+		}
+		if prev[len(prev)-1] != "id-old" {
+			t.Errorf("last entry = %q, want id-old (newest retained)", prev[len(prev)-1])
+		}
+	})
 }

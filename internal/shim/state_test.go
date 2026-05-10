@@ -190,6 +190,57 @@ func TestShimState_ZeroSchemaVersionIsV1(t *testing.T) {
 	}
 }
 
+func TestReadState_SchemaVersionExceedsMaxRejected(t *testing.T) {
+	// A state file claiming schema_version > maxSupportedSchemaVersion
+	// was written by a newer naozhi with fields/semantics this binary
+	// cannot interpret. Reader MUST refuse and return the zero State
+	// rather than silently dropping data.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "future.json")
+	payload := `{"version":1,"schema_version":2,"shim_pid":1,"socket":"/tmp/s.sock","auth_token":"dA==","key":"k"}`
+	if err := os.WriteFile(path, []byte(payload), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadStateFile(path)
+	if err == nil {
+		t.Fatal("expected error for schema_version > max, got nil")
+	}
+	if !strings.Contains(err.Error(), "schema_version 2") || !strings.Contains(err.Error(), "max supported 1") {
+		t.Errorf("error should name both observed and max schema version, got: %v", err)
+	}
+	// On schema rejection the returned State must be the zero value; asserting
+	// on the fields populated by the rejected payload is enough to prove no
+	// partial data leaked through.
+	if got.ShimPID != 0 || got.Socket != "" || got.AuthToken != "" || got.Key != "" ||
+		got.Version != 0 || got.SchemaVersion != 0 || got.CLIArgs != nil {
+		t.Errorf("on schema rejection, returned State must be zero value; got %+v", got)
+	}
+}
+
+func TestReadState_SchemaVersionEqualToMaxAccepted(t *testing.T) {
+	// schema_version == maxSupportedSchemaVersion is inside the
+	// supported range and must round-trip without error.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "max.json")
+	want := State{
+		SchemaVersion: maxSupportedSchemaVersion,
+		ShimPID:       1,
+		Socket:        "/tmp/s.sock",
+		AuthToken:     "dA==",
+		Key:           "k",
+	}
+	if err := WriteStateFile(path, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadStateFile(path)
+	if err != nil {
+		t.Fatalf("ReadStateFile: %v", err)
+	}
+	if got.SchemaVersion != maxSupportedSchemaVersion {
+		t.Errorf("SchemaVersion = %d, want %d", got.SchemaVersion, maxSupportedSchemaVersion)
+	}
+}
+
 func TestReadStateFile_NotFound(t *testing.T) {
 	_, err := ReadStateFile("/nonexistent/path/state.json")
 	if err == nil {

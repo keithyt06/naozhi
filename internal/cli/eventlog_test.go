@@ -463,6 +463,10 @@ func TestEventLog_LastEventAt(t *testing.T) {
 	// activity clock — doing so would make Router.Cleanup think a
 	// reconnected-but-idle session is actively streaming.
 	prevLive := got
+	// TRUE-time-delay (not migrated to testhelper.Eventually): guarantees
+	// monotonic-clock separation between prevLive and the subsequent live
+	// Append at line 476 so got.After(prevLive) is never a same-tick tie.
+	// No condition to poll — we are waiting for wall-clock to advance.
 	time.Sleep(10 * time.Millisecond)
 	l.AppendBatch([]EventEntry{
 		{Type: "user", Time: 1000, Summary: "ancient"},
