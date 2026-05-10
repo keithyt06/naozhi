@@ -99,9 +99,14 @@ func NewSubagentLinker() *SubagentLinker {
 // sessionID comes from the first system.init event.
 func (l *SubagentLinker) SetContext(projectDir, parentSessionID string) {
 	l.mu.Lock()
+	prev := l.projectDir != "" && l.parentSessionID != ""
 	l.projectDir = projectDir
 	l.parentSessionID = parentSessionID
 	l.mu.Unlock()
+	if !prev {
+		slog.Info("agent_link: SetContext installed",
+			"project_dir", projectDir, "session_id", parentSessionID)
+	}
 }
 
 // OnResolve appends a callback fired after every Resolve (success or
@@ -129,6 +134,38 @@ func (l *SubagentLinker) Query(taskID string) (LinkInfo, bool) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	info, ok := l.byTaskID[taskID]
+	return info, ok
+}
+
+// QueryOrResolveFast returns a cached mapping when available; otherwise runs
+// the fast-path stat once (no retry loop, no scan fallback) and returns the
+// result. HTTP endpoints use this instead of Query so users who click an
+// agent row whose live task_started never reached the Linker (e.g. because
+// the event happened pre-restart and shim replay didn't include it) get a
+// direct answer from disk in a single stat call — typically < 1 ms.
+//
+// Returns (zeroLinkInfo, false) when:
+//   - projectDir or parentSessionID is not yet set (Linker not ready)
+//   - the direct-path stat missed (no such agent-<task_id>.jsonl file)
+//
+// The caller distinguishes these by Linker state: the endpoint already
+// null-checks Linker. "Not yet ready" surfaces as 202 pending; the endpoint
+// keeps that contract with this helper so the client retry loop still
+// converges on the "give up" toast after MAX_SWITCH_RETRIES.
+func (l *SubagentLinker) QueryOrResolveFast(taskID string) (LinkInfo, bool) {
+	l.mu.RLock()
+	if info, ok := l.byTaskID[taskID]; ok {
+		l.mu.RUnlock()
+		return info, ok
+	}
+	projectDir := l.projectDir
+	sessionID := l.parentSessionID
+	l.mu.RUnlock()
+	if projectDir == "" || sessionID == "" {
+		return LinkInfo{}, false
+	}
+	subagentDir := filepath.Join(projectDir, sessionID, "subagents")
+	info, ok := l.resolveByTaskIDFast(taskID, "", subagentDir, sessionID)
 	return info, ok
 }
 
@@ -183,6 +220,9 @@ func (l *SubagentLinker) Resolve(taskID, toolUseID, name, description string, ag
 	sessionID := l.parentSessionID
 	l.mu.RUnlock()
 	if projectDir == "" || sessionID == "" {
+		slog.Info("agent_link: Resolve bailing — missing context",
+			"task_id", taskID, "projectDir_set", projectDir != "",
+			"sessionID_set", sessionID != "")
 		return LinkInfo{}, false
 	}
 
@@ -332,11 +372,14 @@ func (l *SubagentLinker) Resolve(taskID, toolUseID, name, description string, ag
 // older CLIs / sidechain agents whose filename scheme differs still work.
 func (l *SubagentLinker) resolveByTaskIDFast(taskID, toolUseID, subagentDir, sessionID string) (LinkInfo, bool) {
 	if !agentHexRe.MatchString(taskID) {
+		slog.Debug("agent_link: fast-path skip, bad hex", "task_id", taskID)
 		return LinkInfo{}, false
 	}
 	jsonlPath := filepath.Join(subagentDir, "agent-"+taskID+".jsonl")
 	st, err := os.Stat(jsonlPath)
 	if err != nil || st.Size() == 0 {
+		slog.Debug("agent_link: fast-path stat miss",
+			"task_id", taskID, "path", jsonlPath, "err", err)
 		return LinkInfo{}, false
 	}
 	first, err := readFirstLineMeta(jsonlPath)
@@ -387,6 +430,8 @@ func (l *SubagentLinker) resolveByTaskIDFast(taskID, toolUseID, subagentDir, ses
 	}
 	l.fireOnResolveLocked(taskID, toolUseID, info.InternalAgentID)
 	l.mu.Unlock()
+	slog.Info("agent_link: resolved by task_id fast path",
+		"task_id", taskID, "agent_type", name, "jsonl_size", st.Size())
 	return info, true
 }
 

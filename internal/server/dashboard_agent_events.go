@@ -153,12 +153,12 @@ func (h *AgentEventsHandlers) handleAgentEvents(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	info, ok := linker.Query(taskID)
+	info, ok := linker.QueryOrResolveFast(taskID)
 	if !ok {
-		// Linker has never seen this task_id — treat as "still resolving"
-		// so the client can poll. The dashboard switchAgentView helper has
-		// a bounded retry loop that converts a prolonged 202 into the same
-		// toast as 404.
+		// Linker context not yet installed (projectDir / session_id pending
+		// the first live init event) — tell client to retry. The dashboard
+		// switchAgentView helper has a bounded retry loop that converts a
+		// prolonged 202 into the same toast as 404.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"status":"pending"}`))

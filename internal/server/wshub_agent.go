@@ -150,10 +150,11 @@ func (h *Hub) handleAgentSubscribe(c *wsClient, msg node.ClientMsg) {
 		})
 		return
 	}
-	info, ok := linker.Query(msg.TaskID)
+	info, ok := linker.QueryOrResolveFast(msg.TaskID)
 	if !ok {
-		// Linker hasn't seen this task_id yet — tell client to retry (it
-		// already polls HTTP /agent_events which returns 202 in this case).
+		// Linker context not yet installed (awaiting init event). The HTTP
+		// endpoint returns 202 on the same condition; tell WS clients to
+		// retry once the polling loop settles.
 		c.SendJSON(node.ServerMsg{
 			Type:   "agent_subscribe_rejected",
 			Key:    msg.Key,

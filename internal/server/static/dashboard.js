@@ -2568,8 +2568,17 @@ async function sendAskAnswerViaAPI(text) {
   }
 }
 
-function eventHtml(e) {
-  if (isInternalEvent(e) || e.type === 'thinking') return '';
+// eventHtml renders one EventEntry bubble.
+// opts.includeInternal=true keeps tool_use / thinking / task_* / agent / result
+// events that the parent view hides (banner handles them there). The sub-agent
+// internal view (agent_view.js) needs them — a team member's work is almost
+// entirely tool_use + thinking; filtering those out leaves the panel looking
+// empty even when the jsonl transcript is full of content. RFC v4 §3.6.7 /
+// §3.6.1 contract: parent and agent views share the bubble renderer but
+// differ on the filter policy.
+function eventHtml(e, opts) {
+  const includeInternal = !!(opts && opts.includeInternal);
+  if (!includeInternal && (isInternalEvent(e) || e.type === 'thinking')) return '';
   // AskUserQuestion interactive card: dedicated renderer with option buttons.
   // The matching tool_use entry is already filtered out via INTERNAL_EVENT_TYPES,
   // so the card stands alone in the transcript.
@@ -2695,11 +2704,11 @@ window.eventHtml = eventHtml;
 // EVENT_DIVIDER_GAP_MS. `prevTime` seeds the comparison against whatever is
 // already rendered in the DOM (0 = always emit a leading divider for the first
 // visible event).
-function renderEventsWithDividers(events, prevTime) {
+function renderEventsWithDividers(events, prevTime, opts) {
   let out = '';
   let lastTime = prevTime || 0;
   for (const e of events) {
-    const h = eventHtml(e);
+    const h = eventHtml(e, opts);
     if (!h) continue;
     const t = e.time || 0;
     if (t && (lastTime === 0 || t - lastTime >= EVENT_DIVIDER_GAP_MS)) {

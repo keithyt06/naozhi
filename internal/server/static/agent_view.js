@@ -265,15 +265,18 @@
     // definitions; fall back to a plain-text stub only if both are somehow
     // missing (unexpected — contract is enforced by dashboard.html script
     // ordering).
+    // includeInternal=true keeps tool_use / thinking / task_* bubbles that
+    // the parent view hides — for a sub-agent panel those ARE the content.
+    var renderOpts = { includeInternal: true };
     var renderAll = typeof window.renderEventsWithDividers === 'function'
       ? window.renderEventsWithDividers : null;
     var renderOne = typeof window.eventHtml === 'function'
       ? window.eventHtml : null;
     if (renderAll) {
-      el.insertAdjacentHTML('beforeend', renderAll(events, 0));
+      el.insertAdjacentHTML('beforeend', renderAll(events, 0, renderOpts));
     } else if (renderOne) {
       for (var i = 0; i < events.length; i++) {
-        var html = renderOne(events[i]);
+        var html = renderOne(events[i], renderOpts);
         if (html) el.insertAdjacentHTML('beforeend', html);
       }
     } else {
@@ -302,7 +305,7 @@
     var renderOne = typeof window.eventHtml === 'function'
       ? window.eventHtml : null;
     if (renderOne) {
-      var html = renderOne(ev);
+      var html = renderOne(ev, { includeInternal: true });
       if (!html) return;
       el.insertAdjacentHTML('beforeend', html);
     } else {
