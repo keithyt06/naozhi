@@ -46,11 +46,6 @@ const (
 	// subscribe attempts receive agent_subscribe_rejected{reason:"capacity"}
 	// and the dashboard falls back to 3 s HTTP poll (§3.5.4 R FC).
 	agentTailerMax = 50
-
-	// subscribeDebounce coalesces rapid agent_subscribe→agent_unsubscribe→
-	// agent_subscribe sequences (e.g. a user double-clicking the banner row)
-	// so we don't thrash ensureTailer / closeTailer.
-	subscribeDebounce = 150 * time.Millisecond
 )
 
 // agentTailer streams a single agent jsonl to any number of subscribed

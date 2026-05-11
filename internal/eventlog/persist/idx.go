@@ -20,12 +20,6 @@ import (
 // constant documents the default.
 const DefaultIdxStride = 32
 
-// idxHeaderStride is the stride used when an idx entry MUST be written
-// regardless of stride policy. Concretely: the very first record of a
-// file (the header) always gets an idx entry at seq=0, so recovery can
-// anchor to a known safe edge even for a 1-record file.
-const idxHeaderStride = 1
-
 // IdxWriter is a thin append-only writer on top of os.File. Each
 // AppendEntry call writes exactly IdxEntrySize bytes. No buffering —
 // callers batch at the Persister layer and Sync() on fsync boundaries.

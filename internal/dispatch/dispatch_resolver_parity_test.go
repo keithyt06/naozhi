@@ -28,12 +28,10 @@ func TestDispatchResolverParity(t *testing.T) {
 	}
 
 	type setup struct {
-		name          string
-		agents        map[string]session.AgentOpts
-		binding       session.ProjectBinding
-		agentID       string
-		plannerModel  string
-		plannerPrompt string
+		name    string
+		agents  map[string]session.AgentOpts
+		binding session.ProjectBinding
+		agentID string
 	}
 	fixtures := []setup{
 		{

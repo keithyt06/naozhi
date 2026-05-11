@@ -1384,11 +1384,11 @@ func (r *Router) reconnectShims(parentCtx context.Context) {
 		// + cached, so this costs at most one stat per unique task_id.
 		if linker := proc.Linker(); linker != nil && len(replays) > 0 {
 			seen := make(map[string]struct{})
-			for _, r := range replays {
-				if r.Type != "replay" {
+			for _, replay := range replays {
+				if replay.Type != "replay" {
 					continue
 				}
-				ev, _, err := recWrapper.Protocol.ReadEvent(r.Line)
+				ev, _, err := recWrapper.Protocol.ReadEvent(replay.Line)
 				if err != nil || ev.Type != "system" || ev.SubType != "task_started" {
 					continue
 				}

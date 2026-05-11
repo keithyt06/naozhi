@@ -645,11 +645,6 @@ func resolveProjectDir(cwd string) string {
 	if cwd == "" {
 		return ""
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = os.Getenv("HOME")
-	}
-	claudeRoot := filepath.Join(home, ".claude", "projects")
 	var b strings.Builder
 	b.Grow(len(cwd))
 	for _, r := range cwd {
@@ -660,5 +655,5 @@ func resolveProjectDir(cwd string) string {
 			b.WriteByte('-')
 		}
 	}
-	return filepath.Join(claudeRoot, b.String())
+	return filepath.Join(claudeProjectsRoot(), b.String())
 }

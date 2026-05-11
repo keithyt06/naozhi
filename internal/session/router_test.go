@@ -2245,7 +2245,11 @@ func TestCollectPreviousHistory(t *testing.T) {
 // TestSpawnSession* case that exercises the enclosing spawnSession
 // path, which now routes through this helper.
 func TestInstallFreshSessionLocked_SignatureGuard(t *testing.T) {
-	var fn func(
+	// Compile-time pin: if installFreshSessionLocked's signature drifts,
+	// this assignment fails to build. Method values on a concrete type
+	// are never nil, so a runtime nil-check here would be vacuous
+	// (staticcheck SA4031).
+	var _ = func(r *Router) func(
 		key string,
 		proc *cli.Process,
 		workspace string,
@@ -2256,10 +2260,8 @@ func TestInstallFreshSessionLocked_SignatureGuard(t *testing.T) {
 		prevIDs []string,
 		oldTotalCost float64,
 		exempt bool,
-	) *ManagedSession
-	r := &Router{}
-	fn = r.installFreshSessionLocked
-	if fn == nil {
-		t.Fatal("installFreshSessionLocked method missing")
+	) *ManagedSession {
+		return r.installFreshSessionLocked
 	}
+	_ = t
 }

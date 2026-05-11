@@ -141,7 +141,7 @@ func (c *wsClient) clearSubGenReleasable(key string) {
 // regardless, to put a hard bound on memory). Returns the number of entries
 // reclaimed, for observability in tests.
 func (c *wsClient) sweepSubGenExpiredLocked(nowNanos int64) int {
-	if c.subGenReleaseAt == nil || len(c.subGenReleaseAt) == 0 {
+	if len(c.subGenReleaseAt) == 0 {
 		return 0
 	}
 	// Throttle: skip the scan if a recent sweep ran, unless the map has

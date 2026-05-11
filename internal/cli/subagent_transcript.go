@@ -185,12 +185,7 @@ type transcriptLine struct {
 	Message   *transcriptMessage `json:"message,omitempty"`
 	SessionID string             `json:"sessionId"`
 	Timestamp string             `json:"timestamp"`
-	Extra     map[string]any     `json:"-"`
-	_         struct{}           `json:"-"`
-	_meta     json.RawMessage    `json:"-"`
 	PromptID  string             `json:"promptId,omitempty"`
-	_raw      map[string]any     `json:"-"`
-	Content   json.RawMessage    `json:"content,omitempty"`
 }
 
 type transcriptMessage struct {

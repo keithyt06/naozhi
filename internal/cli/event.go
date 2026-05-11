@@ -106,8 +106,8 @@ type ContentBlock struct {
 //
 // We can't silently fall back to a single text-block array for *all* string
 // shapes, because tool_result user events also encode content as an array.
-// Only the shape normalization happens here; downstream extractReplayTexts
-// handles the single-text case uniformly.
+// Only the shape normalization happens here; downstream consumers handle the
+// single-text case uniformly via the resulting ContentBlock array.
 func (m *AssistantMessage) UnmarshalJSON(data []byte) error {
 	var raw struct {
 		Role    string          `json:"role"`

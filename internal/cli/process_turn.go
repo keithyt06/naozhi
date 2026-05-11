@@ -179,11 +179,10 @@ drain:
 }
 
 // isChanAlive reports whether done is still open (readLoop still running, so
-// eventCh remains safe to send on). readLoop's defers are registered in this
-// declaration order: close(eventCh), close(done), CloseSubscribers, recover.
-// LIFO execution order is therefore: recover → CloseSubscribers → close(done)
-// → close(eventCh). Invariant used here: `done` closes strictly BEFORE
-// `eventCh`, so if `done` is still open, `eventCh` is also still open.
+// eventCh remains safe to send on). Invariant used here: readLoop closes
+// `done` strictly BEFORE `eventCh` on exit — so if `done` is still open,
+// `eventCh` is also still open. See process_readloop.go for the defer chain
+// that establishes this ordering.
 func isChanAlive(done <-chan struct{}) bool {
 	select {
 	case <-done:
