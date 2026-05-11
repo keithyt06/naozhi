@@ -71,6 +71,24 @@ type Dispatcher struct {
 	takeoverFn func(ctx context.Context, chatKey, key string, opts session.AgentOpts) bool
 }
 
+// keyForChat returns the routed session key for the given chat coordinates
+// and agentID. Prefers the KeyResolver (project-bound general → planner);
+// falls back to the inlined lookup when no resolver is wired. Kept as a
+// Dispatcher method so slash-command handlers share a single derivation
+// path with the main IM path — see docs/rfc/key-resolver.md §4.2-4.4.
+func (d *Dispatcher) keyForChat(platform, chatType, chatID, agentID string) string {
+	if d.resolver != nil {
+		return d.resolver.KeyForChat(platform, chatType, chatID, agentID)
+	}
+	// Legacy fallback: duplicate minimal project-binding check.
+	if d.projectMgr != nil && agentID == "general" {
+		if proj := d.projectMgr.ProjectForChat(platform, chatType, chatID); proj != nil {
+			return proj.PlannerSessionKey()
+		}
+	}
+	return session.SessionKey(platform, chatType, chatID, agentID)
+}
+
 // Metrics returns a snapshot of operational counters for /health.
 // Counter values are monotonic since process start. lastReplySuccess is the
 // wall-clock time of the most recent successful user-visible reply; the zero
