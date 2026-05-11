@@ -50,10 +50,16 @@ type Server struct {
 	nodesMu           sync.RWMutex
 	claudeDir         string // path to ~/.claude for session discovery
 	projectMgr        *project.Manager
-	workspaceName     string
-	allowedRoot       string             // /cd is restricted to paths under this directory (used by Hub)
-	nodeCache         *node.CacheManager // background-cached remote node data
-	discoveryCache    *discoveryCache    // background-cached local discovery results
+	// resolver centralises session-key → opts derivation. Constructed
+	// once in buildServer from (agents, project.NewDataSource(projectMgr))
+	// and shared across Dispatcher / Hub / ProjectHandlers. Guaranteed
+	// non-nil in production wiring; tests that bypass buildServer may
+	// leave it unset (callers fall back to legacy inlined merge).
+	resolver       *session.KeyResolver
+	workspaceName  string
+	allowedRoot    string             // /cd is restricted to paths under this directory (used by Hub)
+	nodeCache      *node.CacheManager // background-cached remote node data
+	discoveryCache *discoveryCache    // background-cached local discovery results
 
 	// Extracted handler groups
 	auth         *AuthHandlers
@@ -426,6 +432,13 @@ func buildServer(opts ServerOptions) *Server {
 
 	cookieSecret := loadOrCreateCookieSecret(opts.StateDir)
 
+	// Construct KeyResolver once and share across dispatcher (wired in
+	// Start), hub, and ProjectHandlers. project.NewDataSource returns
+	// untyped nil when projectMgr is nil so the Resolver correctly
+	// short-circuits the project-binding lookup in that mode.
+	// docs/rfc/key-resolver.md Phase 4.
+	resolver := session.NewKeyResolver(agents, project.NewDataSource(opts.ProjectManager))
+
 	s := &Server{
 		addr:         addr,
 		mux:          http.NewServeMux(),
@@ -451,6 +464,7 @@ func buildServer(opts ServerOptions) *Server {
 		dashboardToken:  opts.DashboardToken,
 		onReady:         opts.OnReady,
 		projectMgr:      opts.ProjectManager,
+		resolver:        resolver,
 		nodes:           nodes,
 		knownNodes:      knownNodes,
 
@@ -515,6 +529,7 @@ func buildServer(opts ServerOptions) *Server {
 	s.projectH = &ProjectHandlers{
 		projectMgr: opts.ProjectManager,
 		router:     router,
+		resolver:   resolver,
 		nodeAccess: s.nodeAccess,
 		nodeCache:  s.nodeCache,
 		ctxFunc: func() context.Context {
@@ -633,13 +648,9 @@ func buildServer(opts ServerOptions) *Server {
 
 // Start registers routes and begins serving.
 func (s *Server) Start(ctx context.Context) error {
-	// Construct KeyResolver once at dispatcher-wire time. The resolver
-	// centralises (key, opts) derivation for project-bound chats and
-	// owns the ExtraArgs aliasing-safe merge (R37-CONCUR1). Project data
-	// flows through project.NewDataSource(projectMgr); when projectMgr
-	// is nil the adapter returns untyped nil and the resolver treats the
-	// chat as never-bound. See docs/rfc/key-resolver.md Phase 2.
-	resolver := session.NewKeyResolver(s.agents, project.NewDataSource(s.projectMgr))
+	// Resolver is constructed in buildServer and reused across the
+	// dispatch / hub / project-api surfaces. docs/rfc/key-resolver.md
+	// Phase 4.
 	d := dispatch.NewDispatcher(dispatch.DispatcherConfig{
 		Router:                s.router,
 		Platforms:             s.platforms,
@@ -647,7 +658,7 @@ func (s *Server) Start(ctx context.Context) error {
 		AgentCommands:         s.agentCommands,
 		Scheduler:             s.scheduler,
 		ProjectMgr:            s.projectMgr,
-		Resolver:              resolver,
+		Resolver:              s.resolver,
 		Guard:                 s.sessionGuard,
 		Queue:                 s.msgQueue,
 		Dedup:                 s.dedup,

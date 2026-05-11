@@ -224,6 +224,7 @@ func (s *Server) registerDashboard() {
 		Nodes:            s.nodes,
 		NodesMu:          &s.nodesMu,
 		ProjectMgr:       s.projectMgr,
+		Resolver:         s.resolver,
 		AllowedRoot:      s.allowedRoot,
 		TrustedProxy:     s.auth.trustedProxy,
 		WSAuthLimiter:    s.auth.loginAllow,
@@ -454,8 +455,34 @@ func strOrFallback(m map[string]any, key, fallback string) string {
 	return v
 }
 
-// buildSessionOpts resolves agent config and planner overrides for a session key.
-func buildSessionOpts(key string, agents map[string]session.AgentOpts, projectMgr *project.Manager) session.AgentOpts {
+// buildSessionOpts resolves agent config and planner overrides for a
+// session key. When resolver is non-nil, delegates to ResolveForKey for
+// the planner branch (preserving the "do not read defaults" contract of
+// planner-restart semantics) and for IM-4-segment keys. Falls back to
+// the legacy inlined merge otherwise, e.g. headless/test constructions
+// that wire no resolver.
+//
+// Behaviour parity with the legacy path:
+//   - IM 4-segment key → opts = agents[agentID]; Workspace NOT overlaid
+//     (resume path: workspace comes from sessions.json, not fresh chat)
+//   - planner key + project exists → Resolver's planner-view opts
+//     (Exempt=true + Workspace + Model + --append-system-prompt)
+//   - planner key + project missing → ResolveForKey returns ok=false;
+//     we fall back to legacy "opts.Exempt=true, agent defaults only"
+//     so the session still spawns (planner without project config is a
+//     degenerate but recoverable state — e.g. project deleted between
+//     sessions.json save and dashboard resume)
+func buildSessionOpts(key string, resolver *session.KeyResolver, agents map[string]session.AgentOpts, projectMgr *project.Manager) session.AgentOpts {
+	if resolver != nil {
+		if opts, ok := resolver.ResolveForKey(key); ok {
+			return opts
+		}
+		// ok=false for planner with missing project, or scratch/cron/
+		// malformed keys. Fall through to the legacy inline merge so
+		// we stay lenient — dashboard resume must never fail hard on
+		// a stale key.
+	}
+
 	parts := strings.SplitN(key, ":", 4)
 	agentID := "general"
 	if len(parts) == 4 {

@@ -65,8 +65,12 @@ type Hub struct {
 	nodes        map[string]node.Conn
 	nodesMu      *sync.RWMutex // shared with Server.nodesMu — all nodes map access must use this
 	projectMgr   *project.Manager
-	scheduler    *cron.Scheduler // optional, for cron prompt auto-save
-	uploadStore  *uploadStore    // optional, for resolving WS-sent file_ids
+	// resolver centralises session key → opts derivation; used by
+	// sessionOptsFor / buildSessionOpts. Nil keeps legacy fallback
+	// wiring for tests that don't construct a resolver.
+	resolver    *session.KeyResolver
+	scheduler   *cron.Scheduler // optional, for cron prompt auto-save
+	uploadStore *uploadStore    // optional, for resolving WS-sent file_ids
 	// scratchPool lets sessionOptsFor resolve the inherited AgentOpts for an
 	// ephemeral "scratch" key without touching the persistent agent registry.
 	// Nil when the scratch feature is disabled (tests, headless mode).
@@ -140,16 +144,22 @@ type Hub struct {
 
 // HubOptions holds configuration for a Hub.
 type HubOptions struct {
-	Router           *session.Router
-	Agents           map[string]session.AgentOpts
-	AgentCmds        map[string]string
-	DashToken        string
-	CookieMAC        string
-	Guard            *session.Guard
-	Queue            *dispatch.MessageQueue
-	Nodes            map[string]node.Conn
-	NodesMu          *sync.RWMutex
-	ProjectMgr       *project.Manager
+	Router     *session.Router
+	Agents     map[string]session.AgentOpts
+	AgentCmds  map[string]string
+	DashToken  string
+	CookieMAC  string
+	Guard      *session.Guard
+	Queue      *dispatch.MessageQueue
+	Nodes      map[string]node.Conn
+	NodesMu    *sync.RWMutex
+	ProjectMgr *project.Manager
+	// Resolver, when non-nil, centralises session-key → opts derivation
+	// for sessionOptsFor / buildSessionOpts. Wired by server.Start so
+	// WS subscribe / send paths share the same planner-binding
+	// precedence as the IM dispatch path. Nil falls back to the legacy
+	// inlined merge.
+	Resolver         *session.KeyResolver
 	AllowedRoot      string
 	TrustedProxy     bool
 	WSAuthLimiter    func(ip string) bool
@@ -198,6 +208,7 @@ func NewHub(opts HubOptions) *Hub {
 		nodes:            opts.Nodes,
 		nodesMu:          opts.NodesMu,
 		projectMgr:       opts.ProjectMgr,
+		resolver:         opts.Resolver,
 		allowedRoot:      opts.AllowedRoot,
 		trustedProxy:     opts.TrustedProxy,
 		wsAuthLimiter:    opts.WSAuthLimiter,

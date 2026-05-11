@@ -474,7 +474,7 @@ func (h *Hub) sessionOptsFor(key string) session.AgentOpts {
 			return opts
 		}
 	}
-	return buildSessionOpts(key, h.agents, h.projectMgr)
+	return buildSessionOpts(key, h.resolver, h.agents, h.projectMgr)
 }
 
 // runTurn executes one send turn: GetOrCreate + sendWithBroadcast.
