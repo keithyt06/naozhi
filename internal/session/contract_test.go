@@ -24,12 +24,15 @@ import (
 	"github.com/naozhi/naozhi/internal/dispatch"
 	"github.com/naozhi/naozhi/internal/server"
 	"github.com/naozhi/naozhi/internal/session"
+	"github.com/naozhi/naozhi/internal/upstream"
 )
 
-// Enforce *session.Router satisfies each consumer's SessionRouter.
-// Additional consumer interfaces (upstream.SessionRouter) are added
-// in subsequent phases of docs/rfc/consumer-interfaces.md.
+// Enforce *session.Router satisfies every consumer's interface. All
+// three consumers from docs/rfc/consumer-interfaces.md are covered;
+// any new Router method signature drift surfaces here as a single
+// CI failure instead of three scattered ones.
 var (
 	_ dispatch.SessionRouter = (*session.Router)(nil)
 	_ server.HubRouter       = (*session.Router)(nil)
+	_ upstream.SessionRouter = (*session.Router)(nil)
 )

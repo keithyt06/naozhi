@@ -67,8 +67,12 @@ const reasonSessionReset = "session_reset"
 // Connector dials a primary naozhi and serves it as a reverse-connected node.
 // Run on machines behind NAT that cannot be reached by the primary directly.
 type Connector struct {
-	cfg     *config.UpstreamConfig
-	router  *session.Router
+	cfg *config.UpstreamConfig
+	// router is the SessionRouter subset used by Connector (consumer.go).
+	// *session.Router satisfies this interface implicitly. Kept as an
+	// interface so future Router sub-aggregation and connector tests
+	// can swap implementations without touching upstream internals.
+	router  SessionRouter
 	projMgr *project.Manager // may be nil
 	// resolver centralises planner-view opts derivation for
 	// reverse-RPC restart_planner (#7). Nil keeps the legacy literal
