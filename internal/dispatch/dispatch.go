@@ -43,12 +43,17 @@ type Dispatcher struct {
 	agentCommands map[string]string
 	scheduler     *cron.Scheduler
 	projectMgr    *project.Manager
-	guard         SessionGuard // used by Dashboard/WS path
-	queue         *MessageQueue
-	dedup         *platform.Dedup
-	allowedRoot   string
-	claudeDir     string
-	replyFooter   string
+	// resolver centralises (key, opts) derivation. When non-nil the main
+	// IM path uses it instead of the inlined projectMgr+agents merge.
+	// Nil keeps legacy behaviour for tests / headless constructions that
+	// don't wire a resolver. See docs/rfc/key-resolver.md Phase 2.
+	resolver    *session.KeyResolver
+	guard       SessionGuard // used by Dashboard/WS path
+	queue       *MessageQueue
+	dedup       *platform.Dedup
+	allowedRoot string
+	claudeDir   string
+	replyFooter string
 
 	noOutputTimeout       time.Duration
 	totalTimeout          time.Duration
@@ -92,12 +97,17 @@ type DispatcherConfig struct {
 	AgentCommands map[string]string
 	Scheduler     *cron.Scheduler
 	ProjectMgr    *project.Manager
-	Guard         SessionGuard
-	Queue         *MessageQueue
-	Dedup         *platform.Dedup
-	AllowedRoot   string
-	ClaudeDir     string
-	ReplyFooter   string
+	// Resolver, when non-nil, is used by the main IM path for (key, opts)
+	// derivation instead of the legacy inlined merge. Nil keeps the
+	// legacy path for headless/test constructions. Production wiring in
+	// cmd/naozhi.main should always pass a live KeyResolver.
+	Resolver    *session.KeyResolver
+	Guard       SessionGuard
+	Queue       *MessageQueue
+	Dedup       *platform.Dedup
+	AllowedRoot string
+	ClaudeDir   string
+	ReplyFooter string
 
 	NoOutputTimeout       time.Duration
 	TotalTimeout          time.Duration
@@ -117,6 +127,7 @@ func NewDispatcher(cfg DispatcherConfig) *Dispatcher {
 		agentCommands:         cfg.AgentCommands,
 		scheduler:             cfg.Scheduler,
 		projectMgr:            cfg.ProjectMgr,
+		resolver:              cfg.Resolver,
 		guard:                 cfg.Guard,
 		queue:                 cfg.Queue,
 		dedup:                 cfg.Dedup,
@@ -211,44 +222,41 @@ func (d *Dispatcher) BuildHandler() platform.MessageHandler {
 		// include slash commands, ignored non-text items, or dedup hits.
 		d.messageCount.Add(1)
 
-		// Determine session key and opts: project-bound chat routes to planner
+		// Determine session key and opts. Prefer KeyResolver (centralises
+		// project-binding precedence + aliasing-safe ExtraArgs merge as
+		// internal invariants — see docs/rfc/key-resolver.md §3.1 and
+		// session/routing.go). Legacy inlined merge retained as fallback
+		// for headless/test constructions that don't wire a resolver.
 		var key string
-		opts := d.agents[agentID] // zero value = use router defaults
-
-		if d.projectMgr != nil {
-			if proj := d.projectMgr.ProjectForChat(msg.Platform, msg.ChatType, msg.ChatID); proj != nil {
-				if agentID == "general" {
-					key = proj.PlannerSessionKey()
-					opts.Exempt = true
-					opts.Workspace = proj.Path
-					if m := d.projectMgr.EffectivePlannerModel(proj); m != "" {
-						opts.Model = m
+		var opts session.AgentOpts
+		if d.resolver != nil {
+			key, opts = d.resolver.ResolveForChat(msg.Platform, msg.ChatType, msg.ChatID, agentID)
+		} else {
+			// Legacy path: duplicates resolver logic for zero-resolver
+			// test wiring. R37-CONCUR1 aliasing protection lives here
+			// until all legacy callers are migrated.
+			opts = d.agents[agentID]
+			if d.projectMgr != nil {
+				if proj := d.projectMgr.ProjectForChat(msg.Platform, msg.ChatType, msg.ChatID); proj != nil {
+					if agentID == "general" {
+						key = proj.PlannerSessionKey()
+						opts.Exempt = true
+						opts.Workspace = proj.Path
+						if m := d.projectMgr.EffectivePlannerModel(proj); m != "" {
+							opts.Model = m
+						}
+						if p := d.projectMgr.EffectivePlannerPrompt(proj); p != "" {
+							opts.ExtraArgs = append(opts.ExtraArgs[:len(opts.ExtraArgs):len(opts.ExtraArgs)], "--append-system-prompt", p)
+						}
+					} else {
+						key = session.SessionKey(msg.Platform, msg.ChatType, msg.ChatID, agentID)
+						opts.Workspace = proj.Path
 					}
-					if p := d.projectMgr.EffectivePlannerPrompt(proj); p != "" {
-						// Three-arg slice `[:len:len]` forces append to
-						// allocate a fresh backing array instead of
-						// writing past the caller's slice length —
-						// opts.ExtraArgs starts life as a copy of the
-						// shared d.agents[agentID].ExtraArgs value, and
-						// the underlying array is therefore aliased with
-						// every other caller that read the same map
-						// entry. A plain two-arg append would smash those
-						// neighbours with "--append-system-prompt" the
-						// first time cap>len. Downstream router.go also
-						// does a make+copy before handing args to the
-						// CLI spawn, but we harden here too so a future
-						// refactor that drops the downstream copy cannot
-						// cross-contaminate agent configs. R37-CONCUR1.
-						opts.ExtraArgs = append(opts.ExtraArgs[:len(opts.ExtraArgs):len(opts.ExtraArgs)], "--append-system-prompt", p)
-					}
-				} else {
-					key = session.SessionKey(msg.Platform, msg.ChatType, msg.ChatID, agentID)
-					opts.Workspace = proj.Path
 				}
 			}
-		}
-		if key == "" {
-			key = session.SessionKey(msg.Platform, msg.ChatType, msg.ChatID, agentID)
+			if key == "" {
+				key = session.SessionKey(msg.Platform, msg.ChatType, msg.ChatID, agentID)
+			}
 		}
 
 		// Convert platform images to CLI image data

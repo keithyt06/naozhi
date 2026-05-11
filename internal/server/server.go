@@ -633,6 +633,13 @@ func buildServer(opts ServerOptions) *Server {
 
 // Start registers routes and begins serving.
 func (s *Server) Start(ctx context.Context) error {
+	// Construct KeyResolver once at dispatcher-wire time. The resolver
+	// centralises (key, opts) derivation for project-bound chats and
+	// owns the ExtraArgs aliasing-safe merge (R37-CONCUR1). Project data
+	// flows through project.NewDataSource(projectMgr); when projectMgr
+	// is nil the adapter returns untyped nil and the resolver treats the
+	// chat as never-bound. See docs/rfc/key-resolver.md Phase 2.
+	resolver := session.NewKeyResolver(s.agents, project.NewDataSource(s.projectMgr))
 	d := dispatch.NewDispatcher(dispatch.DispatcherConfig{
 		Router:                s.router,
 		Platforms:             s.platforms,
@@ -640,6 +647,7 @@ func (s *Server) Start(ctx context.Context) error {
 		AgentCommands:         s.agentCommands,
 		Scheduler:             s.scheduler,
 		ProjectMgr:            s.projectMgr,
+		Resolver:              resolver,
 		Guard:                 s.sessionGuard,
 		Queue:                 s.msgQueue,
 		Dedup:                 s.dedup,
