@@ -1,9 +1,9 @@
 # RFC: cli/Process 文件分拆(ARCH-PROCESS-SPLIT)
 
-> **状态**: Proposal v2
+> **状态**: Implemented (v3 — 含落地后 bisect 备注)
 > **作者**: naozhi team
 > **创建**: 2026-05-10
-> **修订**: 2026-05-11(v2: 按 review findings 修正符号归属 + 数值错误)
+> **修订**: 2026-05-11(v3: 补 Phase 4/5 commit 不可独立 build 的 bisect 备注)
 > **范围**: `internal/cli/process.go` → 拆成 7 个文件;**零语义改动**
 > **关联代码**: `internal/cli/process.go`(2464 行)、`internal/cli/passthrough.go`、`internal/cli/wrapper.go`、`internal/cli/event.go`、`internal/cli/eventlog.go`、`internal/cli/subagent_link.go`
 > **解锁**: `docs/TODO.md` R67-PERF-1(ReadEvent alloc)、R71-PERF-H1(shimWriter string 拷贝)、R29-DES1(drainStaleEvents push-back invariant)
@@ -11,6 +11,22 @@
 ---
 
 ## 0. 修订历史
+
+### v3 — 落地后 bisect 备注 (2026-05-11)
+
+落地后 review 发现 **Phase 4 (`7cc7d5c`) 和 Phase 5 (`d473a5b`) commit 不可独立 build**：
+
+- Phase 4 的 `process.go` Kill() 改为调 `signalShimShutdown(p.shimPID)`，但 `signalShimShutdown` 当时未定义（working tree 有未追踪的 `process_signal_unix.go` 掩盖了编译错误，commit 没带上该文件）。
+- Phase 5 继承该 unresolved 引用。
+- Phase 6 (`b548fa3`) 引入 `osutil.SendShimReload` 正式修复，与 baseline `syscall.Kill(pid, SIGUSR2)` 语义等价。
+
+**HEAD 及此后任何 commit 均可正确 build + test**。仅 `git bisect` 或 `git log --follow` 用户走到 Phase 4/5 中间点会遇到编译错误。
+
+**Bisect 工作流**：若需要二分回溯 process-split 相关的回归，跳过 `7cc7d5c..b548fa3~1` 区间（用 `git bisect skip` 或 `git bisect start HEAD b548fa3`）；或直接以 `b548fa3`（Phase 6）为稳定锚点对比 `27da349`（Phase 前）。
+
+RFC §8.1 "每 phase commit 独立 build 绿" 的承诺在此两个 commit 上违反，作为事实记录在此。后续重构应把跨 phase 的依赖修复压缩在同一 commit 内。
+
+---
 
 ### v2(2026-05-11)
 

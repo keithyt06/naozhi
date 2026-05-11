@@ -2,14 +2,39 @@
 
 | 字段 | 值 |
 | :--- | :--- |
-| 状态 | Proposal v2 |
+| 状态 | Implemented (v3) |
 | 作者 | naozhi team |
 | 创建日期 | 2026-05-10 |
-| 修订日期 | 2026-05-11（v2：按 review findings 重算方法清单 + 收敛为单接口） |
+| 修订日期 | 2026-05-11（v3：按落地实测 + 第二轮 review 修订方法数与 typed-nil 防御） |
 | 关联代码 | `internal/session/router.go`<br/>`internal/dispatch/dispatch.go:39-70`（`*Dispatcher.router`）<br/>`internal/server/wshub.go:38-140`（`*Hub.router`）<br/>`internal/upstream/connector.go:67-95`（`*Connector.router`）<br/>`internal/cron/scheduler.go:60-85`（已有参考实现） |
 | 关联 RFC | `docs/rfc/key-resolver.md`（正交推进）<br/>延后：ARCH-ROUTER-SUBAGGREGATE（暂未立 ticket）<br/>延后：ARCH-SERVER-ROUTER-IF（Phase 2.5，Server/Handlers 迁移；本 RFC 非目标） |
 
 ## 0. 修订历史
+
+### v3(2026-05-11)
+
+落地后第二轮 review 发现：
+
+- **B1 (dispatch) — typed-nil interface 陷阱已修**：`NewDispatcher` 把
+  `cfg.Router (*session.Router)` 直接赋给接口字段会产生 typed-nil；
+  `discardQueue` 的 `if d.router != nil` 变成恒真。v3 代码加 nil-guard
+  让接口字段保持 untyped nil；新增 `TestNewDispatcher_NilRouterStaysUntypedNil`
+  回归锁。
+- **B2 (HubRouter 方法数) — RFC 正文更新为 14 方法**：v2 §2.1.2 / §3.2.2
+  漏掉 `dashboard_scratch.go` / `dashboard_send.go` 里
+  `h.hub.router.X()` 透传（*ScratchHandler / *SendHandler 共用 Hub
+  的 router 字段句柄）。真实 HubRouter 接口是 14 方法（多了 Remove /
+  RenameSession / GetWorkspace）。v3 §2.1.2 / §3.2.2 / §7.2 全部更新
+  为 14 方法、§7.2 "≤15 阈值" 余量改为 1。
+- **D2 (Connector 方法数表格 8 vs 9 不一致) — 已对齐 9**：§2.1.3 表列
+  了 8 行 `c.router.X()` 调用 + 1 处构造期 `router.DefaultWorkspace()`
+  = 接口 9 方法。v3 正文统一描述。
+- **S1 (upstream.New 形参未改接口类型) — 刻意保留**：RFC v2 §4.5 约定
+  "构造站点改动最小化"，让 cmd/naozhi 继续传具体指针。v3 §6.3 补
+  注释说明"形参保留具体类型是 accept 的设计决策，不是遗漏"。
+- **S3 (contract_test.go 盲点) — 补一行注释**：它只能防 Router-side
+  漂移，不能防消费者接口 silently 删方法；v3 文件头新增文档。
+- NIT：N1 方法数更新、N3 加 RFC 链接 — 轻量落盘。
 
 ### v2（2026-05-11）
 
@@ -79,13 +104,18 @@ rg 'c\.router\.' internal/upstream/      # Connector
 
 #### 2.1.2 Hub（`*Hub.router` 字段，`internal/server/wshub.go:58`）
 
-严格按 receiver 为 `*Hub` 的源文件过滤（`wshub.go` / `wshub_agent.go` / `send.go`）。注意 `dashboard_session.go` / `project_api.go` / `health.go` 等文件里的 `h.router.` 是 `*SessionHandlers` / `*ProjectHandlers` / `*HealthHandler` 等 **不同 struct** 的 receiver，不属于 Hub。
+按 receiver 为 `*Hub` 的源文件过滤（`wshub.go` / `wshub_agent.go` / `send.go`）得到 11 个直接调用方法。另有 3 个方法来自 *ScratchHandler / *SendHandler 透传（这些 handler 持 `h.hub` 引用，通过 `h.hub.router.X()` 间接访问）—— 必须纳入 `HubRouter` 接口，否则编译断裂。
+
+注意 `dashboard_session.go` / `project_api.go` / `health.go` / `dashboard_cli.go` 等文件里的 `h.router.` 是 `*SessionHandlers` / `*ProjectHandlers` / `*HealthHandler` 等 **不同 struct** 的 receiver，不属于 Hub（留给 ARCH-SERVER-ROUTER-IF Phase 2.5）。
 
 | 方法 | 调用点 |
 | :--- | :--- |
 | `GetOrCreate` | `send.go:484, 523` |
 | `GetSession` | `wshub.go:499, 504, 1058 · wshub_agent.go:133 · send.go:87, 197` |
+| `Remove` | `dashboard_scratch.go:294, 301, 316` (via `h.hub.router`) |
+| `RenameSession` | `dashboard_scratch.go:311` (via `h.hub.router`) |
 | `ResetAndDiscardOverride` | `send.go:203` |
+| `GetWorkspace` | `dashboard_send.go:329, 949` (via `hub.router` / `h.hub.router`) |
 | `SetWorkspace` | `send.go:246` |
 | `SetSessionBackend` | `send.go:265` |
 | `DefaultWorkspace` | `send.go:277` |
@@ -95,7 +125,7 @@ rg 'c\.router\.' internal/upstream/      # Connector
 | `InterruptSessionViaControl` | `send.go:326` |
 | `NotifyIdle` | `send.go:385, 592` |
 
-**合计 11 方法**，16 处调用点。
+**合计 14 方法**，19 处调用点（含 3 处 *ScratchHandler / *SendHandler 经 Hub 透传）。
 
 #### 2.1.3 Connector（`*Connector.router` 字段，`internal/upstream/connector.go:71`）
 
@@ -449,7 +479,7 @@ go vet ./...
 
 ### 7.2 接口膨胀触发点
 
-消费者接口方法数到 15 时重新评估是否拆面。当前三接口最大是 Hub 的 11 方法，留 4 方法余量。
+消费者接口方法数到 15 时重新评估是否拆面。当前三接口最大是 Hub 的 **14 方法**（含 *ScratchHandler / *SendHandler 透传），留 1 方法余量。若 Phase 2.5 把 `*ScratchHandler` / `*SendHandler` 的 router 访问迁到独立接口，Hub 本体会回到 11 方法、阈值余量回升到 4。
 
 ### 7.3 签名漂移防护（新增）
 
