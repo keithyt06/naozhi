@@ -22,12 +22,14 @@ package session_test
 
 import (
 	"github.com/naozhi/naozhi/internal/dispatch"
+	"github.com/naozhi/naozhi/internal/server"
 	"github.com/naozhi/naozhi/internal/session"
 )
 
 // Enforce *session.Router satisfies each consumer's SessionRouter.
-// Additional consumer interfaces (server.HubRouter, upstream.SessionRouter)
-// are added in subsequent phases of docs/rfc/consumer-interfaces.md.
+// Additional consumer interfaces (upstream.SessionRouter) are added
+// in subsequent phases of docs/rfc/consumer-interfaces.md.
 var (
 	_ dispatch.SessionRouter = (*session.Router)(nil)
+	_ server.HubRouter       = (*session.Router)(nil)
 )

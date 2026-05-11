@@ -55,16 +55,20 @@ type Hub struct {
 	// concurrent SendRaw drops).
 	droppedTotal atomic.Int64
 	clients      map[*wsClient]struct{}
-	router       *session.Router
-	agents       map[string]session.AgentOpts
-	agentCmds    map[string]string
-	dashToken    string
-	cookieMAC    string // HMAC-derived cookie value (different from dashToken)
-	guard        *session.Guard
-	queue        *dispatch.MessageQueue // per-key FIFO queue for dashboard sends
-	nodes        map[string]node.Conn
-	nodesMu      *sync.RWMutex // shared with Server.nodesMu — all nodes map access must use this
-	projectMgr   *project.Manager
+	// router is the HubRouter subset (consumer.go). *session.Router
+	// satisfies this interface implicitly; kept as an interface so
+	// tests can inject a fake and a future Router sub-aggregation
+	// can swap implementations without touching Hub internals.
+	router     HubRouter
+	agents     map[string]session.AgentOpts
+	agentCmds  map[string]string
+	dashToken  string
+	cookieMAC  string // HMAC-derived cookie value (different from dashToken)
+	guard      *session.Guard
+	queue      *dispatch.MessageQueue // per-key FIFO queue for dashboard sends
+	nodes      map[string]node.Conn
+	nodesMu    *sync.RWMutex // shared with Server.nodesMu — all nodes map access must use this
+	projectMgr *project.Manager
 	// resolver centralises session key → opts derivation; used by
 	// sessionOptsFor / buildSessionOpts. Nil keeps legacy fallback
 	// wiring for tests that don't construct a resolver.
