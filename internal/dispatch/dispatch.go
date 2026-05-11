@@ -37,7 +37,12 @@ type SessionGuard interface {
 // Dispatcher holds the dependencies needed to dispatch incoming IM messages
 // to the session router, handle slash commands, and stream results back.
 type Dispatcher struct {
-	router        *session.Router
+	// router is the SessionRouter subset used by dispatch (consumer.go).
+	// *session.Router satisfies this implicitly; kept as an interface so
+	// tests can inject fakes and a future Router sub-aggregation can
+	// swap implementations without touching dispatch internals. The
+	// router field itself is guaranteed non-nil in production wiring.
+	router        SessionRouter
 	platforms     map[string]platform.Platform
 	agents        map[string]session.AgentOpts
 	agentCommands map[string]string
