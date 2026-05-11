@@ -103,3 +103,21 @@ func TestFakeSessionRouter_UnconfiguredPanics(t *testing.T) {
 	fake := &fakeSessionRouter{}
 	fake.Reset("any")
 }
+
+// TestNewDispatcher_NilRouterStaysUntypedNil pins the typed-nil fix:
+// when DispatcherConfig.Router is nil, the Dispatcher.router
+// interface field must hold untyped nil so subsequent
+// `if d.router != nil` guards behave correctly (e.g.
+// discardQueue at dispatch.go ~404). A naive assignment
+// `d.router = cfg.Router` would store a typed-nil (*session.Router
+// value nil wrapped in interface), making != nil return true and
+// panicking on the next method call.
+func TestNewDispatcher_NilRouterStaysUntypedNil(t *testing.T) {
+	t.Parallel()
+	d := NewDispatcher(DispatcherConfig{Router: nil})
+	if d.router != nil {
+		t.Fatal("Dispatcher.router should be untyped nil when cfg.Router is nil; typed-nil trap reintroduced")
+	}
+	// discardQueue with a nil router must be a no-op, not a panic.
+	d.discardQueue("irrelevant:key:0:general")
+}

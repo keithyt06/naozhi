@@ -2,6 +2,7 @@ package session
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 )
 
@@ -277,6 +278,7 @@ func TestResolveForPlannerKey(t *testing.T) {
 				Model:     "should-NOT-appear",
 				ExtraArgs: []string{"--should-NOT-appear"},
 				Backend:   "should-NOT-appear",
+				Workspace: "should-NOT-appear", // SS3: project path wins, not defaults
 			},
 		}
 		data := &fakeDataSource{byName: map[string]ProjectBinding{
@@ -349,6 +351,11 @@ func TestResolveForKey(t *testing.T) {
 		{"malformed_empty", "", false, AgentOpts{}},
 		{"malformed_two_segments", "foo:bar", false, AgentOpts{}},
 		{"malformed_too_many", "a:b:c:d:e:f", true, AgentOpts{}}, // SplitN(_, 4) keeps 4th intact "d:e:f" → defaults["d:e:f"] = zero
+		// D1: "project:" prefix without ":planner" suffix is not a planner
+		// key. isPlannerKey returns false; IsReservedNamespace then catches
+		// it and returns ok=false. Explicit coverage to prevent future
+		// regression if the reserved-namespace short-circuit is reordered.
+		{"project_prefix_no_planner_suffix", "project:foo", false, AgentOpts{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -360,6 +367,46 @@ func TestResolveForKey(t *testing.T) {
 				t.Errorf("opts = %#v, want %#v", opts, tc.wantOpt)
 			}
 		})
+	}
+}
+
+// TestResolveForKey_IM4SegmentDoesNotOverlayWorkspace is the SS2
+// regression guard. The RFC §3.1 branch (c) comment states "does NOT
+// overlay workspace" for the IM 4-segment branch (resume path:
+// workspace comes from sessions.json independently). A naive
+// implementation that calls ProjectBinding on the 4-segment path
+// would leak the project's workspace into the resumed opts, violating
+// the resume semantics. Keep this test even if the table in
+// TestResolveForKey grows — it pins the contract from a different
+// angle.
+func TestResolveForKey_IM4SegmentDoesNotOverlayWorkspace(t *testing.T) {
+	t.Parallel()
+	// Bind the chat in data.byChat: a regression that called
+	// ProjectBinding on the 4-segment path would hit this binding and
+	// overlay Workspace. The correct behaviour skips data entirely.
+	data := &fakeDataSource{
+		byChat: map[string]ProjectBinding{
+			"feishu:direct:alice": {
+				Bound:        true,
+				Name:         "myproj",
+				WorkspaceDir: "/should-NOT-leak-into-resume",
+			},
+		},
+	}
+	defaults := map[string]AgentOpts{
+		"general": {Model: "sonnet"},
+	}
+	r := NewKeyResolver(defaults, data)
+
+	opts, ok := r.ResolveForKey("feishu:direct:alice:general")
+	if !ok {
+		t.Fatal("expected ok=true for IM 4-segment key")
+	}
+	if opts.Workspace != "" {
+		t.Errorf("ResolveForKey leaked ProjectBinding workspace into resume opts: got %q, want empty", opts.Workspace)
+	}
+	if opts.Model != "sonnet" {
+		t.Errorf("defaults[general].Model should pass through, got %q", opts.Model)
 	}
 }
 
@@ -420,21 +467,25 @@ func TestResolveForChat_ConcurrentNoAliasing(t *testing.T) {
 	r := NewKeyResolver(defaults, data)
 
 	const goroutines, iters = 10, 100
-	done := make(chan struct{}, goroutines)
+	// sync.WaitGroup (not a done-channel) so the "all goroutines finish
+	// before the test function returns" invariant is mechanically
+	// enforced — a future edit that reorders assertions and the signal
+	// would otherwise leave t.Errorf calls running after the test
+	// returned, which panics. SS1 hardening.
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
 	for g := 0; g < goroutines; g++ {
 		go func() {
+			defer wg.Done()
 			for i := 0; i < iters; i++ {
 				_, opts := r.ResolveForChat("feishu", "direct", "alice", "general")
 				if len(opts.ExtraArgs) != 3 {
 					t.Errorf("ExtraArgs len = %d, want 3", len(opts.ExtraArgs))
 				}
 			}
-			done <- struct{}{}
 		}()
 	}
-	for g := 0; g < goroutines; g++ {
-		<-done
-	}
+	wg.Wait()
 
 	// Defaults backing array must still look like before — len unchanged,
 	// and capacity slots past len must be zero strings (append never

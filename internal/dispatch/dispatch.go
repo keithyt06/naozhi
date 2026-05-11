@@ -142,9 +142,21 @@ type DispatcherConfig struct {
 }
 
 // NewDispatcher creates a Dispatcher from the given config.
+//
+// cfg.Router is a concrete *session.Router but Dispatcher.router is
+// the SessionRouter interface. Assigning a nil *session.Router into
+// an interface field produces a typed-nil: the field compares !=
+// nil yet dereferences panic. Normalise to untyped nil so call-site
+// guards like `if d.router != nil` behave as readers expect.
+// Production wiring (server.Start) never passes nil; the guard covers
+// headless/test wiring that may leave the field zeroed.
 func NewDispatcher(cfg DispatcherConfig) *Dispatcher {
+	var router SessionRouter
+	if cfg.Router != nil {
+		router = cfg.Router
+	}
 	return &Dispatcher{
-		router:                cfg.Router,
+		router:                router,
 		platforms:             cfg.Platforms,
 		agents:                cfg.Agents,
 		agentCommands:         cfg.AgentCommands,
