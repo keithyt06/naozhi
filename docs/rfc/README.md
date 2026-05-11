@@ -15,8 +15,10 @@
 | [agent-team-ui.md](agent-team-ui.md) | Ready for implementation (v4) | 2026-05-10 | 并行 agent/team 可视化与内部过程查看（dashboard） |
 | [askuser-question.md](askuser-question.md) | Proposal | 2026-05-10 | CC `AskUserQuestion` 工具在 `-p` 模式下的替代交互方案 |
 | [attachment-refcount.md](attachment-refcount.md) | v1 MVP 已落地（GC cron 待启用） | 2026-05-10 | 大图跨 TTL 可见：attachment 引用计数与双 TTL GC |
+| [consumer-interfaces.md](consumer-interfaces.md) | Proposal v2 | 2026-05-11 | ARCH-CONSUMER-IF：dispatch/hub/upstream 以消费端小接口替换 `*session.Router` 具体指针（v1 因方法清单虚构已重写） |
 | [cron-v2-polish.md](cron-v2-polish.md) | 设计提案（未实现） | 2026-05-09 | Cron 面板 5 项增量打磨（name/jitter/missed/sort/next-run） |
 | [event-log-persistence.md](event-log-persistence.md) | v3 GA 就绪 | 2026-05-10 | EventLog 磁盘持久化，图片与历史事件跨重启可见 |
+| [key-resolver.md](key-resolver.md) | Proposal v2 | 2026-05-11 | ARCH3：收敛 planner/agent session key 派生；chat-view / planner-view 双接口（v1 漏掉 #6/#7 不继承 defaults 的语义，v2 修） |
 | [learning-system.md](learning-system.md) | 设计提案 | 2026-04-14 | 会话结束触发的闭环自学习（skills/MEMORY/USER） |
 | [message-queue.md](message-queue.md) | 设计提案（未实现） | 2026-04-14 | 替代 sessionGuard 丢消息的 per-session 消息队列策略 |
 | [passthrough-mode.md](passthrough-mode.md) | v2.2 设计文档 | 2026-05-09 | 直通 CC CLI 原生 command queue，不做合并/节流 |
@@ -24,6 +26,7 @@
 | [passthrough-mode-validation.md](passthrough-mode-validation.md) | Phase 0 实测报告 | 2026-05-09 | V1-V9 验证点的脚本与原始日志汇总 |
 | [passthrough-mode-phase-c-report.md](passthrough-mode-phase-c-report.md) | Phase C 实测报告 | 2026-05-06 | Dashboard 路径灰度实测结果与修复的 2 个 bug |
 | [pdf-attachment.md](pdf-attachment.md) | 设计提案 → 实现中 | 2026-05-06 | Dashboard PDF 附件上传，走 workspace + Read 工具路径 |
+| [process-split.md](process-split.md) | Proposal v2 | 2026-05-11 | ARCH-PROCESS-SPLIT：`cli/process.go` 2464 行按职责拆 7 份，纯文件移动零语义改动（v2 修正 shimMsg 归属、EventCallback 跨包使用、测试文件数） |
 
 ## 已废弃 / 已被取代
 
