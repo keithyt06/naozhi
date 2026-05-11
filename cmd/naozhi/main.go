@@ -727,7 +727,14 @@ func main() {
 
 	// Start upstream connector (this node connects to a primary)
 	if cfg.Upstream != nil {
-		conn := upstream.New(cfg.Upstream, router, projectMgr)
+		// Build a KeyResolver for the connector so reverse-RPC planner
+		// restart (#7) goes through the same ResolveForPlannerKey path
+		// as the dashboard HTTP handler (#6). Independent instance from
+		// the server's resolver — the agents map and project data are
+		// the same source of truth, but wiring through main.go avoids
+		// coupling upstream to the server package.
+		upstreamResolver := session.NewKeyResolver(agents, project.NewDataSource(projectMgr))
+		conn := upstream.New(cfg.Upstream, router, projectMgr, upstreamResolver)
 		if claudeDir != "" {
 			conn.SetDiscoverFunc(func() (json.RawMessage, error) {
 				pids, sids, cwds := router.ManagedExcludeSets()

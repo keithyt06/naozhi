@@ -51,7 +51,7 @@ func TestReqSem_InflightGaugeBalanced(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.UpstreamConfig{URL: wsURL(srv), NodeID: "node1", Token: "tok"}
-	c := New(cfg, makeRouter(), nil)
+	c := New(cfg, makeRouter(), nil, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -146,7 +146,7 @@ func TestReqSem_WaitCounterOnSaturation(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.UpstreamConfig{URL: wsURL(srv), NodeID: "node1", Token: "tok"}
-	c := New(cfg, makeRouter(), nil)
+	c := New(cfg, makeRouter(), nil, nil)
 
 	// Parking previewFunc: each call holds a reqSem slot until the
 	// test closes `release`. Returning empty-array JSON keeps the

@@ -67,9 +67,14 @@ const reasonSessionReset = "session_reset"
 // Connector dials a primary naozhi and serves it as a reverse-connected node.
 // Run on machines behind NAT that cannot be reached by the primary directly.
 type Connector struct {
-	cfg              *config.UpstreamConfig
-	router           *session.Router
-	projMgr          *project.Manager // may be nil
+	cfg     *config.UpstreamConfig
+	router  *session.Router
+	projMgr *project.Manager // may be nil
+	// resolver centralises planner-view opts derivation for
+	// reverse-RPC restart_planner (#7). Nil keeps the legacy literal
+	// AgentOpts construction for headless/test callers that don't wire
+	// a resolver. docs/rfc/key-resolver.md Phase 5.
+	resolver         *session.KeyResolver
 	claudeDir        string
 	hostname         string
 	defaultWorkspace string // used as allowedRoot for incoming workspace overrides
@@ -78,7 +83,11 @@ type Connector struct {
 }
 
 // New creates a Connector. projMgr may be nil if projects are not configured.
-func New(cfg *config.UpstreamConfig, router *session.Router, projMgr *project.Manager) *Connector {
+// Callers that want the KeyResolver-backed planner restart path should
+// pass a non-nil resolver (built from session.NewKeyResolver +
+// project.NewDataSource). Nil resolver keeps the legacy inlined merge
+// for backward compatibility with existing tests.
+func New(cfg *config.UpstreamConfig, router *session.Router, projMgr *project.Manager, resolver *session.KeyResolver) *Connector {
 	claudeDir := ""
 	if home, err := os.UserHomeDir(); err == nil {
 		claudeDir = filepath.Join(home, ".claude")
@@ -88,6 +97,7 @@ func New(cfg *config.UpstreamConfig, router *session.Router, projMgr *project.Ma
 		cfg:              cfg,
 		router:           router,
 		projMgr:          projMgr,
+		resolver:         resolver,
 		claudeDir:        claudeDir,
 		hostname:         hostname,
 		defaultWorkspace: router.DefaultWorkspace(),
@@ -937,24 +947,39 @@ func (c *Connector) handleRequest(appCtx, connCtx context.Context, req node.Reve
 		if err := project.ValidateProjectName(p.ProjectName); err != nil {
 			return nil, fmt.Errorf("restart_planner: %w", err)
 		}
-		if c.projMgr == nil {
-			return nil, fmt.Errorf("projects not configured")
-		}
-		proj := c.projMgr.Get(p.ProjectName)
-		if proj == nil {
-			// Use %q so bidi/C1/newline bytes in the primary-supplied name
-			// cannot forge structured-log fields when the remote side logs
-			// this error. R177-SEC-2.
-			return nil, fmt.Errorf("project not found: %q", p.ProjectName)
-		}
-		plannerKey := proj.PlannerSessionKey()
-		opts := session.AgentOpts{
-			Model:     c.projMgr.EffectivePlannerModel(proj),
-			Workspace: proj.Path,
-			Exempt:    true,
-		}
-		if prompt := c.projMgr.EffectivePlannerPrompt(proj); prompt != "" {
-			opts.ExtraArgs = []string{"--append-system-prompt", prompt}
+		// Delegate planner-view opts derivation to Resolver when wired;
+		// preserves the "do not inherit defaults" contract of
+		// administrative planner restarts (docs/rfc/key-resolver.md §2.2
+		// #7). Legacy inlined path retained for headless/test callers.
+		var plannerKey string
+		var opts session.AgentOpts
+		if c.resolver != nil {
+			key, plannerOpts, ok := c.resolver.ResolveForPlannerKey(p.ProjectName)
+			if !ok {
+				// Use %q so bidi/C1/newline bytes in the primary-supplied
+				// name cannot forge structured-log fields when the remote
+				// side logs this error. R177-SEC-2.
+				return nil, fmt.Errorf("project not found: %q", p.ProjectName)
+			}
+			plannerKey = key
+			opts = plannerOpts
+		} else {
+			if c.projMgr == nil {
+				return nil, fmt.Errorf("projects not configured")
+			}
+			proj := c.projMgr.Get(p.ProjectName)
+			if proj == nil {
+				return nil, fmt.Errorf("project not found: %q", p.ProjectName)
+			}
+			plannerKey = proj.PlannerSessionKey()
+			opts = session.AgentOpts{
+				Model:     c.projMgr.EffectivePlannerModel(proj),
+				Workspace: proj.Path,
+				Exempt:    true,
+			}
+			if prompt := c.projMgr.EffectivePlannerPrompt(proj); prompt != "" {
+				opts.ExtraArgs = []string{"--append-system-prompt", prompt}
+			}
 		}
 		if _, err := c.router.ResetAndRecreate(connCtx, plannerKey, opts); err != nil {
 			return nil, fmt.Errorf("restart planner: %w", err)
