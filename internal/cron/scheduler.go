@@ -1363,10 +1363,12 @@ func (s *Scheduler) executeOpt(j *Job, viaTriggerNow bool) {
 	}
 	defer guard.Store(false)
 
-	// 抖动：放在 CAS 之后 / snapshot 之前。放在 CAS 之后的好处是 concurrent
-	// 重叠触发被 CAS 立刻拒绝；放在 snapshot 之前意味着抖动期间 Prompt 或
-	// WorkDir 被 UpdateJob 改掉了，后续 snapshot 拿到新值（符合"改动立即
-	// 生效"的直觉）。TriggerNow 跳过，保持"run now 立刻跑"语义。
+	// Apply jitter after CAS, before snapshot. After-CAS so concurrent overlap
+	// triggers are rejected immediately. Before-snapshot so an UpdateJob that
+	// lands during the jitter window still lets the subsequent snapshot read
+	// the new Prompt / WorkDir (matches the "edits take effect immediately"
+	// operator expectation). TriggerNow skips jitter to preserve the
+	// "run now = run now" semantics.
 	if !viaTriggerNow && s.jitterMax > 0 {
 		applyJitter(s.stopCtx, j.Schedule, s.jitterMax)
 	}
@@ -1985,6 +1987,17 @@ func applyJitter(ctx context.Context, schedule string, jitterMax time.Duration) 
 
 // slogWriter adapts slog to io.Writer so robfig/cron's PrintfLogger can route
 // through the project's structured logger instead of standard log.
+//
+// Observability note: robfig/cron wraps this via non-verbose PrintfLogger
+// (logger.go:28 in the vendored lib) which only emits Error() — its Info()
+// path is compiled out when logInfo=false. So every line reaching Write is
+// effectively an error-grade event (recover panic, skip-if-still-running
+// notice, schedule parse failure). Previously logged at Warn; keep at Warn
+// rather than elevating to Error because SkipIfStillRunning fires on normal
+// slow-job scenarios that operators don't want paging on. Format emitted
+// via log.New(w, "cron: ", 0) is `"cron: <msg>, error=<err>"`; strip the
+// "cron: " prefix for readability and pass the rest as a single message
+// attribute for structured logging consumers.
 type slogWriter struct{}
 
 func (slogWriter) Write(p []byte) (int, error) {
@@ -1992,6 +2005,7 @@ func (slogWriter) Write(p []byte) (int, error) {
 	// happens on the already-shortened payload — avoids one alloc per cron
 	// log line.
 	msg := string(bytes.TrimRight(p, "\n"))
-	slog.Warn(msg)
+	msg = strings.TrimPrefix(msg, "cron: ")
+	slog.Warn("cron logger", "msg", msg)
 	return len(p), nil
 }
