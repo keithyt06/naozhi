@@ -172,51 +172,13 @@ func validateWorkspace(workspace, allowedRoot string) (string, error) {
 // defaults; sharing the primary's allowedRoot across nodes is not always
 // possible (nodes may have different filesystem layouts). R61-SEC-2.
 func validateRemoteWorkspace(workspace string) error {
-	if workspace == "" {
-		// Empty means "use remote's default workspace" — intentional, allowed.
-		return nil
-	}
-	if len(workspace) > session.MaxRemoteWorkspacePath {
-		return fmt.Errorf("workspace too long")
-	}
-	if strings.ContainsRune(workspace, 0) {
-		return fmt.Errorf("invalid workspace")
-	}
-	for i := 0; i < len(workspace); i++ {
-		c := workspace[i]
-		if c < 0x20 || c == 0x7f {
-			return fmt.Errorf("invalid workspace")
-		}
-	}
-	// R176-SEC-M: rune-level sweep for C1 controls + bidi / LS / PS
-	// runes that survive the byte-level `< 0x20` filter. Same policy
-	// validateCronWorkDir / validateCronPrompt already enforce via
-	// osutil.IsLogInjectionRune. Without this, an authenticated operator can
-	// post `/tmp/ws‮.sock` and trip log-injection in
-	// `slog.Warn("remote ws send failed", "key", ..., "workspace", ws)`
-	// at wshub.go:1405 or pipe-style misrendering in terminal viewers
-	// (Loki / grep).
-	for _, r := range workspace {
-		if osutil.IsLogInjectionRune(r) {
-			return fmt.Errorf("invalid workspace")
-		}
-	}
-	if !filepath.IsAbs(workspace) {
-		return fmt.Errorf("workspace must be absolute")
-	}
-	// Reject any literal `..` segment in the submitted path. filepath.Clean
-	// collapses `/home/../etc` into `/etc` silently, so checking *after*
-	// Clean would let traversal slip through as a now-canonical absolute
-	// path. The primary cannot reliably Stat the remote FS, so we only
-	// accept paths that are already free of traversal markers at the HTTP
-	// boundary — the remote side's own EvalSymlinks check is the second
-	// line of defense, not the first.
-	for _, seg := range strings.Split(workspace, string(filepath.Separator)) {
-		if seg == ".." {
-			return fmt.Errorf("workspace contains traversal segment")
-		}
-	}
-	return nil
+	// Delegate to the canonical session-layer validator so the two trust
+	// boundaries (primary HTTP / RPC) cannot drift. session.ValidateRemote-
+	// WorkspacePath additionally does a utf8.ValidString sweep which the
+	// previous inline byte-level scan here missed — an attacker could
+	// submit a non-UTF8 byte sequence like 0xFF 0xFE that passes the
+	// `< 0x20` check yet corrupts slog TextHandler output downstream.
+	return session.ValidateRemoteWorkspacePath(workspace)
 }
 
 // pathErrReason returns a short, path-free tag describing a filesystem error

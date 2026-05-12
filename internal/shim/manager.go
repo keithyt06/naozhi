@@ -1004,11 +1004,21 @@ var shimEnvAllowedPrefixes = []string{
 	// Git (SSH, config)
 	"SSH_AUTH_SOCK=", "GIT_",
 
-	// Common dev toolchains the CLI's Bash tool may invoke
+	// Common dev toolchains the CLI's Bash tool may invoke.
+	//
+	// SECURITY: NODE_* and PYTHON* are listed by exact prefix (not bare
+	// "NODE_"/"PYTHON") because several variables in those namespaces can
+	// load arbitrary code into any Node.js / Python subprocess the CLI
+	// spawns (Claude CLI itself is Node.js). Explicitly excluded:
+	//   - NODE_OPTIONS (can pass --require /path/to/evil.js)
+	//   - NODE_EXTRA_CA_CERTS, NODE_TLS_REJECT_UNAUTHORIZED (TLS bypass)
+	//   - PYTHONSTARTUP (runs on every python invocation)
+	//   - PYTHONINSPECT (drops into REPL after script)
 	"GOPATH=", "GOROOT=", "GOBIN=",
 	"CARGO_HOME=", "RUSTUP_HOME=",
-	"NVM_DIR=", "NODE_", "NPM_",
-	"PYTHON", "VIRTUAL_ENV=", "CONDA_",
+	"NVM_DIR=", "NODE_ENV=", "NODE_PATH=", "NPM_",
+	"PYTHONPATH=", "PYTHONHOME=", "PYTHONDONTWRITEBYTECODE=", "PYTHONUNBUFFERED=",
+	"VIRTUAL_ENV=", "CONDA_",
 	"JAVA_HOME=",
 }
 
