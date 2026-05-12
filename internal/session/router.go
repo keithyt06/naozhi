@@ -56,6 +56,35 @@ func validateModel(model string) error {
 // Callers should map it to an HTTP 400 or IM error reply.
 var ErrInvalidModel = errors.New("invalid model identifier")
 
+// backendRe mirrors the model identifier pattern but with a tighter 64-byte
+// cap since backend IDs are short tags ("claude", "kiro", "gemini"). Value
+// flows into slog attrs, session state JSON, and shim state file; without
+// this gate a WS client could land C0/C1 bytes into structured logs.
+var backendRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._\-]*$`)
+
+const maxBackendBytes = 64
+
+// ErrInvalidBackend is returned when AgentOpts.Backend fails validateBackend.
+var ErrInvalidBackend = errors.New("invalid backend identifier")
+
+// validateBackend returns nil for empty (router default) or any string
+// matching backendRe under the byte cap; otherwise ErrInvalidBackend. The
+// actual backend->wrapper resolution still goes through wrapperFor which
+// falls back to the default wrapper when the backend is unknown; this gate
+// only stops shape-invalid input, not unknown backends.
+func validateBackend(backend string) error {
+	if backend == "" {
+		return nil
+	}
+	if len(backend) > maxBackendBytes {
+		return fmt.Errorf("%w: exceeds %d bytes", ErrInvalidBackend, maxBackendBytes)
+	}
+	if !backendRe.MatchString(backend) {
+		return fmt.Errorf("%w: must match %s", ErrInvalidBackend, backendRe)
+	}
+	return nil
+}
+
 // ShutdownTimeout is the maximum time to wait for graceful shutdown
 // of running sessions (Router) and HTTP connections (Server).
 // Exported so both session and server packages use a single value.
@@ -1793,6 +1822,13 @@ func (r *Router) GetOrCreate(ctx context.Context, key string, opts AgentOpts) (*
 	if err := validateModel(opts.Model); err != nil {
 		return nil, 0, err
 	}
+	// Same boundary guard for Backend: flows into slog attrs and persisted
+	// state JSON. wrapperFor already tolerates unknown backends by falling
+	// back to the default wrapper; this gate only rejects shape-invalid
+	// input (control chars, whitespace, overlength).
+	if err := validateBackend(opts.Backend); err != nil {
+		return nil, 0, err
+	}
 	r.mu.Lock()
 
 	// Passthrough exposes a concurrency pattern that the old Send path never
@@ -2178,14 +2214,21 @@ func (r *Router) spawnSession(ctx context.Context, key string, resumeID string, 
 		// fresh 15s timeout gives slow storage room to breathe while
 		// still bounding the request path.
 		histCtx, histCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		allEntries := discovery.LoadHistoryChainTailCtx(
-			histCtx, r.claudeDir, ids, workspace, maxPersistedHistory,
-		)
-		histCancel()
-		if len(allEntries) > 0 {
-			s.InjectHistory(allEntries)
-			slog.Info("loaded session history on resume", "key", key, "entries", len(allEntries), "chain", len(ids))
-		}
+		// defer cancel inside a narrow func scope: the success path still
+		// wants to call Cancel promptly to release the timer rather than
+		// waiting for spawnSession to return, but using defer here removes
+		// the pre-existing footgun where a future early-return added above
+		// the inline cancel would leak the context.
+		func() {
+			defer histCancel()
+			allEntries := discovery.LoadHistoryChainTailCtx(
+				histCtx, r.claudeDir, ids, workspace, maxPersistedHistory,
+			)
+			if len(allEntries) > 0 {
+				s.InjectHistory(allEntries)
+				slog.Info("loaded session history on resume", "key", key, "entries", len(allEntries), "chain", len(ids))
+			}
+		}()
 	}
 
 	// RFC §3.2.2 ordering contract: SetPersistSink ONLY after every
@@ -3047,6 +3090,30 @@ func (r *Router) shouldPrune(s *ManagedSession, now time.Time) bool {
 // on a shorter interval to reduce data loss on crash.
 func (r *Router) StartCleanupLoop(ctx context.Context, interval time.Duration) {
 	go func() {
+		// Panic recovery: a bug inside Cleanup or saveIfDirty would silently
+		// kill the loop, allowing sessions to accumulate indefinitely past
+		// their TTL and losing the periodic sessions.json flush. Log with
+		// stack so ops can diagnose, then re-enter the loop via a tail call.
+		defer func() {
+			if rec := recover(); rec != nil {
+				slog.Error("router cleanup loop panic recovered",
+					"panic", rec, "stack", string(debug.Stack()))
+				// Restart the loop so TTL expiry and saveIfDirty continue.
+				// Guard against ctx already cancelled so we do not resurrect
+				// after Shutdown. Brief backoff before relaunch so a bug that
+				// panics on every tick cannot pile up a cloud of short-lived
+				// restart goroutines; 5s bounds the recovery latency at the
+				// same order as the cleanup tick.
+				if ctx.Err() == nil {
+					time.AfterFunc(5*time.Second, func() {
+						if ctx.Err() != nil {
+							return
+						}
+						r.StartCleanupLoop(ctx, interval)
+					})
+				}
+			}
+		}()
 		cleanupTicker := time.NewTicker(interval)
 		defer cleanupTicker.Stop()
 		// Save dirty state on sessionSaveInterval to reduce crash-recovery
@@ -3341,11 +3408,11 @@ func (r *Router) shutdown() {
 	// wedged disk doesn't hold Shutdown open.
 	if r.eventLogPersister != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		if err := r.eventLogPersister.Stop(ctx); err != nil {
 			slog.Warn("event log persister stop timed out",
 				"err", err, "stats", r.eventLogPersister.Stats())
 		}
-		cancel()
 	}
 
 	// Stop the attachment tracker AFTER the persister so no more
@@ -3874,6 +3941,9 @@ func (r *Router) Takeover(ctx context.Context, key string, sessionID string, wor
 	// R188-SEC-M2: same flag-injection guard as GetOrCreate. Takeover flows
 	// from upstream RPC with caller-supplied AgentOpts.
 	if err := validateModel(opts.Model); err != nil {
+		return nil, err
+	}
+	if err := validateBackend(opts.Backend); err != nil {
 		return nil, err
 	}
 	r.mu.Lock()

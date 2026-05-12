@@ -408,6 +408,12 @@ func (f *Feishu) registerWebhook(mux *http.ServeMux, handler platform.MessageHan
 				}
 				return
 			}
+			if !isValidFeishuResourceKey(content.ImageKey) {
+				slog.Warn("feishu webhook: rejecting malformed image_key",
+					"key", osutil.SanitizeForLog(content.ImageKey, 64),
+					"msg_id", event.Message.MessageID)
+				return
+			}
 			select {
 			case f.hookSem <- struct{}{}:
 			default:
@@ -445,6 +451,12 @@ func (f *Feishu) registerWebhook(mux *http.ServeMux, handler platform.MessageHan
 				}
 				return
 			}
+			if !isValidFeishuResourceKey(content.FileKey) {
+				slog.Warn("feishu webhook: rejecting malformed file_key",
+					"key", osutil.SanitizeForLog(content.FileKey, 64),
+					"msg_id", event.Message.MessageID)
+				return
+			}
 			select {
 			case f.hookSem <- struct{}{}:
 			default:
@@ -461,6 +473,27 @@ func (f *Feishu) registerWebhook(mux *http.ServeMux, handler platform.MessageHan
 			}()
 		}
 	})
+}
+
+// isValidFeishuResourceKey accepts the narrow character set Feishu uses for
+// image_key / file_key identifiers. Real keys are opaque printable ASCII
+// (base62-ish) capped at ~100 bytes; reject anything with whitespace, C0/C1
+// control bytes, or non-ASCII so a message from an attacker-controlled
+// sender cannot smuggle structured-log-splitting bytes or oversized payloads
+// into the Feishu API URL builder.
+func isValidFeishuResourceKey(k string) bool {
+	if k == "" || len(k) > 256 {
+		return false
+	}
+	for i := 0; i < len(k); i++ {
+		c := k[i]
+		// Printable ASCII excluding whitespace. Hyphen and underscore are
+		// common in real keys; accept them explicitly via the range test.
+		if c < 0x21 || c > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 // constantTimeEqualString compares two strings in constant time without leaking

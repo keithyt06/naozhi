@@ -173,6 +173,10 @@ func SocketPath(keyHash string) string {
 		dir = filepath.Join(dir, "naozhi")
 	}
 	os.MkdirAll(dir, 0700) //nolint:errcheck
+	// Re-apply 0700 even when MkdirAll is a no-op: a pre-existing directory
+	// from an earlier build / backup tool may have looser permissions, and
+	// the socket file inherits the directory's traverse-visibility.
+	os.Chmod(dir, 0700) //nolint:errcheck
 	return filepath.Join(dir, fmt.Sprintf("shim-%s.sock", keyHash))
 }
 

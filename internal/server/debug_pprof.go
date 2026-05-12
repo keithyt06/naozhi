@@ -58,7 +58,12 @@ func (s *Server) registerPprof() {
 		// Cmdline / Profile / Symbol / Trace have dedicated handlers.
 		switch newURL.Path {
 		case "/debug/pprof/cmdline":
-			pprofhandler.Cmdline(w, &rr)
+			// Disabled: cmdline leaks --config path and any flag-based
+			// secrets embedded in argv. Operators who need it can SSH
+			// to the host and read /proc/self/cmdline directly. Every
+			// other pprof profile is fine to expose over loopback.
+			http.Error(w, "cmdline pprof disabled; read /proc/<pid>/cmdline locally", http.StatusForbidden)
+			return
 		case "/debug/pprof/profile":
 			pprofhandler.Profile(w, &rr)
 		case "/debug/pprof/symbol":

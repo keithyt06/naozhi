@@ -633,7 +633,12 @@ func (s *shimServer) handleClient(conn net.Conn, idleTimeout time.Duration) {
 
 	// Verify connecting peer has same UID (defense-in-depth beyond token auth)
 	if !VerifyPeerUID(conn) {
-		slog.Debug("client rejected: UID mismatch")
+		// Elevated to Warn: a UID mismatch on a unix socket that is supposed
+		// to be owner-private is an audit-worthy event. Debug-level output
+		// is silenced in production deployments and would hide an in-progress
+		// same-host privilege escalation attempt.
+		slog.Warn("shim: rejecting client with UID mismatch",
+			"remote", conn.RemoteAddr().String())
 		return
 	}
 

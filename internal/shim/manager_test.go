@@ -528,14 +528,15 @@ func TestFilterShimEnv_AllowsExpectedPrefixes(t *testing.T) {
 		{"RUSTUP_HOME=/home/user/.rustup", true},
 		{"NVM_DIR=/home/user/.nvm", true},
 		{"NODE_ENV=production", true},
+		{"NODE_PATH=/usr/lib/node_modules", true},
 		{"NPM_TOKEN=abc", true},
-		{"PYTHON=/usr/bin/python3", true},
 		{"PYTHONPATH=/usr/lib/python3", true},
+		{"PYTHONHOME=/usr", true},
 		{"VIRTUAL_ENV=/home/user/venv", true},
 		{"CONDA_PREFIX=/opt/conda", true},
 		{"JAVA_HOME=/usr/lib/jvm/java-17", true},
 
-		// Blocked
+		// Blocked — generic secrets / unrelated
 		{"DATABASE_URL=postgres://...", false},
 		{"REDIS_PASSWORD=secret", false},
 		{"SECRET_KEY=abc123", false},
@@ -547,6 +548,14 @@ func TestFilterShimEnv_AllowsExpectedPrefixes(t *testing.T) {
 		{"POSTGRES_PASSWORD=password", false},
 		{"FOO=bar", false},
 		{"DISPLAY=:0", false},
+
+		// Blocked — Node.js / Python runtime loaders (code injection vectors)
+		{"NODE_OPTIONS=--require /tmp/evil.js", false},
+		{"NODE_EXTRA_CA_CERTS=/tmp/fake.pem", false},
+		{"NODE_TLS_REJECT_UNAUTHORIZED=0", false},
+		{"PYTHONSTARTUP=/tmp/evil.py", false},
+		{"PYTHONINSPECT=1", false},
+		{"PYTHON=/usr/bin/python3", false}, // bare "PYTHON" no longer allowed
 	}
 
 	for _, tc := range tests {

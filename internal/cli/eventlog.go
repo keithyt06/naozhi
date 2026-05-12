@@ -575,8 +575,15 @@ func (l *EventLog) SetAgentInternalID(toolUseID, internalAgentID, jsonlPath, fir
 // Signals all subscribers non-blockingly after appending.
 func (l *EventLog) Append(e EventEntry) {
 	l.mu.Lock()
+	// Single time.Now() feeds both the event timestamp (if absent) and the
+	// lastEventAt heartbeat below. Both reads used to happen independently
+	// causing two vDSO calls per Append on the hot path. The tiny skew
+	// between the two was meaningless — Cleanup only needs "some event
+	// landed recently", and the entry's own Time already represents the
+	// "actually received at" moment.
+	now := time.Now()
 	if e.Time == 0 {
-		e.Time = time.Now().UnixMilli()
+		e.Time = now.UnixMilli()
 	}
 	stampUUID(&e)
 	// Server-side enforcement that every image entry is a data:image/* URI.
@@ -614,8 +621,9 @@ func (l *EventLog) Append(e EventEntry) {
 
 	// Record live-activity timestamp. A single Store is fine: Cleanup only
 	// cares about "some event landed recently", and later Appends overwrite
-	// with a never-decreasing value.
-	l.lastEventAt.Store(time.Now().UnixNano())
+	// with a never-decreasing value. Reuses the `now` captured at function
+	// entry — one vDSO call per Append instead of two.
+	l.lastEventAt.Store(now.UnixNano())
 
 	l.mu.Unlock()
 

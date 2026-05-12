@@ -53,7 +53,7 @@ func ValidateRemoteWorkspacePath(workspace string) error {
 		return errors.New("workspace too long")
 	}
 	if !utf8.ValidString(workspace) {
-		return errors.New("invalid workspace")
+		return errors.New("workspace is not valid UTF-8")
 	}
 	for _, r := range workspace {
 		// C0 controls and DEL — NUL (0x00) is inside the `r < 0x20`
@@ -62,14 +62,14 @@ func ValidateRemoteWorkspacePath(workspace string) error {
 		// sequence, so there is no way to smuggle a bare 0x00 past
 		// this check).
 		if r < 0x20 || r == 0x7f {
-			return errors.New("invalid workspace")
+			return errors.New("workspace contains C0 control byte")
 		}
 		// C1 / bidi override / bidi isolate / LS/PS — UTF-8-encoded
 		// these slip past a byte-level scan entirely. Aligned with
 		// session.ValidateUserLabel so one trust boundary cannot admit
 		// characters the other would reject.
 		if osutil.IsLogInjectionRune(r) {
-			return errors.New("invalid workspace")
+			return errors.New("workspace contains bidi or C1 control rune")
 		}
 	}
 	if !filepath.IsAbs(workspace) {
