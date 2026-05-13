@@ -46,14 +46,22 @@ func (h *TranscribeHandler) handleTranscribe(w http.ResponseWriter, r *http.Requ
 
 	const maxAudioSize = 10 << 20 // 10 MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxAudioSize+4096)
-	if err := r.ParseMultipartForm(maxAudioSize); err != nil {
+	parseErr := r.ParseMultipartForm(maxAudioSize)
+	// Register cleanup before any return path. ParseMultipartForm may have
+	// partially populated r.MultipartForm (and written tmp files) even on
+	// error; attempting to RemoveAll on a nil form is safe to guard against.
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
+	if parseErr != nil {
 		http.Error(w, "invalid multipart form", http.StatusBadRequest)
 		return
 	}
 	if rejectIfTooManyFields(w, r) {
 		return
 	}
-	defer r.MultipartForm.RemoveAll()
 
 	files := r.MultipartForm.File["audio"]
 	if len(files) == 0 {
@@ -111,6 +119,15 @@ func (h *TranscribeHandler) handleTranscribe(w http.ResponseWriter, r *http.Requ
 		slog.Warn("transcribe failed", "err", err, "mime", mimeType, "declared", declaredMIME, "size", len(data))
 		http.Error(w, "transcription failed", http.StatusInternalServerError)
 		return
+	}
+
+	// Defence-in-depth: cap the response payload so a misbehaving upstream
+	// (e.g. AWS Transcribe returning a multi-megabyte transcript for a long
+	// audio) cannot push an unbounded JSON body to the browser.
+	const maxTranscribeRespBytes = 1 << 20 // 1 MiB
+	if len(text) > maxTranscribeRespBytes {
+		slog.Warn("transcribe text truncated", "orig_len", len(text), "cap", maxTranscribeRespBytes)
+		text = text[:rtruncByteLen(text, maxTranscribeRespBytes)]
 	}
 
 	slog.Info("transcribe ok", "text_len", len(text), "mime", mimeType, "size", len(data))

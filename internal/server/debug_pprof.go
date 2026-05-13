@@ -5,8 +5,20 @@ import (
 	"net"
 	"net/http"
 	pprofhandler "net/http/pprof"
+	"strconv"
 	"strings"
 )
+
+// parsePositiveSeconds parses a `seconds=` pprof query parameter; returns 0
+// for any malformed input (which then fails the `> 30` check below and gets
+// rewritten to 30, the safe default).
+func parsePositiveSeconds(s string) int {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
 
 // registerPprof wires Go's standard net/http/pprof handlers onto the
 // server mux, gated by two independent defenses:
@@ -69,6 +81,16 @@ func (s *Server) registerPprof() {
 		case "/debug/pprof/symbol":
 			pprofhandler.Symbol(w, &rr)
 		case "/debug/pprof/trace":
+			// Cap trace duration server-side: pprofhandler.Trace honours the
+			// `seconds` query parameter (default 1s, no cap) so a buggy or
+			// malicious loopback caller can request an indefinite trace.
+			// Stdlib limits to 1s default but we further bound at 30s.
+			if v := newURL.Query().Get("seconds"); v == "" || parsePositiveSeconds(v) > 30 {
+				q := newURL.Query()
+				q.Set("seconds", "30")
+				newURL.RawQuery = q.Encode()
+				rr.URL = &newURL
+			}
 			pprofhandler.Trace(w, &rr)
 		default:
 			// Index covers the listing at /debug/pprof/ and also every
