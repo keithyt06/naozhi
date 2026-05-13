@@ -171,6 +171,13 @@ func (s *ReverseServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 		return
 	}
+	// Sanitize remote-supplied label fields immediately after read so any
+	// future slog call before auth (e.g. an added forensic breadcrumb) is
+	// safe regardless of code order. Defense-in-depth — current code paths
+	// only log msg.NodeID before auth, but the invariant is brittle.
+	const maxLabel = 256
+	msg.DisplayName = truncateLabelUTF8(msg.DisplayName, maxLabel)
+	msg.Hostname = truncateLabelUTF8(msg.Hostname, maxLabel)
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {
 		slog.Debug("ws-node: clear read deadline failed", "err", err)
 		conn.Close()
@@ -223,9 +230,8 @@ func (s *ReverseServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadLimit(16 << 20) // 16 MB
 
 	// Use configured display name; fall back to what remote sent.
-	// Cap remote-supplied strings so a compromised worker cannot bloat the
-	// dashboard /api/sessions payload (defense-in-depth after token auth).
-	const maxLabel = 256
+	// msg.DisplayName / msg.Hostname were already truncated at read time
+	// (above). Configured-side names and r.RemoteAddr still need their cap.
 	displayName := s.names[msg.NodeID]
 	if displayName == "" {
 		displayName = msg.DisplayName

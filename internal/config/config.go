@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/url"
@@ -241,7 +242,9 @@ func Load(path string) (*Config, error) {
 	// Reject config file if readable by group or others BEFORE reading its
 	// contents into memory — the file may contain secrets (app_secret, tokens).
 	// Use Lstat (not Stat) so a symlink pointing at a 0644 file cannot bypass
-	// the check via a strict-mode symlink.
+	// the check via a strict-mode symlink. Then open + Fstat to confirm the
+	// file we read is the same we Lstat'd (closes the TOCTOU window between
+	// the symlink/mode check and ReadFile).
 	if fi, statErr := os.Lstat(path); statErr == nil {
 		if fi.Mode()&os.ModeSymlink != 0 {
 			return nil, fmt.Errorf("config file %s is a symlink; refusing to load (resolve the link or point --config at the target directly)",
@@ -253,7 +256,25 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
-	data, err := os.ReadFile(path)
+	f, err := os.OpenFile(path, os.O_RDONLY, 0)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+	defer f.Close()
+	// Re-check on the open fd: if the path was swapped to a symlink between
+	// Lstat and OpenFile, Fstat sees the resolved target's mode. We cannot
+	// detect the symlink swap directly via Fstat, but a 0644 swap-target
+	// would trip the same world-readable gate.
+	if fi, ferr := f.Stat(); ferr == nil {
+		if !fi.Mode().IsRegular() {
+			return nil, fmt.Errorf("config file %s is not a regular file", path)
+		}
+		if fi.Mode()&0o044 != 0 {
+			return nil, fmt.Errorf("config file %s is group/world-readable (mode %04o); restrict with: chmod 0600 %s",
+				path, fi.Mode().Perm(), path)
+		}
+	}
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
