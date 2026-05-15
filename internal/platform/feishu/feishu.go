@@ -29,6 +29,42 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+const (
+	// maxAPIRespBodyBytes caps the response body read for all Feishu Open API
+	// JSON responses (token, send, upload, bot_info, etc.). 1 MiB is well
+	// above any documented response size; the limit prevents a
+	// compromised/misbehaving upstream from forcing unbounded memory growth.
+	maxAPIRespBodyBytes = 1 << 20
+
+	// maxImageDownloadBytes / maxAudioDownloadBytes cap the raw-byte download
+	// paths for message attachments. Feishu's own documented limits are
+	// 10 MiB (image) and 20 MiB (audio); we match those exactly so the error
+	// surface is predictable.
+	maxImageDownloadBytes = 10 * 1024 * 1024
+	maxAudioDownloadBytes = 20 * 1024 * 1024
+
+	// defaultMaxReplyLen is the fallback split-length applied when
+	// Config.MaxReplyLen is not set. Feishu's upstream per-message text limit
+	// is ~4000 bytes (~1333 CJK chars); matching that keeps replies within
+	// the platform's single-card rendering budget.
+	defaultMaxReplyLen = 4000
+
+	// tokenTTLBuffer is the number of seconds subtracted from Feishu's
+	// reported token expiry before caching, so the cached token is never
+	// used right up to its expiry boundary (clock skew, network latency).
+	tokenTTLBuffer = 60
+
+	// minTokenCacheDuration is the floor TTL applied when Feishu reports an
+	// unusually short (or zero/negative post-buffer) expiry. Keeps
+	// singleflight effective and avoids a refresh storm.
+	minTokenCacheDuration = 30 * time.Second
+
+	// maxWebhookBodyBytes caps the raw request body read by the webhook handler.
+	// 64 KiB is well above the largest legitimate Feishu webhook payload; a body
+	// larger than this is either a misconfigured sender or an attack attempt.
+	maxWebhookBodyBytes = 64 * 1024
+)
+
 var feishuHTTPClient = &http.Client{
 	Timeout: 10 * time.Second,
 	Transport: &http.Transport{
@@ -202,7 +238,7 @@ type Feishu struct {
 // New creates a Feishu platform adapter. transcriber may be nil to disable voice.
 func New(cfg Config, transcriber transcribe.Service) *Feishu {
 	if cfg.MaxReplyLen <= 0 {
-		cfg.MaxReplyLen = 4000
+		cfg.MaxReplyLen = defaultMaxReplyLen
 	}
 	mode := cfg.ConnectionMode
 	if mode == "" {
@@ -439,7 +475,7 @@ func (f *Feishu) fetchBotInfo(ctx context.Context) error {
 			AppName string `json:"app_name"`
 		} `json:"bot"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIRespBodyBytes)).Decode(&result); err != nil {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	if result.Code != 0 {
@@ -653,7 +689,7 @@ func (f *Feishu) postMessage(ctx context.Context, token string, reqBody []byte) 
 		} `json:"data"`
 		Msg string `json:"msg"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIRespBodyBytes)).Decode(&result); err != nil {
 		return "", fmt.Errorf("decode response: %w", err)
 	}
 	if result.Code != 0 {
@@ -709,7 +745,7 @@ func (f *Feishu) sendImage(ctx context.Context, chatID string, img platform.Imag
 		} `json:"data"`
 		Msg string `json:"msg"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIRespBodyBytes)).Decode(&result); err != nil {
 		return "", fmt.Errorf("decode response: %w", err)
 	}
 	if result.Code != 0 {
@@ -722,12 +758,12 @@ func (f *Feishu) sendImage(ctx context.Context, chatID string, img platform.Imag
 
 // DownloadImage downloads an image from a message via Feishu API.
 func (f *Feishu) DownloadImage(ctx context.Context, messageID, fileKey string) ([]byte, string, error) {
-	return f.downloadResource(ctx, messageID, fileKey, "image", 10*1024*1024, "image/png")
+	return f.downloadResource(ctx, messageID, fileKey, "image", maxImageDownloadBytes, "image/png")
 }
 
 // DownloadAudio downloads an audio file from a message via Feishu API.
 func (f *Feishu) DownloadAudio(ctx context.Context, messageID, fileKey string) ([]byte, string, error) {
-	return f.downloadResource(ctx, messageID, fileKey, "audio", 20*1024*1024, "audio/ogg")
+	return f.downloadResource(ctx, messageID, fileKey, "audio", maxAudioDownloadBytes, "audio/ogg")
 }
 
 // downloadResource downloads a message resource (image/audio) from the Feishu API.
@@ -953,7 +989,7 @@ func (f *Feishu) uploadImage(ctx context.Context, data []byte, mimeType string) 
 		} `json:"data"`
 		Msg string `json:"msg"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIRespBodyBytes)).Decode(&result); err != nil {
 		return "", fmt.Errorf("decode upload response: %w", err)
 	}
 	if result.Code != 0 {
@@ -1003,7 +1039,7 @@ func (f *Feishu) EditMessage(ctx context.Context, msgID string, text string) err
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIRespBodyBytes)).Decode(&result); err != nil {
 		return fmt.Errorf("decode edit response: %w", err)
 	}
 	if result.Code != 0 {
@@ -1141,7 +1177,7 @@ func (f *Feishu) getAccessToken(_ context.Context) (string, error) {
 			TenantAccessToken string `json:"tenant_access_token"`
 			Expire            int    `json:"expire"`
 		}
-		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIRespBodyBytes)).Decode(&result); err != nil {
 			return nil, fmt.Errorf("decode token response: %w", err)
 		}
 		if result.Code != 0 {
@@ -1156,9 +1192,9 @@ func (f *Feishu) getAccessToken(_ context.Context) (string, error) {
 		if result.TenantAccessToken == "" {
 			return nil, &APIError{Code: result.Code, Msg: "empty token", Op: "token"}
 		}
-		ttl := time.Duration(result.Expire-60) * time.Second
-		if ttl < 30*time.Second {
-			ttl = 30 * time.Second
+		ttl := time.Duration(result.Expire-tokenTTLBuffer) * time.Second
+		if ttl < minTokenCacheDuration {
+			ttl = minTokenCacheDuration
 		}
 
 		f.tokenMu.Lock()
@@ -1317,7 +1353,7 @@ func (f *Feishu) AddReaction(ctx context.Context, messageID string, r platform.R
 		} `json:"data"`
 		Msg string `json:"msg"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIRespBodyBytes)).Decode(&result); err != nil {
 		return fmt.Errorf("decode reaction response: %w", err)
 	}
 	if result.Code != 0 {
@@ -1383,7 +1419,7 @@ func (f *Feishu) RemoveReaction(ctx context.Context, messageID string, r platfor
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIRespBodyBytes)).Decode(&result); err != nil {
 		return fmt.Errorf("decode delete reaction response: %w", err)
 	}
 	if result.Code != 0 {

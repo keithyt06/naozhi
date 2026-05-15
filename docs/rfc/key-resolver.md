@@ -1,9 +1,9 @@
 # ARCH3 — SessionKeyResolver(收敛 planner/agent session key 派生)
 
-> **状态**: Proposal v2
+> **状态**: Phase 1-5 已实装;Phase 6(dispatch 侧关闭 legacy fallback)随 PR #9 落地
 > **作者**: naozhi team
 > **创建**: 2026-05-10
-> **修订**: 2026-05-11(v2: 按 review findings 修 6 个 Blocker + 5 个 Strong-Suggest)
+> **修订**: 2026-05-14(Phase 6 收尾 dispatch 侧 legacy nil-resolver 分支)/ 2026-05-11(v2: 按 review findings 修 6 个 Blocker + 5 个 Strong-Suggest)
 > **关联代码**:
 > - `internal/session/key.go`(现有 SessionKey / ChatKey / 保留前缀常量 / 判定函数)
 > - `internal/session/router.go:1769`(`AgentOpts` 定义,ExtraArgs 下游已有 make+copy 但 aliasing 防护仍在调用方)
@@ -702,7 +702,23 @@ Phase 3 落地 `/urgent` 迁移的**同一 commit** 必须包含 `internal/dispa
 - 多节点场景:primary 点远程 project restart 按钮,remote 端 `restart_planner` 接收后用 Resolver 拼 opts,planner 重启成功 smoke 通过
 - **argv diff smoke**(同 Phase 4)
 
-### 总计 **2.5 人天**
+### Phase 6: 关闭 legacy nil-resolver 分支(0.25 天)
+
+> 实施 PR: [#9 refactor(dispatch): 删除 legacy nil-resolver 内联分支](https://github.com/KevinZhao/naozhi/pull/9)
+
+Phase 2-5 在每个调用点都保留了 `if d.resolver != nil { resolver.X } else { 内联重复 }` 双轨,把测试/headless 构造路径留给 inline fallback。Phase 6 收紧 NewDispatcher 契约让 resolver 永远非 nil,删掉 4 处 inline fallback,routing 逻辑彻底单点化。
+
+**Done when**:
+- `dispatch.NewDispatcher` 在 `cfg.Resolver == nil` 时自动 fabricate 一个 fallback resolver(从 `cfg.Agents` + `project.NewDataSource(cfg.ProjectMgr)` 构造,data 端 nil-safe)
+- `dispatch.go::keyForChat` / `BuildHandler` 主路径删 `if d.resolver != nil` 分支
+- `commands.go::handleUrgentCommand` 删同款分支
+- `Dispatcher.projectMgr` 字段 doc 显式标注"仅用于 slash-command UX 文案,routing 走 resolver",防止未来重抄
+- 新增 `TestNewDispatcher_ResolverFabricatedWhenNil` pin fabricate + explicit pass-through 两条路径
+- `go test -race ./internal/dispatch/... ./internal/server/...` 通过
+
+**未在 Phase 6 处理**:`internal/server/dashboard.go::buildSessionOpts` 仍保留 `if resolver != nil` 双轨,因为它的输入是 raw key(不是 chat coords)且要兼容已废 / 不存在的 project 的 dashboard resume 路径,行为分支语义与 dispatch 路径不同。后续若把这条路径完全收敛进 `ResolveForKey + ok 分支`,可加 Phase 7 关闭。
+
+### 总计 **2.75 人天**
 
 ---
 
