@@ -32,18 +32,18 @@ func (f *Feishu) registerWebhook(mux *http.ServeMux, handler platform.MessageHan
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		// Read up to maxBody+1 so we can distinguish "exactly maxBody" (legal)
-		// from "exceeds maxBody" (silently truncated). A truncated body would
-		// deserialize into malformed/empty JSON and drop the event silently;
-		// better to surface 413 so operators can raise the cap if needed.
-		const maxBody = 64 * 1024
-		body, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
+		// Read up to maxWebhookBodyBytes+1 so we can distinguish "exactly at
+		// the limit" (legal) from "exceeds limit" (silently truncated). A
+		// truncated body would deserialize into malformed/empty JSON and drop
+		// the event silently; better to surface 413 so operators can raise the
+		// cap if needed.
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxWebhookBodyBytes+1))
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if len(body) > maxBody {
-			slog.Warn("feishu webhook body exceeds limit", "limit", maxBody)
+		if len(body) > maxWebhookBodyBytes {
+			slog.Warn("feishu webhook body exceeds limit", "limit", maxWebhookBodyBytes)
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
 			return
 		}

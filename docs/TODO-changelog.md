@@ -1381,3 +1381,50 @@ SyncDir 里对 `syscall.EINVAL` 的使用不拆 —— Windows 下 `os.Open(dir)
 </details>
 
 </details>
+
+---
+
+## R218 — 第 33 轮 5-agent 并行 review NEEDS-DESIGN 归档（2026-05-15）
+
+### 直接修（已落地，见本轮 commits）
+- [x] `feishu/feishu.go` 提取 `1<<20` 为包级常量 `maxAPIRespBodyBytes`（8 处 API 响应 body 限制）
+- [x] `feishu/feishu.go` 提取下载限制为 `maxImageDownloadBytes` / `maxAudioDownloadBytes`
+- [x] `feishu/feishu.go` 提取 `defaultMaxReplyLen = 4000`
+- [x] `feishu/feishu.go` 提取 token TTL buffer 为 `tokenTTLBuffer = 60` / `minTokenCacheDuration = 30s`
+- [x] `feishu/feishu.go` 提取 webhook body 上限为 `maxWebhookBodyBytes = 64*1024`（并将 transport_hook.go 的函数内常量改引包级常量）
+- [x] `server/server.go` 提取 `maxRequestBodyBytes = 1<<20`，dashboard_session.go / dashboard_scratch.go / dashboard_discovered.go 共 8 处引用
+
+### NEEDS-DESIGN（登记，不直接修）
+
+#### Go / 并发
+
+- **R218-GO-P1-1** `cli/passthrough.go` 锁顺序：shimWMu → slotsMu 在某些错误路径提前 unlock 顺序与正常路径不对称，需整理锁契约文档或调整 unlock 顺序 — 影响并发正确性，需设计评审
+- **R218-GO-P1-2** `cli/process_readloop.go` 多 `defer close()` 无 panic-safe 顺序保证，若 `close(eventCh)` 前 panic 则 `done` 永不关闭可能死锁 — 需 `defer func(){ recover; close(done); close(eventCh) }()` 收口
+- **R218-GO-P1-3** `cmd/naozhi/main.go` 并行初始化的 goroutine（transcriber / projectMgr）未绑定 `ctx`，关闭信号不能中断 — 跨模块改动，需协调
+- **R218-GO-P2-1** `cli/process.go setDeathReason` 使用局部变量指针塞入 `atomic.Pointer`，跨 CAS 循环存在短暂悬空窗口 — 需 `new(string)` 在 CAS 成功后立即转移所有权
+- **R218-GO-P2-2** `cli/passthrough.go` victim set map-vs-linear 策略阈值 4 无 benchmark 依据，且 map 构建后未使用 — 清理或文档化权衡
+- **R218-GO-P3-1** `cli/process_send.go` 缩略图生成 goroutine 无 context 取消 — Send ctx 取消后仍执行
+- **R218-GO-P3-2** `cli/process_readloop.go linker.Resolve` goroutine 无超时 — 理论上可积累阻塞 goroutine
+
+#### Security
+
+- **R218-SEC-P1-1** 飞书 webhook 时间戳校验未来窗口 30s 过宽 — 缩窄至 5-10s 需 API 行为变更评审（breaking）
+- **R218-SEC-P2-1** nonce 长度上限 128 与 challenge 长度上限 1024 不一致 — 统一资源限制策略需文档决策
+- **R218-SEC-P2-2** Feishu token 被即时撤销时缓存 TTL 内仍使用旧 token（100ms 级窗口）— 激进刷新策略权衡
+
+#### Architecture
+
+- **R218-ARCH-P1-1** `cmd/naozhi/main.go:671` `scheduler.Start()` 失败时走 `os.Exit(1)` 跳过 `runShutdown`，已初始化的 router/cron 状态不做清理 — 需改为走 `runShutdown`
+- **R218-ARCH-P1-2** `cron.SessionRouter` 接口定义在 cron 包内，session 包若反向导入 cron 会成循环依赖 — 接口迁移到 session 包或新建 `sessioniface` 包（breaking）
+- **R218-ARCH-P1-3** `cmd/naozhi/main.go` 并行初始化 goroutine error 无 sync 同步，init 失败时 projectMgr 可被其他 goroutine 读到半初始化状态 — 需 `sync.Once` 或 `atomic.Pointer`
+- **R218-ARCH-P2-1** `dispatch/dispatch.go keyForChat` project binding 逻辑与 router 层 resolve 逻辑重复，可能漂移 — 需由 Router 单一维护
+- **R218-ARCH-P2-2** `Platform` 可选能力（Reactor / QuestionCardSender）靠类型断言发现 — 需统一 `Capabilities()` 接口或分层接口（breaking）
+- **R218-ARCH-P2-3** 配置验证分散在 `validateConfig` / `Load` / `initPlatforms`，默认值处理和验证时序不清 — 统一到 `Config.Validate()` 早期调用
+- **R218-ARCH-P2-4** `server.go nodeCache` 初始化回调依赖尚未创建的 `hub` — 需确认是否真实 nil-deref 风险，若是则推迟初始化到 `Start()` 后
+- **R218-ARCH-P3-1** `cmd/naozhi/main.go:720` `srv.OnReady` 回调无 panic recover，READY=1 发出后立即崩溃可能导致 systemd 报已就绪但进程实际退出
+
+#### Performance
+
+- **R218-PERF-P2-1** `session/router.go countExempt` 每次调用 O(N) 全扫（`countActive` 已有原子快路径，`countExempt` 无）— 需 `exemptCount atomic.Int64` 原子计数
+- **R218-PERF-P2-2** `server/wshub.go` `notifySubscribers` 高并发 channel send 无 pacing（50 WS × 10 subs = 500 sends/event）— 需 benchmark 验证是否瓶颈再决定 batch/sync.Cond 替代
+- **R218-PERF-P2-3** `cli/eventlog.go AppendBatch` sinkCopy append 在 `l.mu` 锁内迭代，并发 reader 在大量历史回放时被阻塞 — 需将 sinkCopy 构建移出锁范围
