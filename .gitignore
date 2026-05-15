@@ -9,7 +9,6 @@ tmp/
 
 # Build artifacts
 /naozhi
-TODO.md
 
 # Node / Playwright
 node_modules/
