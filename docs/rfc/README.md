@@ -18,7 +18,7 @@
 | [consumer-interfaces.md](consumer-interfaces.md) | Proposal v2 | 2026-05-11 | ARCH-CONSUMER-IF：dispatch/hub/upstream 以消费端小接口替换 `*session.Router` 具体指针（v1 因方法清单虚构已重写） |
 | [cron-v2-polish.md](cron-v2-polish.md) | 设计提案（未实现） | 2026-05-09 | Cron 面板 5 项增量打磨（name/jitter/missed/sort/next-run） |
 | [event-log-persistence.md](event-log-persistence.md) | v3 GA 就绪 | 2026-05-10 | EventLog 磁盘持久化，图片与历史事件跨重启可见 |
-| [key-resolver.md](key-resolver.md) | Proposal v2 | 2026-05-11 | ARCH3：收敛 planner/agent session key 派生；chat-view / planner-view 双接口（v1 漏掉 #6/#7 不继承 defaults 的语义，v2 修） |
+| [key-resolver.md](key-resolver.md) | Phase 1-6 已实装（PR #9）；Phase 7 dashboard buildSessionOpts 待 | 2026-05-14 | ARCH3：收敛 planner/agent session key 派生；chat-view / planner-view 双接口（v2 修 v1 漏掉 #6/#7 不继承 defaults 的语义；Phase 6 删 dispatch 侧 legacy nil-resolver 分支） |
 | [learning-system.md](learning-system.md) | 设计提案 | 2026-04-14 | 会话结束触发的闭环自学习（skills/MEMORY/USER） |
 | [message-queue.md](message-queue.md) | 设计提案（未实现） | 2026-04-14 | 替代 sessionGuard 丢消息的 per-session 消息队列策略 |
 | [passthrough-mode.md](passthrough-mode.md) | v2.2 设计文档 | 2026-05-09 | 直通 CC CLI 原生 command queue，不做合并/节流 |
