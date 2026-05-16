@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -23,7 +24,12 @@ type TranscribeHandler struct {
 // handleTranscribe accepts an audio file upload and returns transcribed text.
 // POST /api/transcribe  (multipart/form-data, field "audio")
 func (h *TranscribeHandler) handleTranscribe(w http.ResponseWriter, r *http.Request) {
+	slog.Info("transcribe request arrived",
+		"content_type", r.Header.Get("Content-Type"),
+		"content_length", r.ContentLength,
+		"ua", r.Header.Get("User-Agent"))
 	if h.transcribeLimiter != nil && !h.transcribeLimiter.AllowRequest(r) {
+		slog.Warn("transcribe rate limited")
 		writeJSONStatus(w, http.StatusTooManyRequests, map[string]string{"error": "transcribe rate limit exceeded"})
 		return
 	}
@@ -47,6 +53,7 @@ func (h *TranscribeHandler) handleTranscribe(w http.ResponseWriter, r *http.Requ
 	const maxAudioSize = 10 << 20 // 10 MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxAudioSize+4096)
 	if err := r.ParseMultipartForm(maxAudioSize); err != nil {
+		slog.Warn("transcribe parse multipart failed", "err", err, "ct", r.Header.Get("Content-Type"))
 		http.Error(w, "invalid multipart form", http.StatusBadRequest)
 		return
 	}
@@ -74,12 +81,20 @@ func (h *TranscribeHandler) handleTranscribe(w http.ResponseWriter, r *http.Requ
 
 	// Step 1: allowlist the client-supplied Content-Type so obviously wrong
 	// uploads are rejected cheaply before we run DetectContentType.
+	// Strip parameters (";codecs=opus", ";boundary=...") so matches don't
+	// fail for legitimate MIMEs like "audio/webm; codecs=opus" from
+	// iPhone Safari 26 / Chromium.
 	declaredMIME := fh.Header.Get("Content-Type")
-	switch declaredMIME {
+	declaredBase := declaredMIME
+	if i := strings.IndexByte(declaredBase, ';'); i >= 0 {
+		declaredBase = strings.TrimSpace(declaredBase[:i])
+	}
+	switch declaredBase {
 	case "audio/ogg", "audio/mpeg", "audio/wav", "audio/flac", "audio/mp4",
 		"audio/amr", "audio/webm", "audio/aac", "audio/x-m4a",
 		"video/mp4", "video/webm": // some browsers tag voice memos as video
 	default:
+		slog.Warn("transcribe unsupported declared mime", "declared", declaredMIME, "base", declaredBase, "filename", fh.Filename, "size", len(data))
 		http.Error(w, "unsupported audio format", http.StatusBadRequest)
 		return
 	}
@@ -91,6 +106,12 @@ func (h *TranscribeHandler) handleTranscribe(w http.ResponseWriter, r *http.Requ
 	if !strings.HasPrefix(detected, "audio/") &&
 		!strings.HasPrefix(detected, "video/") &&
 		detected != "application/ogg" {
+		// Capture first bytes (hex) to diagnose what the client actually sent.
+		preview := data
+		if len(preview) > 16 {
+			preview = preview[:16]
+		}
+		slog.Warn("transcribe content not audio", "declared", declaredMIME, "detected", detected, "size", len(data), "first_bytes_hex", fmt.Sprintf("%x", preview))
 		http.Error(w, "file content is not audio", http.StatusBadRequest)
 		return
 	}
